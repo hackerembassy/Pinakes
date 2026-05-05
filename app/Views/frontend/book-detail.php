@@ -1585,11 +1585,13 @@ ob_start();
                         </p>
                     <?php endif; ?>
 
-                    <h1 class="fw-bold mb-3" id="book-title" style="font-size: clamp(1.5rem, 3.5vw, 2.25rem);">
-                        <?= htmlspecialchars(html_entity_decode($book['titolo'] ?? '', ENT_QUOTES, 'UTF-8')) ?>
-                        <span class="badge bg-light text-secondary fw-normal" style="font-size: 0.5em; vertical-align: middle;">
+                    <div class="mb-1">
+                        <span class="badge bg-light text-secondary fw-normal" style="font-size: 0.7rem;">
                             <i class="fas <?= \App\Support\MediaLabels::icon($resolvedTipoMedia) ?> me-1"></i><?= \App\Support\MediaLabels::tipoMediaDisplayName($resolvedTipoMedia) ?>
                         </span>
+                    </div>
+                    <h1 class="fw-bold mb-3" id="book-title" style="font-size: clamp(1.5rem, 3.5vw, 2.25rem);">
+                        <?= htmlspecialchars(html_entity_decode($book['titolo'] ?? '', ENT_QUOTES, 'UTF-8')) ?>
                     </h1>
 
                     <div class="authors-list" id="book-authors-list">
