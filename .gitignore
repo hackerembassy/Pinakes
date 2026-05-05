@@ -305,8 +305,6 @@ public/assets/*.LICENSE.txt
 # ========================================
 # PHPStan
 # ========================================
-phpstan.neon
-phpstan-baseline.neon
 phpstan-stubs.php
 phpstan-report.json
 phpstan.json

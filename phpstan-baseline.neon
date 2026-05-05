@@ -1,0 +1,25 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Call to method searchByIsbn\(\) on an unknown class Plugins\\Z39Server\\Classes\\SbnClient\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Controllers/ScrapeController.php
+
+		-
+			message: '#^Constructor of class App\\Middleware\\RateLimitMiddleware has an unused parameter \$maxAttempts\.$#'
+			identifier: constructor.unusedParameter
+			count: 1
+			path: app/Middleware/RateLimitMiddleware.php
+
+		-
+			message: '#^Offset ''expired_pickups'' on array\{skipped\?\: bool, reason\?\: string, scheduled_loans_activated\?\: int, reservations_converted\?\: int, expired_reservations\?\: int, overdue_loans_updated\?\: int, expiration_warnings\?\: int, overdue_notifications\?\: int, \.\.\.\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Support/MaintenanceService.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: app/Support/QueryCache.php

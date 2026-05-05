@@ -1,0 +1,14 @@
+includes:
+	- phpstan-baseline.neon
+
+parameters:
+	level: 5
+	paths:
+		- app/
+		- config/
+		- public/index.php
+	scanDirectories:
+		- server/src
+		- storage/plugins
+	phpVersion: 80100
+	reportUnmatchedIgnoredErrors: false
