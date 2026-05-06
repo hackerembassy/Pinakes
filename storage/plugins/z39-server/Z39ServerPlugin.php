@@ -169,6 +169,12 @@ class Z39ServerPlugin
         // Auto-upgrade: add Nordic servers if not already configured
         $this->ensureNordicServers();
 
+        // Ensure all default formats are present (non-destructive: preserves user additions)
+        $current = array_filter(array_map('trim', explode(',', $this->getSetting('supported_formats', 'marcxml'))));
+        $required = array_filter(array_map('trim', explode(',', self::DEFAULT_SETTINGS['supported_formats'])));
+        $merged = array_values(array_unique(array_merge($current, $required)));
+        $this->setSetting('supported_formats', implode(',', $merged));
+
         // Log activation
         $this->log('info', 'Z39.50/SRU Server Plugin activated', [
             'server_enabled' => $this->isSettingEnabled('enable_server') || $this->isSettingEnabled('server_enabled'),

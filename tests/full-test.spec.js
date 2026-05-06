@@ -266,17 +266,14 @@ async function requestLoanViaSwal(page, dateISO) {
 // Rate limit cleanup: file-based rate limiter persists across PHP requests,
 // so test runs can accumulate hits. Clear before each phase.
 // ════════════════════════════════════════════════════════════════════════════
-const rateLimitDir = path.join(require('os').tmpdir(), 'pinakes_ratelimit');
 function clearRateLimits() {
+  // Use PHP to locate the actual sys_get_temp_dir() used by PHP-FPM (may differ from os.tmpdir())
   try {
-    if (fs.existsSync(rateLimitDir)) {
-      // Delete individual files rather than the directory itself to avoid ENOTEMPTY
-      // race with PHP creating files concurrently
-      for (const file of fs.readdirSync(rateLimitDir)) {
-        try { fs.unlinkSync(path.join(rateLimitDir, file)); } catch { /* ignore */ }
-      }
-    }
-  } catch { /* directory may not exist or be inaccessible */ }
+    require('child_process').execFileSync('php', [
+      '-r',
+      'array_map("unlink", glob(sys_get_temp_dir()."/pinakes_ratelimit/*.json") ?: []);',
+    ], { encoding: 'utf-8', timeout: 5000 });
+  } catch { /* ignore */ }
 }
 clearRateLimits();
 
