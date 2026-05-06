@@ -23,9 +23,6 @@
 
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
-const fs   = require('fs');
-const path = require('path');
-const os   = require('os');
 
 function clearRateLimits() {
     // Use PHP to locate the actual sys_get_temp_dir() used by PHP-FPM (may differ from os.tmpdir())
