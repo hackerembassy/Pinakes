@@ -103,14 +103,17 @@ class Z39ServerPlugin
     }
 
     /**
-     * Hook: Executed during plugin installation
-     * Creates necessary tables and sets up initial configuration
+     * Idempotent schema creation — called by both onInstall() and onActivate()
+     * so tables are guaranteed to exist after any upgrade path.
+     *
+     * @return array{created: string[], failed: string[]}
      */
-    public function onInstall(): void
+    public function ensureSchema(): array
     {
-        // Create table for SRU access logs
-        $this->db->query("
-            CREATE TABLE IF NOT EXISTS z39_access_logs (
+        $result = ['created' => [], 'failed' => []];
+
+        $tables = [
+            'z39_access_logs' => "CREATE TABLE IF NOT EXISTS z39_access_logs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 ip_address VARCHAR(45) NOT NULL COMMENT 'Client IP address',
                 user_agent TEXT COMMENT 'Client user agent',
@@ -125,12 +128,8 @@ class Z39ServerPlugin
                 INDEX idx_ip (ip_address),
                 INDEX idx_operation (operation),
                 INDEX idx_created (created_at)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
-
-        // Create table for rate limiting
-        $this->db->query("
-            CREATE TABLE IF NOT EXISTS z39_rate_limits (
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            'z39_rate_limits' => "CREATE TABLE IF NOT EXISTS z39_rate_limits (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 ip_address VARCHAR(45) NOT NULL,
                 request_count INT DEFAULT 1,
@@ -138,8 +137,27 @@ class Z39ServerPlugin
                 last_request DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY unique_ip_window (ip_address, window_start),
                 INDEX idx_window (window_start)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        ];
+
+        foreach ($tables as $table => $ddl) {
+            if ($this->db->query($ddl) !== false) {
+                $result['created'][] = $table;
+            } else {
+                $result['failed'][] = $table;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Hook: Executed during plugin installation
+     * Creates necessary tables and sets up initial configuration
+     */
+    public function onInstall(): void
+    {
+        $this->ensureSchema();
 
         // Set default settings
         foreach (self::DEFAULT_SETTINGS as $key => $value) {
@@ -149,7 +167,6 @@ class Z39ServerPlugin
         // Set pre-configured Nordic SRU servers
         $this->setSetting('servers', json_encode(self::NORDIC_SERVERS, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-        // Log installation
         $this->log('info', 'Z39.50/SRU Server Plugin installed successfully', [
             'tables_created' => ['z39_access_logs', 'z39_rate_limits'],
             'default_settings' => count(self::DEFAULT_SETTINGS),
@@ -163,6 +180,13 @@ class Z39ServerPlugin
      */
     public function onActivate(): void
     {
+        $result = $this->ensureSchema();
+        if (!empty($result['failed'])) {
+            throw new \RuntimeException(
+                '[Z39Server] Schema activation failed for: ' . implode(', ', $result['failed'])
+            );
+        }
+
         // Register hooks
         $this->registerHooks();
 
