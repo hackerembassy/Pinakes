@@ -177,9 +177,9 @@ if ($bookISBN) {
         $sameAsLinks[] = 'https://www.worldcat.org/isbn/' . $isbn;
     }
 }
-if (!empty($sameAsLinks)) {
-    $bookSchema["sameAs"] = $sameAsLinks;
-}
+// Add BIBFRAME instance persistent URI as sameAs identifier
+$sameAsLinks[] = absoluteUrl('/id/instance/' . (int) $book['id']);
+$bookSchema["sameAs"] = $sameAsLinks;
 
 // Include ALL authors with proper Schema.org roles
 $schemaAuthors = [];
@@ -192,6 +192,21 @@ foreach ($authors as $authorData) {
         continue;
     }
     $person = ["@type" => "Person", "name" => $name];
+    // Add VIAF/ISNI sameAs when available (from viaf-authority plugin columns)
+    $personSameAs = [];
+    if (!empty($authorData['viaf_uri']) && is_string($authorData['viaf_uri'])) {
+        $personSameAs[] = $authorData['viaf_uri'];
+    } elseif (!empty($authorData['viaf_id']) && is_string($authorData['viaf_id'])) {
+        $personSameAs[] = 'https://viaf.org/viaf/' . rawurlencode($authorData['viaf_id']);
+    }
+    if (!empty($authorData['isni_uri']) && is_string($authorData['isni_uri'])) {
+        $personSameAs[] = $authorData['isni_uri'];
+    } elseif (!empty($authorData['isni_id']) && is_string($authorData['isni_id'])) {
+        $personSameAs[] = 'https://isni.org/isni/' . preg_replace('/\s+/', '', $authorData['isni_id']);
+    }
+    if (!empty($personSameAs)) {
+        $person['sameAs'] = count($personSameAs) === 1 ? $personSameAs[0] : $personSameAs;
+    }
     $role = $authorData['ruolo'] ?? 'principale';
     switch ($role) {
         case 'traduttore':
@@ -2274,6 +2289,19 @@ ob_start();
 <?php
 $isLoggedJs = !empty($_SESSION['user'] ?? null);
 $libroIdJs = (int)($book['id'] ?? 0);
+
+// FAIR Signposting <link> elements for HTML discovery (complement to HTTP Link headers)
+$headLinks = [
+    [
+        'rel'  => 'describedby',
+        'type' => 'application/ld+json',
+        'href' => absoluteUrl('/api/bibframe/book/' . (int) $book['id']),
+    ],
+    [
+        'rel'  => 'type',
+        'href' => 'https://schema.org/' . \App\Support\MediaLabels::schemaOrgType($resolvedTipoMedia),
+    ],
+];
 
 // Prepare SEO variables for layout
 $seoTitle = $metaTitle;

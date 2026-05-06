@@ -137,6 +137,25 @@ class BibframeLinkedDataPlugin
         ) use ($plugin): ResponseInterface {
             return $plugin->bookInstanceAction($request, $response, $args);
         });
+
+        // Persistent linked-data URIs (Linked Data Principles / FAIR)
+        // GET /id/work/{id}     — 303 for HTML; machine-readable → bf:Work JSON-LD
+        // GET /id/instance/{id} — 303 for HTML; machine-readable → bf:Instance JSON-LD
+        $app->get('/id/work/{id:[0-9]+}', function (
+            ServerRequestInterface $request,
+            ResponseInterface $response,
+            array $args
+        ) use ($plugin): ResponseInterface {
+            return $plugin->idWorkAction($request, $response, $args);
+        });
+
+        $app->get('/id/instance/{id:[0-9]+}', function (
+            ServerRequestInterface $request,
+            ResponseInterface $response,
+            array $args
+        ) use ($plugin): ResponseInterface {
+            return $plugin->idInstanceAction($request, $response, $args);
+        });
     }
 
     // ── Handlers ──────────────────────────────────────────────────────────────
@@ -185,6 +204,64 @@ class BibframeLinkedDataPlugin
         $instance = array_values(array_filter($graph['@graph'], fn($n) => $n['@id'] === $baseUri . '/instance'))[0] ?? $graph;
         $doc      = ['@context' => $graph['@context'], '@graph' => [$instance]];
         return $this->serializeResponse($request, $response, $doc);
+    }
+
+    // ── Persistent linked-data URI handlers ──────────────────────────────────
+
+    public function idWorkAction(
+        ServerRequestInterface $request,
+        ResponseInterface $response,
+        array $args
+    ): ResponseInterface {
+        $book = $this->fetchBook((int) ($args['id'] ?? 0));
+        if ($book === null) {
+            return $this->notFound($response);
+        }
+        if ($this->wantsMachineReadable(strtolower($request->getHeaderLine('Accept')))) {
+            $baseUri = absoluteUrl('/api/bibframe/book/' . (int) $book['id']);
+            $graph   = $this->buildGraph($book, $baseUri);
+            $nodes   = is_array($graph['@graph']) ? $graph['@graph'] : [];
+            $workUri = $baseUri . '/work';
+            $node    = null;
+            foreach ($nodes as $n) {
+                if (is_array($n) && ($n['@id'] ?? '') === $workUri) { $node = $n; break; }
+            }
+            $doc = ['@context' => $graph['@context'], '@graph' => [$node ?? $graph]];
+            return $this->serializeResponse($request, $response, $doc);
+        }
+        return $response->withStatus(303)->withHeader('Location', absoluteUrl(book_url($book)));
+    }
+
+    public function idInstanceAction(
+        ServerRequestInterface $request,
+        ResponseInterface $response,
+        array $args
+    ): ResponseInterface {
+        $book = $this->fetchBook((int) ($args['id'] ?? 0));
+        if ($book === null) {
+            return $this->notFound($response);
+        }
+        if ($this->wantsMachineReadable(strtolower($request->getHeaderLine('Accept')))) {
+            $baseUri     = absoluteUrl('/api/bibframe/book/' . (int) $book['id']);
+            $graph       = $this->buildGraph($book, $baseUri);
+            $nodes       = is_array($graph['@graph']) ? $graph['@graph'] : [];
+            $instanceUri = $baseUri . '/instance';
+            $node        = null;
+            foreach ($nodes as $n) {
+                if (is_array($n) && ($n['@id'] ?? '') === $instanceUri) { $node = $n; break; }
+            }
+            $doc = ['@context' => $graph['@context'], '@graph' => [$node ?? $graph]];
+            return $this->serializeResponse($request, $response, $doc);
+        }
+        return $response->withStatus(303)->withHeader('Location', absoluteUrl(book_url($book)));
+    }
+
+    private function wantsMachineReadable(string $accept): bool
+    {
+        return str_contains($accept, 'application/ld+json')
+            || str_contains($accept, 'text/turtle')
+            || str_contains($accept, 'application/rdf+xml')
+            || str_contains($accept, 'application/json');
     }
 
     // ── BIBFRAME graph builder ────────────────────────────────────────────────
@@ -531,7 +608,7 @@ class BibframeLinkedDataPlugin
     {
         if ($id <= 0) { return null; }
         $stmt = $this->db->prepare(
-            'SELECT l.*, a.viaf_id AS viaf_id
+            'SELECT l.*, a.viaf_id AS viaf_id, a.nome AS autore_principale
                FROM libri l
                LEFT JOIN autori a ON a.id = (
                    SELECT la2.autore_id FROM libri_autori la2 WHERE la2.libro_id = l.id

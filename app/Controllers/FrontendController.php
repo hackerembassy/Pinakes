@@ -726,8 +726,33 @@ class FrontendController
         include __DIR__ . '/../Views/frontend/book-detail.php';
         $content = ob_get_clean();
 
+        // FAIR Signposting (RFC 9264) — machine-discoverable link relations
+        $bookArr  = is_array($book) ? $book : [];
+        $tipoRes  = \App\Support\MediaLabels::resolveTipoMedia(
+            isset($bookArr['formato'])    && is_string($bookArr['formato'])    ? $bookArr['formato']    : null,
+            isset($bookArr['tipo_media']) && is_string($bookArr['tipo_media']) ? $bookArr['tipo_media'] : null
+        );
+        $signLinks = [
+            '<' . absoluteUrl('/api/bibframe/book/' . $book_id) . '>; rel="describedby"; type="application/ld+json"',
+            '<https://schema.org/' . \App\Support\MediaLabels::schemaOrgType($tipoRes) . '>; rel="type"',
+        ];
+        $primaryAuthor = $authors[0] ?? null;
+        if (is_array($primaryAuthor)) {
+            $viafUri = '';
+            if (!empty($primaryAuthor['viaf_uri']) && is_string($primaryAuthor['viaf_uri'])) {
+                $viafUri = $primaryAuthor['viaf_uri'];
+            } elseif (!empty($primaryAuthor['viaf_id']) && is_string($primaryAuthor['viaf_id'])) {
+                $viafUri = 'https://viaf.org/viaf/' . rawurlencode($primaryAuthor['viaf_id']);
+            }
+            if ($viafUri !== '') {
+                $signLinks[] = '<' . $viafUri . '>; rel="author"';
+            }
+        }
+
         $response->getBody()->write($content);
-        return $response->withHeader('Content-Type', 'text/html');
+        return $response
+            ->withHeader('Content-Type', 'text/html')
+            ->withHeader('Link', implode(', ', $signLinks));
     }
 
     private function render404(Response $response): Response
