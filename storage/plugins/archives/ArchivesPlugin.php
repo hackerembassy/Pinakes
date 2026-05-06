@@ -153,6 +153,16 @@ class ArchivesPlugin
         }
     }
 
+    public function onInstall(): void
+    {
+        $result = $this->ensureSchema();
+        if (!empty($result['failed'])) {
+            throw new \RuntimeException(
+                '[Archives] Schema install failed for: ' . implode(', ', $result['failed'])
+            );
+        }
+    }
+
     /**
      * Called when deactivated. Keeps the tables in place — dropping them
      * would delete archival records, which are probably more valuable than

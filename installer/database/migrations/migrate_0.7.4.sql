@@ -1,6 +1,7 @@
--- Pinakes v0.7.4 — MAG digital_assets table + NCIP partner schema additions
+-- Pinakes v0.7.4 — MAG digital_assets table + NCIP partner/transactions schema additions
 -- digital_assets: per-book digitization metadata (url, md5_hash, filesize, dimensions, ppi)
 -- ncip_partners: add isil and notes columns (standard ILS partner attributes)
+-- ncip_transactions: align columns with plugin schema (partner_id, prestito_id, status, error_msg)
 
 CREATE TABLE IF NOT EXISTS digital_assets (
     id           INT UNSIGNED      NOT NULL AUTO_INCREMENT,
@@ -67,3 +68,74 @@ EXECUTE _stmt;
 DEALLOCATE PREPARE _stmt;
 
 ALTER TABLE ncip_partners MODIFY COLUMN code VARCHAR(64) NULL DEFAULT NULL;
+
+-- ncip_transactions: upgrade path — add columns introduced in v0.7.4.
+-- The old schema (from ≤v0.7.3) had only: id, message_type, related_loan_id, request_id, created_at.
+-- The plugin's ensureSchema() creates the full schema, but on upgrades the table already exists so
+-- CREATE TABLE IF NOT EXISTS is a no-op. We add the missing columns and drop the old one here.
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'ncip_transactions'
+      AND COLUMN_NAME  = 'partner_id'
+);
+SET @sql = IF(
+    @col_exists = 0,
+    'ALTER TABLE ncip_transactions ADD COLUMN partner_id INT NULL AFTER id',
+    'SELECT 1'
+);
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'ncip_transactions'
+      AND COLUMN_NAME  = 'prestito_id'
+);
+SET @sql = IF(
+    @col_exists = 0,
+    'ALTER TABLE ncip_transactions ADD COLUMN prestito_id INT NULL AFTER message_type',
+    'SELECT 1'
+);
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'ncip_transactions'
+      AND COLUMN_NAME  = 'status'
+);
+SET @sql = IF(
+    @col_exists = 0,
+    "ALTER TABLE ncip_transactions ADD COLUMN status ENUM('pending','success','error') NOT NULL DEFAULT 'pending' AFTER request_id",
+    'SELECT 1'
+);
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'ncip_transactions'
+      AND COLUMN_NAME  = 'error_msg'
+);
+SET @sql = IF(
+    @col_exists = 0,
+    'ALTER TABLE ncip_transactions ADD COLUMN error_msg VARCHAR(1000) NULL AFTER status',
+    'SELECT 1'
+);
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- Drop legacy column (only if the new columns were just added — safe because related_loan_id
+-- is not referenced anywhere in plugin code from v0.7.4 onward).
+SET @col_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'ncip_transactions'
+      AND COLUMN_NAME  = 'related_loan_id'
+);
+SET @sql = IF(
+    @col_exists > 0,
+    'ALTER TABLE ncip_transactions DROP COLUMN related_loan_id',
+    'SELECT 1'
+);
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;

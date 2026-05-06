@@ -725,14 +725,17 @@ CREATE TABLE `ncip_partners` (
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ncip_transactions` (
   `id` int NOT NULL AUTO_INCREMENT,
+  `partner_id` int DEFAULT NULL,
   `message_type` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `related_loan_id` int DEFAULT NULL,
+  `prestito_id` int DEFAULT NULL,
   `request_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` enum('pending','success','error') NOT NULL DEFAULT 'pending',
+  `error_msg` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `idx_message_type` (`message_type`),
-  KEY `idx_related_loan_id` (`related_loan_id`),
-  KEY `idx_request_id` (`request_id`)
+  KEY `idx_partner` (`partner_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_prestito` (`prestito_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

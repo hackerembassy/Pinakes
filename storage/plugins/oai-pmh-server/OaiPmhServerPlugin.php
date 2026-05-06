@@ -73,6 +73,16 @@ class OaiPmhServerPlugin
         }
     }
 
+    public function onInstall(): void
+    {
+        $result = $this->ensureSchema();
+        if (!empty($result['failed'])) {
+            throw new \RuntimeException(
+                '[OaiPmhServer] Schema install failed for: ' . implode(', ', $result['failed'])
+            );
+        }
+    }
+
     public function onDeactivate(): void
     {
         $this->deleteHooksFromDb();

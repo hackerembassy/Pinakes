@@ -71,7 +71,11 @@ class NcipServerPlugin
         $this->deleteHooksFromDb();
     }
 
-    public function onInstall(): void {}
+    public function onInstall(): void
+    {
+        $this->ensureSchema();
+    }
+
     public function onUninstall(): void {}
 
     // ─── Schema ───────────────────────────────────────────────────────────────
