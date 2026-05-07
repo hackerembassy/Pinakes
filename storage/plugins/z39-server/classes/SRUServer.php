@@ -811,7 +811,7 @@ class SRUServer
             'marcxml'    => 'info:srw/schema/1/marcxml-v1.1',
             'dc'         => 'info:srw/schema/1/dc-v1.1',
             'mods'       => 'info:srw/schema/1/mods-v3.3',
-            'unimarcxml' => 'info:srw/schema/1/unimarc-v0.1',
+            'unimarcxml' => 'info:srw/schema/8/unimarcxml-v0.1',
         ];
         $schemaUri = $schemaUriMap[$recordSchema] ?? $recordSchema;
 

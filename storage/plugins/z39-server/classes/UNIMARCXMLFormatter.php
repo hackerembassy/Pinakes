@@ -12,7 +12,7 @@ namespace Z39Server;
  * codes.  Mirrors the UNIMARC output of OaiPmhServerPlugin::writeBookUnimarc()
  * but works with the DOMDocument API used by the SRU record pipeline.
  *
- * recordSchema identifier: http://www.loc.gov/MARC21/slim
+ * recordSchema identifier: info:srw/schema/8/unimarcxml-v0.1
  */
 class UNIMARCXMLFormatter extends RecordFormatter
 {
