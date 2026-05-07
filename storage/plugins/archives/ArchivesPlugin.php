@@ -248,6 +248,7 @@ class ArchivesPlugin
             'authority_records'       => self::ddlAuthorityRecords(),
             'archival_unit_authority' => self::ddlArchivalAuthorityLinks(),
             'autori_authority_link'   => self::ddlAutoriAuthorityLink(),
+            'archival_unit_files'     => self::ddlArchivalUnitFiles(),
         ];
         $created = [];
         $failed = [];
@@ -485,6 +486,15 @@ class ArchivesPlugin
             array $args
         ) use ($plugin): ResponseInterface {
             return $plugin->removeAssetAction($request, $response, (int) $args['id']);
+        })->add($csrfMiddleware)->add($adminMiddleware);
+
+        // POST /admin/archives/{id}/files/{fileId}/delete — remove one file from archival_unit_files
+        $app->post('/admin/archives/{id:[0-9]+}/files/{fileId:[0-9]+}/delete', function (
+            ServerRequestInterface $request,
+            ResponseInterface $response,
+            array $args
+        ) use ($plugin): ResponseInterface {
+            return $plugin->removeFileAction($request, $response, (int) $args['id'], (int) $args['fileId']);
         })->add($csrfMiddleware)->add($adminMiddleware);
 
         // ── Phase 2 — authority_records CRUD ────────────────────────────────
@@ -1198,6 +1208,7 @@ class ArchivesPlugin
         return $this->renderView($response, 'show', [
             'row'                  => $row,
             'parent_title'         => $parentTitle,
+            'unit_files'           => $this->fetchUnitFiles($id),
             'linked_authorities'   => $this->fetchAuthoritiesForArchivalUnit($id),
             'available_authorities'=> $this->listAllAuthorities(),
             'authority_roles'      => array_keys(self::AUTHORITY_ROLES),
@@ -1587,18 +1598,93 @@ class ArchivesPlugin
             }
         } else {
             $clientName = (string) ($upload->getClientFilename() ?: ('archive-' . $id . '.' . $ext));
-            // Strip any path component from the client-provided name.
             $clientName = basename($clientName);
+            // Insert into archival_unit_files (multi-document table).
+            // sort_order = max existing + 1 so new files appear last.
             $stmt = $this->db->prepare(
-                'UPDATE archival_units SET document_path = ?, document_mime = ?, document_filename = ? WHERE id = ?'
+                'INSERT INTO archival_unit_files (unit_id, file_path, file_mime, original_filename, sort_order)
+                 SELECT ?, ?, ?, ?,
+                        COALESCE((SELECT MAX(sort_order) FROM archival_unit_files WHERE unit_id = ?), -1) + 1'
             );
             if ($stmt !== false) {
-                $stmt->bind_param('sssi', $relPath, $mime, $clientName, $id);
+                $stmt->bind_param('isssi', $id, $relPath, $mime, $clientName, $id);
                 $stmt->execute();
                 $stmt->close();
             }
         }
         return $response->withHeader('Location', '/admin/archives/' . $id)->withStatus(303);
+    }
+
+    /**
+     * Delete a single file from archival_unit_files and unlink it from disk.
+     * Requires the file to belong to the given unit (ownership check).
+     */
+    public function removeFileAction(
+        ServerRequestInterface $request,
+        ResponseInterface $response,
+        int $unitId,
+        int $fileId
+    ): ResponseInterface {
+        $stmt = $this->db->prepare(
+            'SELECT file_path FROM archival_unit_files WHERE id = ? AND unit_id = ?'
+        );
+        if ($stmt === false) {
+            return $response->withHeader('Location', '/admin/archives/' . $unitId)->withStatus(303);
+        }
+        $stmt->bind_param('ii', $fileId, $unitId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $file   = $result->fetch_assoc();
+        $stmt->close();
+
+        if ($file === null) {
+            return $response->withHeader('Location', '/admin/archives/' . $unitId)->withStatus(303);
+        }
+
+        $filePath = (string) $file['file_path'];
+        if (str_starts_with($filePath, '/uploads/archives/documents/')) {
+            $fsPath = __DIR__ . '/../../../public' . $filePath;
+            if (is_file($fsPath)) {
+                @unlink($fsPath);
+            }
+        }
+
+        $del = $this->db->prepare('DELETE FROM archival_unit_files WHERE id = ? AND unit_id = ?');
+        if ($del !== false) {
+            $del->bind_param('ii', $fileId, $unitId);
+            $del->execute();
+            $del->close();
+        }
+
+        return $response->withHeader('Location', '/admin/archives/' . $unitId)->withStatus(303);
+    }
+
+    /**
+     * Return all files for a unit ordered by sort_order, id.
+     *
+     * @return list<array{id:int,file_path:string,file_mime:string,original_filename:string,sort_order:int}>
+     */
+    private function fetchUnitFiles(int $unitId): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT id, file_path, file_mime, original_filename, sort_order
+               FROM archival_unit_files
+              WHERE unit_id = ?
+              ORDER BY sort_order, id'
+        );
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param('i', $unitId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        /** @var list<array{id:int,file_path:string,file_mime:string,original_filename:string,sort_order:int}> $rows */
+        $rows = [];
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+        $stmt->close();
+        return $rows;
     }
 
     // ── Phase 2 — authority_records handlers ────────────────────────────
@@ -2393,6 +2479,7 @@ class ArchivesPlugin
             'children'    => $children,
             'authorities' => $authorities,
             'breadcrumb'  => $breadcrumb,
+            'unit_files'  => $this->fetchUnitFiles($id),
         ]);
     }
 
@@ -4598,6 +4685,63 @@ class ArchivesPlugin
                 ];
             }
         }
+        // Additional image files from archival_unit_files → extra Canvases.
+        // Non-image files (PDF, audio, video) → rendering[] array.
+        $unitFiles   = $this->fetchUnitFiles($id);
+        $canvasIndex = count($items) + 1;
+        $rendering   = [];
+        foreach ($unitFiles as $uf) {
+            $fileMime = (string) $uf['file_mime'];
+            $fsPath   = __DIR__ . '/../../../public' . (string) $uf['file_path'];
+            if (!is_file($fsPath)) {
+                continue;
+            }
+            $fileUrl = $base . '/' . ltrim((string) $uf['file_path'], '/');
+            $label   = (string) ($uf['original_filename'] ?: basename((string) $uf['file_path']));
+            if (str_starts_with($fileMime, 'image/')) {
+                $imgSize      = @getimagesize($fsPath);
+                $imgW         = ($imgSize !== false && $imgSize[0] > 0) ? $imgSize[0] : 1500;
+                $imgH         = ($imgSize !== false && $imgSize[1] > 0) ? $imgSize[1] : 2000;
+                $detectedMime = ($imgSize !== false) ? $imgSize['mime'] : $fileMime;
+                $canvasId     = $manifestId . '/canvas/' . $canvasIndex;
+                $items[]      = [
+                    'id'     => $canvasId,
+                    'type'   => 'Canvas',
+                    'label'  => ['none' => [$label]],
+                    'width'  => $imgW,
+                    'height' => $imgH,
+                    'items'  => [[
+                        'id'    => $canvasId . '/page',
+                        'type'  => 'AnnotationPage',
+                        'items' => [[
+                            'id'         => $canvasId . '/annotation/1',
+                            'type'       => 'Annotation',
+                            'motivation' => 'painting',
+                            'body'       => [
+                                'id'     => $fileUrl,
+                                'type'   => 'Image',
+                                'format' => $detectedMime,
+                                'width'  => $imgW,
+                                'height' => $imgH,
+                            ],
+                            'target' => $canvasId,
+                        ]],
+                    ]],
+                ];
+                $canvasIndex++;
+            } else {
+                $rendering[] = [
+                    'id'     => $fileUrl,
+                    'type'   => 'Text',
+                    'label'  => ['none' => [$label]],
+                    'format' => $fileMime,
+                ];
+            }
+        }
+        if (!empty($rendering)) {
+            $manifest['rendering'] = $rendering;
+        }
+
         // IIIF 3.0 §3.3: items must have cardinality ≥ 1.
         // When no local image is available, serve a minimal placeholder Canvas
         // so clients receive a valid (if unpainted) manifest.
@@ -5046,8 +5190,9 @@ class ArchivesPlugin
      */
     private function buildMetsXml(array $row, array $authorities): string
     {
-        $base   = rtrim((string) absoluteUrl(''), '/');
-        $unitId = (int) ($row['id'] ?? 0);
+        $base      = rtrim((string) absoluteUrl(''), '/');
+        $unitId    = (int) ($row['id'] ?? 0);
+        $unitFiles = $unitId > 0 ? $this->fetchUnitFiles($unitId) : [];
         $title  = (string) ($row['constructed_title'] ?? $row['formal_title'] ?? 'Untitled');
         $objId = !empty($row['ark_identifier'])
             ? (string) $row['ark_identifier']
@@ -5157,6 +5302,35 @@ class ArchivesPlugin
             $xw->endElement(); // fileGrp
         }
 
+        // fileGrp for multi-document files stored in archival_unit_files
+        $docFileIds = [];
+        if (!empty($unitFiles)) {
+            $xw->startElement('mets:fileGrp');
+            $xw->writeAttribute('USE', 'documents');
+            foreach ($unitFiles as $idx => $uf) {
+                $fsPathDoc = __DIR__ . '/../../../public' . (string) $uf['file_path'];
+                if (!is_file($fsPathDoc)) {
+                    continue;
+                }
+                $docMime  = (string) ($uf['file_mime'] ?: 'application/octet-stream');
+                $fileId   = 'DOC_' . $idx;
+                $docFileIds[] = $fileId;
+                $xw->startElement('mets:file');
+                $xw->writeAttribute('ID',       $fileId);
+                $xw->writeAttribute('MIMETYPE', $docMime);
+                if (!empty($uf['original_filename'])) {
+                    $xw->writeAttribute('LABEL', (string) $uf['original_filename']);
+                }
+                $xw->startElement('mets:FLocat');
+                $xw->writeAttribute('LOCTYPE', 'URL');
+                $xw->writeAttributeNs('xlink', 'type', null, 'simple');
+                $xw->writeAttributeNs('xlink', 'href', null, $base . '/' . ltrim((string) $uf['file_path'], '/'));
+                $xw->endElement(); // FLocat
+                $xw->endElement(); // file
+            }
+            $xw->endElement(); // fileGrp
+        }
+
         $xw->endElement(); // fileSec
 
         // structMap
@@ -5172,6 +5346,11 @@ class ArchivesPlugin
         if ($hasCoverFile) {
             $xw->startElement('mets:fptr');
             $xw->writeAttribute('FILEID', 'COVER_IMAGE');
+            $xw->endElement(); // fptr
+        }
+        foreach ($docFileIds as $fileId) {
+            $xw->startElement('mets:fptr');
+            $xw->writeAttribute('FILEID', $fileId);
             $xw->endElement(); // fptr
         }
         $xw->endElement(); // div
@@ -5448,6 +5627,21 @@ class ArchivesPlugin
                 $xw->writeAttribute('linktitle', 'Cover image');
                 $xw->writeAttribute('actuate', 'onrequest');
                 $xw->writeAttribute('show', 'embed');
+                $xw->endElement(); // dao
+            }
+            // One <dao> per multi-document file in archival_unit_files.
+            foreach ($this->fetchUnitFiles($unitId) as $uf) {
+                $fsPathDoc = __DIR__ . '/../../../public' . (string) $uf['file_path'];
+                if (!is_file($fsPathDoc)) {
+                    continue;
+                }
+                $docUrl = (string) absoluteUrl('/' . ltrim((string) $uf['file_path'], '/'));
+                $xw->startElement('dao');
+                $xw->writeAttribute('daotype',   'borndigital');
+                $xw->writeAttribute('href',       $docUrl);
+                $xw->writeAttribute('linktitle',  (string) ($uf['original_filename'] ?: basename((string) $uf['file_path'])));
+                $xw->writeAttribute('actuate',    'onrequest');
+                $xw->writeAttribute('show',       'new');
                 $xw->endElement(); // dao
             }
             $xw->endElement(); // daoset
@@ -6305,6 +6499,25 @@ class ArchivesPlugin
             PRIMARY KEY (autori_id, authority_id),
             KEY idx_authority_autore (authority_id),
             CONSTRAINT fk_aal_authority FOREIGN KEY (authority_id) REFERENCES authority_records(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        SQL;
+    }
+
+    public static function ddlArchivalUnitFiles(): string
+    {
+        return <<<'SQL'
+        CREATE TABLE IF NOT EXISTS archival_unit_files (
+            id                INT UNSIGNED      NOT NULL AUTO_INCREMENT,
+            unit_id           INT               NOT NULL,
+            file_path         VARCHAR(500)      NOT NULL,
+            file_mime         VARCHAR(127)      NOT NULL DEFAULT 'application/octet-stream',
+            original_filename VARCHAR(255)      NOT NULL DEFAULT '',
+            sort_order        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at        TIMESTAMP         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_unit_id (unit_id),
+            CONSTRAINT fk_archival_unit_files_unit
+                FOREIGN KEY (unit_id) REFERENCES archival_units(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         SQL;
     }

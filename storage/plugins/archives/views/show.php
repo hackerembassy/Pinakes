@@ -293,33 +293,37 @@ $id = (int) $row['id'];
                 </form>
             </div>
 
-            <!-- Document -->
+            <!-- Documenti (multi-file) -->
+            <?php /** @var list<array{id:int,file_path:string,file_mime:string,original_filename:string,sort_order:int}> $unit_files */ ?>
             <div>
                 <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    <?= __("Documento scaricabile") ?>
+                    <?= __("Documenti scaricabili") ?>
                 </h3>
-                <?php if (!empty($row['document_path'])): ?>
-                    <div class="border border-gray-200 rounded-md p-3 mb-3 bg-gray-50">
-                        <p class="text-sm text-gray-900 mb-1">
-                            <i class="fas fa-file-alt mr-1"></i>
-                            <a href="<?= $e(url((string) $row['document_path'])) ?>"
-                               target="_blank" rel="noopener"
-                               class="text-blue-600 hover:underline">
-                                <?= $e((string) ($row['document_filename'] ?? basename((string) $row['document_path']))) ?>
-                            </a>
-                        </p>
-                        <?php if (!empty($row['document_mime'])): ?>
-                            <p class="text-xs text-gray-500 font-mono"><?= $e((string) $row['document_mime']) ?></p>
-                        <?php endif; ?>
-                    </div>
-                    <form method="POST" action="<?= $e(url('/admin/archives/' . $id . '/remove-asset')) ?>"
-                          class="inline" onsubmit="return confirm('<?= $e(__("Rimuovere il documento?")) ?>');">
-                        <input type="hidden" name="csrf_token" value="<?= $e(\App\Support\Csrf::ensureToken()) ?>">
-                        <input type="hidden" name="type" value="document">
-                        <button type="submit" class="text-xs text-red-600 hover:underline">
-                            <?= __("Rimuovi documento") ?>
-                        </button>
-                    </form>
+                <?php if (!empty($unit_files)): ?>
+                    <ul class="divide-y divide-gray-200 border border-gray-200 rounded-md mb-3">
+                        <?php foreach ($unit_files as $uf): ?>
+                            <li class="flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100">
+                                <div class="min-w-0 flex-1 mr-3">
+                                    <a href="<?= $e(url((string) $uf['file_path'])) ?>"
+                                       target="_blank" rel="noopener"
+                                       class="text-sm text-blue-600 hover:underline truncate block">
+                                        <i class="fas fa-file-alt mr-1"></i>
+                                        <?= $e((string) ($uf['original_filename'] ?: basename((string) $uf['file_path']))) ?>
+                                    </a>
+                                    <span class="text-xs text-gray-400 font-mono"><?= $e((string) $uf['file_mime']) ?></span>
+                                </div>
+                                <form method="POST"
+                                      action="<?= $e(url('/admin/archives/' . $id . '/files/' . (int) $uf['id'] . '/delete')) ?>"
+                                      class="inline flex-shrink-0"
+                                      onsubmit="return confirm('<?= $e(__("Rimuovere questo file?")) ?>');">
+                                    <input type="hidden" name="csrf_token" value="<?= $e(\App\Support\Csrf::ensureToken()) ?>">
+                                    <button type="submit" class="text-xs text-red-600 hover:underline">
+                                        <?= __("Rimuovi") ?>
+                                    </button>
+                                </form>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
                 <?php else: ?>
                     <p class="text-xs text-gray-500 italic mb-3"><?= __("Nessun documento caricato.") ?></p>
                 <?php endif; ?>
@@ -330,7 +334,7 @@ $id = (int) $row['id'];
                            accept="application/pdf,application/epub+zip,audio/mpeg,audio/mp4,audio/ogg,audio/wav,video/mp4,video/webm,image/tiff,image/jpeg,image/png" required
                            class="block w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                     <p class="text-xs text-gray-400"><?= __("PDF, ePub, audio (mp3/m4a/ogg/wav), video (mp4/webm), immagini (tiff/jpg/png). Max 200 MB.") ?></p>
-                    <button type="submit" class="btn-secondary text-xs"><?= __("Carica documento") ?></button>
+                    <button type="submit" class="btn-secondary text-xs"><?= __("Aggiungi documento") ?></button>
                 </form>
             </div>
         </div>

@@ -71,15 +71,17 @@ if (!empty($row['date_start'])) {
     }
 }
 
-// Optional per-document assets. These columns are added by the
-// 0.5.9 migration's phase-5+ addenda — views degrade gracefully
-// when they're absent or empty.
-$coverUrl  = !empty($row['cover_image_path']) ? url((string) $row['cover_image_path']) : '';
-$docPath   = (string) ($row['document_path'] ?? '');
-$docMime   = (string) ($row['document_mime'] ?? '');
-$docName   = (string) ($row['document_filename'] ?? '');
-$docUrl    = $docPath !== '' ? url($docPath) : '';
-$isAudio   = $docMime !== '' && str_starts_with($docMime, 'audio/');
+// Optional per-document assets.
+$coverUrl   = !empty($row['cover_image_path']) ? url((string) $row['cover_image_path']) : '';
+/** @var list<array{id:int,file_path:string,file_mime:string,original_filename:string,sort_order:int}> $unit_files */
+$unit_files = $unit_files ?? [];
+// Backwards-compat: expose first file as legacy $docUrl for schema.org etc.
+$firstFile  = !empty($unit_files) ? $unit_files[0] : null;
+$docPath    = $firstFile !== null ? (string) $firstFile['file_path'] : (string) ($row['document_path'] ?? '');
+$docMime    = $firstFile !== null ? (string) $firstFile['file_mime'] : (string) ($row['document_mime'] ?? '');
+$docName    = $firstFile !== null ? (string) $firstFile['original_filename'] : (string) ($row['document_filename'] ?? '');
+$docUrl     = $docPath !== '' ? url($docPath) : '';
+$isAudio    = $docMime !== '' && str_starts_with($docMime, 'audio/');
 $specific  = (string) ($row['specific_material'] ?? '');
 ?>
 <link rel="stylesheet" href="<?= $e(url('/plugins/archives/assets/css/archives-public.css')) ?>">
@@ -194,7 +196,36 @@ $archiveSchema = json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UN
                         </p>
                     <?php endif; ?>
 
-                    <?php if ($docUrl !== ''): ?>
+                    <?php if (!empty($unit_files)): ?>
+                        <div class="archive-actions" style="justify-content:flex-start;flex-direction:column;gap:.5rem;">
+                            <?php foreach ($unit_files as $uf): ?>
+                                <?php
+                                $ufPath  = (string) $uf['file_path'];
+                                $ufMime  = (string) $uf['file_mime'];
+                                $ufName  = (string) ($uf['original_filename'] ?: basename($ufPath));
+                                $ufUrl   = url($ufPath);
+                                $ufAudio = str_starts_with($ufMime, 'audio/');
+                                ?>
+                                <div class="d-flex align-items-center gap-2 w-100">
+                                    <?php if ($ufAudio): ?>
+                                        <div class="archive-player-wrap w-100">
+                                            <audio class="green-audio-player" controls preload="metadata"
+                                                   src="<?= $e($ufUrl) ?>"></audio>
+                                        </div>
+                                    <?php else: ?>
+                                        <a class="btn btn-primary btn-sm" href="<?= $e($ufUrl) ?>"
+                                           download="<?= $e($ufName) ?>">
+                                            <i class="fas fa-download me-1"></i><?= $e($ufName) ?>
+                                        </a>
+                                    <?php endif; ?>
+                                    <?php if ($ufMime !== ''): ?>
+                                        <span class="text-muted small ref-mono"><?= $e($ufMime) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php elseif ($docUrl !== ''): ?>
+                        <!-- legacy fallback: document_path column -->
                         <div class="archive-actions" style="justify-content:flex-start;">
                             <?php if ($isAudio): ?>
                                 <div class="archive-player-wrap w-100">
