@@ -193,10 +193,9 @@ function decryptSettingValue(string $encrypted): ?string
 
     // Remove ENC: prefix
     $payload = substr($encrypted, 4);
-    $decoded = base64_decode($payload);
+    $decoded = base64_decode($payload, true);
 
-    /** @phpstan-ignore function.alreadyNarrowedType */
-    if (!is_string($decoded) || strlen($decoded) < 28) {
+    if ($decoded === false || strlen($decoded) < 28) {
         \App\Support\SecureLogger::error('[Z39 SRU Endpoint] Invalid encrypted payload');
         return null;
     }
