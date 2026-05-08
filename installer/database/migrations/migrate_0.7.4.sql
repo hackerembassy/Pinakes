@@ -454,9 +454,18 @@ ON DUPLICATE KEY UPDATE
     metadata      = VALUES(metadata);
 
 -- ─── archival_unit_files: multi-document support per archival unit ───────────
--- Replaces the single document_path/document_mime/document_filename columns with
--- a one-to-many table so each unit can carry multiple downloadable files.
--- The old columns are kept (not dropped) to allow rollback.
+-- archival_unit_files belongs to the Archives plugin.  If Archives was never
+-- activated on this install, archival_units does not exist yet; creating
+-- archival_unit_files with a FK to archival_units would fail with error 1824.
+-- Guard: create the table unconditionally (no FK), then add the FK and migrate
+-- existing document_path rows only when archival_units is already present.
+-- When Archives is later activated, ArchivesPlugin::ensureSchema() will handle
+-- both tables idempotently.
+
+SET @au_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'archival_units'
+);
 
 CREATE TABLE IF NOT EXISTS archival_unit_files (
     id                INT UNSIGNED     NOT NULL AUTO_INCREMENT,
@@ -467,25 +476,22 @@ CREATE TABLE IF NOT EXISTS archival_unit_files (
     sort_order        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     created_at        TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    KEY idx_unit_id (unit_id),
-    CONSTRAINT fk_archival_unit_files_unit
-        FOREIGN KEY (unit_id) REFERENCES archival_units(id) ON DELETE CASCADE
+    KEY idx_unit_id (unit_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Migrate existing document_path rows into the new table (idempotent).
-INSERT INTO archival_unit_files (unit_id, file_path, file_mime, original_filename, sort_order)
-SELECT id,
-       document_path,
-       COALESCE(NULLIF(document_mime, ''), 'application/octet-stream'),
-       COALESCE(NULLIF(document_filename, ''), SUBSTRING_INDEX(document_path, '/', -1)),
-       0
-FROM archival_units
-WHERE document_path IS NOT NULL
-  AND document_path <> ''
-  AND NOT EXISTS (
-      SELECT 1 FROM archival_unit_files f
-      WHERE f.unit_id = archival_units.id AND f.file_path = archival_units.document_path
-  );
+SET @sql = IF(
+    @au_exists > 0,
+    'ALTER TABLE archival_unit_files ADD CONSTRAINT fk_archival_unit_files_unit FOREIGN KEY (unit_id) REFERENCES archival_units(id) ON DELETE CASCADE',
+    'SELECT 1'
+);
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @sql = IF(
+    @au_exists > 0,
+    'INSERT INTO archival_unit_files (unit_id, file_path, file_mime, original_filename, sort_order) SELECT id, document_path, COALESCE(NULLIF(document_mime, ''''), ''application/octet-stream''), COALESCE(NULLIF(document_filename, ''''), SUBSTRING_INDEX(document_path, ''/'', -1)), 0 FROM archival_units WHERE document_path IS NOT NULL AND document_path <> '''' AND NOT EXISTS (SELECT 1 FROM archival_unit_files f WHERE f.unit_id = archival_units.id AND f.file_path = archival_units.document_path)',
+    'SELECT 1'
+);
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
 -- Ensure archives plugin hooks are registered.
 -- Uses INSERT ... ON DUPLICATE KEY to be idempotent (safe to re-run).

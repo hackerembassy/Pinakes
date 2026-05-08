@@ -276,7 +276,40 @@ class ArchivesPlugin
         // installs. Must run AFTER CREATE TABLE so the table exists.
         $this->migrateImageColumns();
 
+        // If archival_unit_files was created by migrate_0.7.4 without the FK
+        // (because archival_units didn't exist yet), add the FK now.
+        $this->migrateArchivalUnitFilesFK();
+
         return ['created' => $created, 'failed' => $failed];
+    }
+
+    /**
+     * Ensures fk_archival_unit_files_unit exists on archival_unit_files.
+     * The v0.7.4 migration creates the table without FK when Archives was
+     * not yet activated; this method adds the FK idempotently at activation.
+     */
+    private function migrateArchivalUnitFilesFK(): void
+    {
+        $cnt = $this->db->query(
+            "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+              WHERE TABLE_SCHEMA    = DATABASE()
+                AND TABLE_NAME      = 'archival_unit_files'
+                AND CONSTRAINT_NAME = 'fk_archival_unit_files_unit'
+                AND CONSTRAINT_TYPE = 'FOREIGN KEY'"
+        );
+        if (!($cnt instanceof \mysqli_result)) {
+            return;
+        }
+        $row = $cnt->fetch_assoc();
+        $cnt->free();
+        if ($row === null || (int) ($row['n'] ?? 1) > 0) {
+            return;
+        }
+        $this->db->query(
+            'ALTER TABLE archival_unit_files
+               ADD CONSTRAINT fk_archival_unit_files_unit
+               FOREIGN KEY (unit_id) REFERENCES archival_units(id) ON DELETE CASCADE'
+        );
     }
 
     /**
