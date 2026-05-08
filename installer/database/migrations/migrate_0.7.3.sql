@@ -91,7 +91,7 @@ VALUES
     ('ncip-server',
      'NCIP 2.0 Server',
      'Implementa il protocollo NISO Circulation Interchange Protocol (NCIP) 2.0 per lo scambio di informazioni sui prestiti con ILS, self-service kiosk e sistemi di rete bibliotecaria. Espone /ncip con LookupItem, LookupUser, CheckOutItem, CheckInItem, RenewItem, RequestItem e CancelRequestItem.',
-     '1.0.0', 'Fabiodalez', '',
+     '1.0.0', 'Fabiodalez', NULL,
      'https://www.niso.org/standards-committees/ncip',
      0,
      'ncip-server',
