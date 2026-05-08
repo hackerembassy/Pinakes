@@ -663,7 +663,7 @@ CREATE TABLE `plugins` (
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `oai_deleted_records` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
-  `entity_type` enum('book','archive_unit') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_type` enum('book','archival_unit') COLLATE utf8mb4_unicode_ci NOT NULL,
   `entity_id` int NOT NULL,
   `oai_id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `datestamp` datetime NOT NULL,

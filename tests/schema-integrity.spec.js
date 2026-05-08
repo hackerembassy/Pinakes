@@ -28,7 +28,7 @@
  * 10. [Archives] archival_units: base + photo + interop columns (skip if absent)
  * 11. [Archives] archival_units.specific_material ENUM — MARC21 values (skip if absent)
  * 12. [Archives] archival_unit_files: all columns (v0.7.4) (skip if absent)
- * 13. oai_deleted_records: entity_type ENUM includes 'archive_unit' (v0.6.0)
+ * 13. oai_deleted_records: entity_type ENUM includes 'archival_unit' (v0.6.0)
  * 14. collane: hierarchy columns parent_id / tipo / gruppo_serie (v0.5.9.5)
  * 15. utenti: GDPR privacy columns (v0.4.0)
  * 16. Plugin registrations: all 16 bundled plugins present in DB
@@ -329,11 +329,11 @@ test.describe.serial('Schema integrity — v0.7.4 (17 tests)', () => {
 
     // ── 13. oai_deleted_records entity_type ──────────────────────────────────
 
-    test("13. oai_deleted_records: entity_type ENUM includes 'archive_unit' (v0.6.0)", () => {
+    test("13. oai_deleted_records: entity_type ENUM includes 'archival_unit' (v0.6.0)", () => {
         const ct = colType('oai_deleted_records', 'entity_type');
         expect(ct, 'oai_deleted_records.entity_type missing').toContain('enum');
         expect(ct, "entity_type missing 'book'").toContain("'book'");
-        expect(ct, "entity_type missing 'archive_unit'").toContain("'archive_unit'");
+        expect(ct, "entity_type missing 'archival_unit'").toContain("'archival_unit'");
     });
 
     // ── 14. collane hierarchy columns ─────────────────────────────────────────
