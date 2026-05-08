@@ -138,6 +138,48 @@ jobs:
           echo "Columns found: $COUNT / 7"
           [ "$COUNT" -eq 7 ] && echo "✓ All expected columns present" || { echo "✗ Missing columns"; exit 1; }
 
+      - name: Verify ENUM values after full migration chain
+        run: |
+          FAILED=0
+
+          # oai_deleted_records.entity_type must include 'archival_unit' (not the old typo 'archive_unit')
+          V=$(mysql -h 127.0.0.1 -u root -proot pinakes_test -sN -e \
+            "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS \
+             WHERE TABLE_SCHEMA='pinakes_test' \
+               AND TABLE_NAME='oai_deleted_records' \
+               AND COLUMN_NAME='entity_type'")
+          echo "oai_deleted_records.entity_type: $V"
+          if echo "$V" | grep -q "archival_unit"; then
+            echo "  ✓ 'archival_unit' present"
+          else
+            echo "  ✗ 'archival_unit' missing — got: $V"
+            FAILED=1
+          fi
+          if echo "$V" | grep -q "'archive_unit'"; then
+            echo "  ✗ old typo 'archive_unit' still present — fix schema.sql"
+            FAILED=1
+          fi
+
+          # archival_units.level must include core ISAD(G) levels
+          V=$(mysql -h 127.0.0.1 -u root -proot pinakes_test -sN -e \
+            "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS \
+             WHERE TABLE_SCHEMA='pinakes_test' \
+               AND TABLE_NAME='archival_units' \
+               AND COLUMN_NAME='level'" 2>/dev/null || echo "")
+          if [ -n "$V" ]; then
+            echo "archival_units.level: $V"
+            for val in fonds series file item; do
+              if echo "$V" | grep -q "'$val'"; then
+                echo "  ✓ '$val' present"
+              else
+                echo "  ✗ '$val' missing"
+                FAILED=1
+              fi
+            done
+          fi
+
+          [ "$FAILED" -eq 0 ] || exit 1
+
   # ─── Job 3: existing single-migration test (upgrade 0.3.x → 0.4.0) ─────────
   test-migrations:
     runs-on: ubuntu-latest

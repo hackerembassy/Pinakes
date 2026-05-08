@@ -1,0 +1,182 @@
+name: E2E Test Suite
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Full E2E suite (Playwright · Apache · MySQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: pinakes_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      E2E_BASE_URL:     http://localhost:8081
+      E2E_ADMIN_EMAIL:  admin@pinakes.test
+      E2E_ADMIN_PASS:   Test1234!
+      E2E_DB_HOST:      127.0.0.1
+      E2E_DB_PORT:      3306
+      E2E_DB_USER:      root
+      E2E_DB_PASS:      root
+      E2E_DB_NAME:      pinakes_test
+      E2E_INSTALL_ROOT: ${{ github.workspace }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── PHP 8.2 (ondrej PPA) ────────────────────────────────────────────────
+      - name: Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mysqli, mbstring, json, curl, openssl, zip, gd, intl, xml
+          coverage: none
+
+      # ── Apache2 + mod_php ───────────────────────────────────────────────────
+      - name: Install Apache2 + mod_php8.2
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y apache2 libapache2-mod-php8.2
+          sudo a2enmod rewrite php8.2 headers
+          sudo a2dissite 000-default || true
+
+      - name: Configure virtual host on port 8081
+        env:
+          WORKSPACE: ${{ github.workspace }}
+        run: |
+          sudo tee /etc/apache2/sites-available/pinakes.conf > /dev/null <<EOF
+          Listen 8081
+          <VirtualHost *:8081>
+              ServerName localhost
+              DocumentRoot ${WORKSPACE}/public
+              <Directory "${WORKSPACE}/public">
+                  Options -Indexes +FollowSymLinks
+                  AllowOverride All
+                  Require all granted
+              </Directory>
+              ErrorLog \${APACHE_LOG_DIR}/pinakes-error.log
+              CustomLog \${APACHE_LOG_DIR}/pinakes-access.log combined
+          </VirtualHost>
+          EOF
+          sudo a2ensite pinakes
+          sudo apachectl configtest
+
+      # ── PHP dependencies ────────────────────────────────────────────────────
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
+
+      # ── Node / Playwright ────────────────────────────────────────────────────
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      # ── Permissions: Apache (www-data) must write .env, .installed, storage ─
+      - name: Grant write permissions to workspace
+        env:
+          WORKSPACE: ${{ github.workspace }}
+        run: |
+          sudo chmod 777 "${WORKSPACE}"
+          sudo chmod -R 777 "${WORKSPACE}/storage"
+          sudo mkdir -p "${WORKSPACE}/public/uploads"
+          sudo chmod -R 777 "${WORKSPACE}/public/uploads"
+
+      # ── Start Apache ─────────────────────────────────────────────────────────
+      - name: Start Apache and wait for installer
+        run: |
+          sudo systemctl start apache2
+          echo "Waiting for Apache on :8081..."
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null "http://localhost:8081/installer/"; then
+              echo "ok — Apache up (attempt $i)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Apache did not respond in 30s"
+          sudo journalctl -u apache2 --no-pager -n 30 >&2
+          sudo cat /var/log/apache2/pinakes-error.log >&2 || true
+          exit 1
+
+      # ── Test suite ───────────────────────────────────────────────────────────
+
+      - name: "[1/4] full-test.spec.js — complete application lifecycle"
+        run: |
+          npx playwright test tests/full-test.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+
+      - name: "[2/4] schema-integrity.spec.js — post-install table verification"
+        run: |
+          npx playwright test tests/schema-integrity.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+
+      - name: "[3/4] plugin-integrity.spec.js — plugin registration regression"
+        run: |
+          npx playwright test tests/plugin-integrity.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+
+      - name: "[4/4] mag-validation.spec.js — OAI-PMH MAG 2.0.1 metadata"
+        run: |
+          npx playwright test tests/mag-validation.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+
+      # ── Artifacts on failure ─────────────────────────────────────────────────
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+      - name: Upload Apache error log
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: apache-error-log-${{ github.run_id }}
+          path: /var/log/apache2/pinakes-error.log
+          retention-days: 7
