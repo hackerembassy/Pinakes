@@ -81,7 +81,7 @@ $docPath    = $firstFile !== null ? (string) $firstFile['file_path'] : (string) 
 $docMime    = $firstFile !== null ? (string) $firstFile['file_mime'] : (string) ($row['document_mime'] ?? '');
 $docName    = $firstFile !== null ? (string) $firstFile['original_filename'] : (string) ($row['document_filename'] ?? '');
 $docUrl     = $docPath !== '' ? url($docPath) : '';
-$isAudio    = (function () use ($unit_files, $docMime): bool {
+$hasAudio   = (function () use ($unit_files, $docMime): bool {
     foreach ($unit_files as $uf) {
         if (str_starts_with((string) $uf['file_mime'], 'audio/')) {
             return true;
@@ -89,10 +89,11 @@ $isAudio    = (function () use ($unit_files, $docMime): bool {
     }
     return $docMime !== '' && str_starts_with($docMime, 'audio/');
 })();
+$docIsAudio = $docMime !== '' && str_starts_with($docMime, 'audio/');
 $specific  = (string) ($row['specific_material'] ?? '');
 ?>
 <link rel="stylesheet" href="<?= $e(url('/plugins/archives/assets/css/archives-public.css')) ?>">
-<?php if ($isAudio): ?>
+<?php if ($hasAudio): ?>
     <link rel="stylesheet" href="<?= $e(url('/assets/vendor/green-audio-player/css/green-audio-player.min.css')) ?>">
 <?php endif; ?>
 <?php
@@ -151,7 +152,7 @@ if ($coverUrl !== '') {
 }
 if ($docUrl !== '') {
     $schema['associatedMedia'] = [
-        '@type' => $isAudio ? 'AudioObject' : 'MediaObject',
+        '@type' => $docIsAudio ? 'AudioObject' : 'MediaObject',
         'contentUrl' => $docUrl,
         'encodingFormat' => $docMime,
     ];
@@ -234,7 +235,7 @@ $archiveSchema = json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UN
                     <?php elseif ($docUrl !== ''): ?>
                         <!-- legacy fallback: document_path column -->
                         <div class="archive-actions" style="justify-content:flex-start;">
-                            <?php if ($isAudio): ?>
+                            <?php if ($docIsAudio): ?>
                                 <div class="archive-player-wrap w-100">
                                     <audio class="green-audio-player" controls preload="metadata"
                                            src="<?= $e($docUrl) ?>"></audio>
@@ -425,7 +426,7 @@ $archiveSchema = json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UN
     </div>
 </section>
 
-<?php if ($isAudio): ?>
+<?php if ($hasAudio): ?>
 <script src="<?= $e(url('/assets/vendor/green-audio-player/js/green-audio-player.min.js')) ?>"></script>
 <script>
     (function() {

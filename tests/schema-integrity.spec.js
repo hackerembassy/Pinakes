@@ -53,11 +53,11 @@ const DB_PORT   = process.env.E2E_DB_PORT   || '';
 
 function mysqlArgs(sql) {
     const args = [];
-    if (DB_SOCKET) {
-        args.push('-S', DB_SOCKET);
-    } else {
-        if (DB_HOST) args.push('-h', DB_HOST);
+    if (DB_HOST) {
+        args.push('-h', DB_HOST);
         if (DB_PORT) args.push('-P', DB_PORT);
+    } else if (DB_SOCKET) {
+        args.push('-S', DB_SOCKET);
     }
     args.push('-u', DB_USER, DB_NAME, '-N', '-B', '-e', sql);
     return args;

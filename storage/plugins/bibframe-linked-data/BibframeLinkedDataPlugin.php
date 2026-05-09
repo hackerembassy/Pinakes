@@ -637,10 +637,12 @@ class BibframeLinkedDataPlugin
             $type  = (string) $val['@type'];
             $parts = ['a ' . $type];
             foreach ($val as $prop => $propVal) {
-                if (in_array($prop, ['@id', '@type'], true) || !is_array($propVal)) {
+                if (in_array($prop, ['@id', '@type'], true)) {
                     continue;
                 }
-                $inner = $this->turtleValues($propVal, $ctx);
+                $inner = is_array($propVal)
+                    ? $this->turtleValues($propVal, $ctx)
+                    : '"' . $this->escapeTurtleString((string) $propVal) . '"';
                 if ($inner !== '') {
                     $parts[] = $prop . ' ' . $inner;
                 }

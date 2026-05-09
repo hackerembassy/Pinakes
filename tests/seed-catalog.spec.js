@@ -5,7 +5,7 @@
  * SKIPPED by default so regression runs don't mutate DB state.
  * To run explicitly: E2E_RUN_SEED=1 /tmp/run-e2e.sh tests/seed-catalog.spec.js --config=tests/playwright.config.js --workers=1
  */
-const { test } = require('@playwright/test');
+const { test, expect } = require('@playwright/test');
 
 test.skip(process.env.E2E_RUN_SEED !== '1', 'Seeder skipped: set E2E_RUN_SEED=1 to run');
 
@@ -120,7 +120,8 @@ test.describe.serial('Seed Catalog (books + music)', () => {
       const copie = await page.locator('input[name="copie_totali"]').inputValue().catch(() => '');
       if (!copie || copie === '0') await page.locator('input[name="copie_totali"]').fill('1');
 
-      await trySave(page, rec.note);
+      const saved = await trySave(page, rec.note);
+      expect(saved).toBeTruthy();
     });
   }
 
@@ -151,7 +152,8 @@ test.describe.serial('Seed Catalog (books + music)', () => {
       const copie = await page.locator('input[name="copie_totali"]').inputValue().catch(() => '');
       if (!copie || copie === '0') await page.locator('input[name="copie_totali"]').fill('1');
 
-      await trySave(page, book.note);
+      const saved = await trySave(page, book.note);
+      expect(saved).toBeTruthy();
     });
   }
 
@@ -173,7 +175,8 @@ test.describe.serial('Seed Catalog (books + music)', () => {
       }
       await page.locator('input[name="copie_totali"]').fill('1');
 
-      await trySave(page, entry.titolo);
+      const saved = await trySave(page, entry.titolo);
+      expect(saved).toBeTruthy();
     });
   }
 });

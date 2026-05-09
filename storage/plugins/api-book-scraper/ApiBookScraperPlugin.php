@@ -260,9 +260,8 @@ class ApiBookScraperPlugin
         }
 
         // Decodifica base64
-        $decoded = base64_decode($encrypted);
-        /** @phpstan-ignore function.alreadyNarrowedType */
-        if (!is_string($decoded)) {
+        $decoded = base64_decode($encrypted, true);
+        if ($decoded === false) {
             return $value;
         }
 

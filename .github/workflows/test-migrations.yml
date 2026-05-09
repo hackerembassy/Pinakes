@@ -165,7 +165,7 @@ jobs:
             "SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS \
              WHERE TABLE_SCHEMA='pinakes_test' \
                AND TABLE_NAME='archival_units' \
-               AND COLUMN_NAME='level'" 2>/dev/null || echo "")
+               AND COLUMN_NAME='level'")
           if [ -n "$V" ]; then
             echo "archival_units.level: $V"
             for val in fonds series file item; do

@@ -23,11 +23,13 @@
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
 
-const BASE      = process.env.E2E_BASE_URL  || 'http://localhost:8081';
-const DB_USER   = process.env.E2E_DB_USER   || '';
-const DB_PASS   = process.env.E2E_DB_PASS   || '';
-const DB_NAME   = process.env.E2E_DB_NAME   || '';
-const DB_SOCKET = process.env.E2E_DB_SOCKET || '';
+const BASE        = process.env.E2E_BASE_URL    || 'http://localhost:8081';
+const DB_USER     = process.env.E2E_DB_USER     || '';
+const DB_PASS     = process.env.E2E_DB_PASS     || '';
+const DB_NAME     = process.env.E2E_DB_NAME     || '';
+const DB_SOCKET   = process.env.E2E_DB_SOCKET   || '';
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
+const ADMIN_PASS  = process.env.E2E_ADMIN_PASS  || '';
 
 function mysqlArgs(sql, batch = false) {
     const args = [];
@@ -50,6 +52,42 @@ test.skip(
 );
 
 test.describe.serial('ResourceSync plugin — v0.7.1 (13 tests)', () => {
+    /** @type {import('@playwright/test').BrowserContext} */
+    let context;
+    /** @type {import('@playwright/test').Page} */
+    let page;
+
+    test.beforeAll(async ({ browser }) => {
+        context = await browser.newContext();
+        page    = await context.newPage();
+
+        // Login as admin.
+        await page.goto(`${BASE}/accedi`);
+        await page.fill('input[name="email"]', ADMIN_EMAIL);
+        await page.fill('input[name="password"]', ADMIN_PASS);
+        await Promise.all([
+            page.waitForURL(/\/admin\//, { timeout: 15000 }),
+            page.click('button[type="submit"]'),
+        ]);
+
+        // Ensure resource-sync plugin is active.
+        const isActive = dbQuery("SELECT is_active FROM plugins WHERE name = 'resource-sync'");
+        if (isActive !== '1') {
+            await page.goto(`${BASE}/admin/plugins`);
+            await page.waitForLoadState('domcontentloaded');
+            const btn = page.locator('button[onclick*="resource-sync"]').first();
+            if (await btn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await btn.click();
+                const confirm = page.locator('.swal2-confirm').first();
+                if (await confirm.isVisible({ timeout: 5000 }).catch(() => false)) await confirm.click();
+                await page.waitForLoadState('domcontentloaded');
+            }
+        }
+    });
+
+    test.afterAll(async () => {
+        await context?.close();
+    });
 
     // ── Test 1: Plugin registration ──────────────────────────────────────────
 

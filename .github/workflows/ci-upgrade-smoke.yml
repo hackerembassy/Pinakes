@@ -63,14 +63,18 @@ jobs:
         env:
           GH_REPO: ${{ github.repository }}
         run: |
-          RESPONSE=$(curl -sf "https://api.github.com/repos/${GH_REPO}/releases/latest" 2>/dev/null || echo "")
-          if [ -z "$RESPONSE" ]; then
+          HTTP_STATUS=$(curl -s -o /tmp/release.json -w "%{http_code}" \
+            "https://api.github.com/repos/${GH_REPO}/releases/latest")
+          if [ "$HTTP_STATUS" = "404" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "No releases found — skipping upgrade path (fresh install test only)"
+            echo "No releases found (HTTP 404) — skipping upgrade path (fresh install test only)"
             exit 0
+          elif [ "$HTTP_STATUS" != "200" ]; then
+            echo "GitHub API returned HTTP $HTTP_STATUS — aborting"
+            exit 1
           fi
-          TAG=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tag_name',''))")
-          ASSET=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); assets=[a['browser_download_url'] for a in d.get('assets',[]) if a['name'].endswith('.zip')]; print(assets[0] if assets else '')")
+          TAG=$(python3 -c "import json; d=json.load(open('/tmp/release.json')); print(d.get('tag_name',''))")
+          ASSET=$(python3 -c "import json; d=json.load(open('/tmp/release.json')); assets=[a['browser_download_url'] for a in d.get('assets',[]) if a['name'].endswith('.zip')]; print(assets[0] if assets else '')")
           if [ -z "$TAG" ] || [ -z "$ASSET" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "No ZIP asset found in latest release — skipping upgrade path"

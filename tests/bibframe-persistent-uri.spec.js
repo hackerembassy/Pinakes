@@ -35,10 +35,17 @@ const DB_USER   = process.env.E2E_DB_USER   || '';
 const DB_PASS   = process.env.E2E_DB_PASS   || '';
 const DB_NAME   = process.env.E2E_DB_NAME   || '';
 const DB_SOCKET = process.env.E2E_DB_SOCKET || '';
+const DB_HOST   = process.env.E2E_DB_HOST   || '';
+const DB_PORT   = process.env.E2E_DB_PORT   || '';
 
 function mysqlArgs(sql, batch = false) {
     const args = [];
-    if (DB_SOCKET) args.push('-S', DB_SOCKET);
+    if (DB_HOST) {
+        args.push('-h', DB_HOST);
+        if (DB_PORT) args.push('-P', DB_PORT);
+    } else if (DB_SOCKET) {
+        args.push('-S', DB_SOCKET);
+    }
     args.push('-u', DB_USER, DB_NAME);
     if (batch) args.push('-N', '-B');
     if (sql !== '') args.push('-e', sql);
@@ -56,22 +63,26 @@ function dbExec(sql) {
 
 test.skip(!DB_USER || !DB_NAME, 'Missing E2E env (DB_*)');
 
+const TAG = `E2E_BIBFRAME_LD_URI_${Date.now()}`;
+
 test.describe.serial('BIBFRAME Persistent URIs — /id/work and /id/instance (15 tests)', () => {
     /** @type {number} */
     let bookId = 0;
 
     test.beforeAll(async () => {
+        // Pre-cleanup: remove stale entries from prior failed runs.
+        try { dbExec("DELETE FROM libri WHERE titolo LIKE 'E2E_BIBFRAME_LD_URI%'"); } catch { /* best-effort */ }
         dbExec(
-            "INSERT INTO libri (titolo, anno_pubblicazione, created_at, updated_at) " +
-            "VALUES ('E2E_BIBFRAME_LD_URI', 2024, NOW(), NOW())"
+            `INSERT INTO libri (titolo, anno_pubblicazione, created_at, updated_at) ` +
+            `VALUES ('${TAG}', 2024, NOW(), NOW())`
         );
         bookId = parseInt(
-            dbQuery("SELECT id FROM libri WHERE titolo='E2E_BIBFRAME_LD_URI' AND deleted_at IS NULL LIMIT 1")
+            dbQuery(`SELECT id FROM libri WHERE titolo='${TAG}' AND deleted_at IS NULL LIMIT 1`)
         ) || 0;
     });
 
     test.afterAll(async () => {
-        try { dbExec("DELETE FROM libri WHERE titolo='E2E_BIBFRAME_LD_URI'"); } catch { /* best-effort */ }
+        try { dbExec(`DELETE FROM libri WHERE titolo='${TAG}'`); } catch { /* best-effort */ }
     });
 
     // ── 303 redirect behaviour ────────────────────────────────────────────────
