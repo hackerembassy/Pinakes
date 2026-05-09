@@ -30,5 +30,6 @@
   "api_home": "/api/home",
   "language_switch": "/lingua",
   "archives": "/archivio",
-  "archive_item": "/archivio"
+  "archive_item": "/archivio",
+  "bibframe.book": "/api/bibframe/book/{id}"
 }

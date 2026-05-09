@@ -189,30 +189,58 @@ storage/plugins/oai-pmh-server/**
 !storage/plugins/oai-pmh-server/*.md
 !storage/plugins/oai-pmh-server/views/
 !storage/plugins/oai-pmh-server/views/*.php
+!storage/plugins/oai-pmh-server/classes/
+!storage/plugins/oai-pmh-server/classes/*.php
+!storage/plugins/oai-pmh-server/migrations/
+!storage/plugins/oai-pmh-server/migrations/*.sql
 
 !storage/plugins/viaf-authority/
 storage/plugins/viaf-authority/**
 !storage/plugins/viaf-authority/*.php
 !storage/plugins/viaf-authority/*.json
 !storage/plugins/viaf-authority/*.md
+!storage/plugins/viaf-authority/views/
+!storage/plugins/viaf-authority/views/*.php
+!storage/plugins/viaf-authority/classes/
+!storage/plugins/viaf-authority/classes/*.php
+!storage/plugins/viaf-authority/migrations/
+!storage/plugins/viaf-authority/migrations/*.sql
 
 !storage/plugins/bibframe-linked-data/
 storage/plugins/bibframe-linked-data/**
 !storage/plugins/bibframe-linked-data/*.php
 !storage/plugins/bibframe-linked-data/*.json
 !storage/plugins/bibframe-linked-data/*.md
+!storage/plugins/bibframe-linked-data/views/
+!storage/plugins/bibframe-linked-data/views/*.php
+!storage/plugins/bibframe-linked-data/classes/
+!storage/plugins/bibframe-linked-data/classes/*.php
+!storage/plugins/bibframe-linked-data/migrations/
+!storage/plugins/bibframe-linked-data/migrations/*.sql
 
 !storage/plugins/resource-sync/
 storage/plugins/resource-sync/**
 !storage/plugins/resource-sync/*.php
 !storage/plugins/resource-sync/*.json
 !storage/plugins/resource-sync/*.md
+!storage/plugins/resource-sync/views/
+!storage/plugins/resource-sync/views/*.php
+!storage/plugins/resource-sync/classes/
+!storage/plugins/resource-sync/classes/*.php
+!storage/plugins/resource-sync/migrations/
+!storage/plugins/resource-sync/migrations/*.sql
 
 !storage/plugins/openurl-resolver/
 storage/plugins/openurl-resolver/**
 !storage/plugins/openurl-resolver/*.php
 !storage/plugins/openurl-resolver/*.json
 !storage/plugins/openurl-resolver/*.md
+!storage/plugins/openurl-resolver/views/
+!storage/plugins/openurl-resolver/views/*.php
+!storage/plugins/openurl-resolver/classes/
+!storage/plugins/openurl-resolver/classes/*.php
+!storage/plugins/openurl-resolver/migrations/
+!storage/plugins/openurl-resolver/migrations/*.sql
 
 !storage/plugins/ncip-server/
 storage/plugins/ncip-server/**
@@ -221,6 +249,10 @@ storage/plugins/ncip-server/**
 !storage/plugins/ncip-server/*.md
 !storage/plugins/ncip-server/views/
 !storage/plugins/ncip-server/views/*.php
+!storage/plugins/ncip-server/classes/
+!storage/plugins/ncip-server/classes/*.php
+!storage/plugins/ncip-server/migrations/
+!storage/plugins/ncip-server/migrations/*.sql
 
 # Premium plugin - never track (private/commercial)
 storage/plugins/scraping-pro/

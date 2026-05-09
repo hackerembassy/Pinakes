@@ -564,4 +564,22 @@ SELECT p.id, 'frontend.catalog.archive_results', 'ArchivesPlugin', 'getPublicArc
   FROM plugins p WHERE p.name = 'archives'
 ON DUPLICATE KEY UPDATE is_active = 1;
 
+-- archival_units — phase 7 safety fallback (idempotent; mirrors migrate_0.5.9.sql phase-7 block).
+-- Ensures IIIF/ARK/rights columns exist even on fresh installs that skipped migrate_0.5.9.sql.
+SET @c = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='archival_units' AND COLUMN_NAME='iiif_manifest_url');
+SET @sql = IF(@c=0, 'ALTER TABLE archival_units ADD COLUMN iiif_manifest_url VARCHAR(2000) NULL', 'SELECT 1');
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @c = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='archival_units' AND COLUMN_NAME='rights_statement_url');
+SET @sql = IF(@c=0, 'ALTER TABLE archival_units ADD COLUMN rights_statement_url VARCHAR(500) NULL', 'SELECT 1');
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @c = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='archival_units' AND COLUMN_NAME='ark_identifier');
+SET @sql = IF(@c=0, 'ALTER TABLE archival_units ADD COLUMN ark_identifier VARCHAR(255) NULL', 'SELECT 1');
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @c = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='archival_units' AND COLUMN_NAME='version_note');
+SET @sql = IF(@c=0, 'ALTER TABLE archival_units ADD COLUMN version_note VARCHAR(500) NULL', 'SELECT 1');
+PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
 -- openurl-resolver registration is already covered by the INSERT above (line ~406).

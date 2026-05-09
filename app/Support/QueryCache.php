@@ -97,7 +97,7 @@ class QueryCache
                 $staleLock = true;
             }
 
-            while (!$lockAcquired && !$staleLock) {
+            while (!$staleLock) {
                 $lockAcquired = flock($lockHandle, LOCK_EX | LOCK_NB);
                 if ($lockAcquired) {
                     break;
@@ -108,7 +108,7 @@ class QueryCache
                 $lockMtime = @filemtime($lockFile);
                 if ($lockMtime !== false && (time() - $lockMtime) > $staleThreshold) {
                     $staleLock = true;
-                    break;
+                    continue; // re-evaluate while(!$staleLock) → exits loop
                 }
 
                 if ((microtime(true) - $start) >= $maxWaitSeconds) {

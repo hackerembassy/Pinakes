@@ -159,6 +159,8 @@ test.describe.serial('NCIP 2.0 Server plugin — v0.7.4 (20 tests)', () => {
     let testUserId = 0;
     /** @type {number} */
     let createdLoanId = 0;
+    /** Track specific prestiti IDs created during these tests for targeted cleanup */
+    let createdPrestitiIds = /** @type {number[]} */ ([]);
 
     test.beforeAll(async () => {
         // Find a book with available copies.
@@ -256,7 +258,10 @@ test.describe.serial('NCIP 2.0 Server plugin — v0.7.4 (20 tests)', () => {
 
         // Extract loan ID from ItemIdentifierValue for check-in test.
         const match = body.match(/<ItemIdentifierValue>(\d+)<\/ItemIdentifierValue>/);
-        if (match) createdLoanId = parseInt(match[1]);
+        if (match) {
+            createdLoanId = parseInt(match[1]);
+            createdPrestitiIds.push(createdLoanId);
+        }
     });
 
     test('10. POST CheckInItem with staff auth → CheckInItemResponse', async ({ request }) => {
@@ -363,6 +368,13 @@ test.describe.serial('NCIP 2.0 Server plugin — v0.7.4 (20 tests)', () => {
         const text = await res.text();
         expect(text).toContain('RequestItemResponse');
         expect(text).toContain(`<ItemIdentifierValue>${testBookId}</ItemIdentifierValue>`);
+
+        // Capture the specific prestiti ID created by this RequestItem for targeted cleanup
+        const newIds = dbQuery(
+            `SELECT id FROM prestiti WHERE libro_id = ${testBookId} AND origine = 'ncip' ORDER BY id DESC LIMIT 1`
+        );
+        const newId = parseInt(newIds);
+        if (newId > 0) createdPrestitiIds.push(newId);
     });
 
     test('19. RequestItem creates prestito with origine=ncip in DB', async () => {
@@ -393,19 +405,16 @@ test.describe.serial('NCIP 2.0 Server plugin — v0.7.4 (20 tests)', () => {
     });
 
     test.afterAll(async () => {
-        // Clean up any NCIP loans that survived (e.g. test 10/20 skipped or failed).
-        try {
-            if (testBookId > 0) {
+        // Clean up only the specific prestiti IDs created by these tests.
+        // This avoids accidentally deleting pre-existing NCIP loans for the same book
+        // (e.g. from other test runs that were not fully cleaned up).
+        if (createdPrestitiIds.length > 0) {
+            try {
+                const idList = createdPrestitiIds.join(',');
                 // FK-safe: child table first (ncip_transactions → prestiti), then parent
-                dbQuery(
-                    `DELETE t FROM ncip_transactions t ` +
-                    `JOIN prestiti p ON p.id = t.prestito_id ` +
-                    `WHERE p.libro_id = ${testBookId} AND p.origine = 'ncip'`
-                );
-                dbQuery(
-                    `DELETE FROM prestiti WHERE libro_id = ${testBookId} AND origine = 'ncip'`
-                );
-            }
-        } catch { /* best-effort */ }
+                dbQuery(`DELETE FROM ncip_transactions WHERE prestito_id IN (${idList})`);
+                dbQuery(`DELETE FROM prestiti WHERE id IN (${idList})`);
+            } catch { /* best-effort */ }
+        }
     });
 });

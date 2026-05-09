@@ -200,6 +200,78 @@ class HtmlHelper
     }
 
     /**
+     * Checks whether the current REMOTE_ADDR is in the TRUSTED_PROXIES list.
+     *
+     * TRUSTED_PROXIES is a comma-separated list of exact IPs or CIDR ranges
+     * read from the environment variable of the same name.  An empty value (the
+     * default) means no proxies are trusted, so forwarded headers are ignored.
+     *
+     * Supports:
+     *  - Exact IPv4 / IPv6 match   (e.g. "127.0.0.1", "::1")
+     *  - IPv4 CIDR notation        (e.g. "10.0.0.0/8", "192.168.1.0/24")
+     *
+     * @return bool True when REMOTE_ADDR is in the trusted-proxy list
+     */
+    private static function isRemoteAddrTrustedProxy(): bool
+    {
+        $trustedRaw = $_ENV['TRUSTED_PROXIES'] ?? getenv('TRUSTED_PROXIES');
+        $trustedEnv = is_string($trustedRaw) ? $trustedRaw : '';
+        if ($trustedEnv === '') {
+            return false;
+        }
+
+        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+        if ($remoteAddr === '') {
+            return false;
+        }
+
+        $remoteIp = inet_pton($remoteAddr);
+        if ($remoteIp === false) {
+            return false;
+        }
+
+        $entries = array_map('trim', explode(',', (string) $trustedEnv));
+        foreach ($entries as $entry) {
+            if ($entry === '') {
+                continue;
+            }
+
+            // CIDR notation (IPv4 only for now, e.g. "10.0.0.0/8")
+            if (strpos($entry, '/') !== false) {
+                [$network, $prefixLen] = explode('/', $entry, 2);
+                if (!is_numeric($prefixLen)) {
+                    continue;
+                }
+                $prefixLen = (int) $prefixLen;
+                $networkIp = inet_pton($network);
+                if ($networkIp === false) {
+                    continue;
+                }
+                // Only IPv4 CIDR supported
+                if (strlen($networkIp) !== 4 || strlen($remoteIp) !== 4) {
+                    continue;
+                }
+                if ($prefixLen < 0 || $prefixLen > 32) {
+                    continue;
+                }
+                $mask = $prefixLen === 0 ? "\x00\x00\x00\x00" : pack('N', ~((1 << (32 - $prefixLen)) - 1));
+                if (($remoteIp & $mask) === ($networkIp & $mask)) {
+                    return true;
+                }
+                continue;
+            }
+
+            // Exact match
+            $entryIp = inet_pton($entry);
+            if ($entryIp !== false && $remoteIp === $entryIp) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Ottiene il base path dell'applicazione (es. '/pinakes' se in sottocartella)
      * Restituisce stringa vuota se l'app è alla root del dominio.
      *
@@ -282,7 +354,10 @@ class HtmlHelper
             }
         }
 
-        $forwardedProto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
+        $forwardedProto = '';
+        if (self::isRemoteAddrTrustedProxy()) {
+            $forwardedProto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
+        }
         $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
             || strtolower($forwardedProto) === 'https';
         $protocol = $isHttps ? 'https' : 'http';

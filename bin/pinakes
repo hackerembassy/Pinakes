@@ -108,7 +108,7 @@ function cmd_help(): void
       viaf:reconcile-all    Batch-reconcile authors without viaf_id against VIAF AutoSuggest
         --confidence-threshold=0.85   Minimum similarity score (0.0–1.0, default 0.85)
         --limit=100                   Max authors to process (default: all)
-        --sleep-ms=200                Sleep between VIAF requests in milliseconds (default: 0)
+        --sleep-ms=200                Sleep between VIAF requests in milliseconds (default: 200)
         --dry-run                     Preview matches without writing to DB
 
     Examples:
@@ -130,7 +130,7 @@ function cmd_viaf_reconcile_all(array $settings, array $opts): void
     $limit     = isset($opts['limit'])
         ? max(1, (int) $opts['limit'])
         : PHP_INT_MAX;
-    $sleepUs   = isset($opts['sleep-ms']) ? max(0, (int) $opts['sleep-ms']) * 1000 : 0;
+    $sleepUs   = isset($opts['sleep-ms']) ? max(0, (int) $opts['sleep-ms']) * 1000 : 200000;
     $dryRun    = isset($opts['dry-run']);
 
     if ($threshold < 0.0 || $threshold > 1.0) {
@@ -221,6 +221,8 @@ function cmd_viaf_reconcile_all(array $settings, array $opts): void
 
         foreach ((array) $data['result'] as $item) {
             if (!is_array($item)) { continue; }
+            // Only process Personal name entries; skip Corporate, Geographic, etc.
+            if (strtolower((string) ($item['nametype'] ?? '')) !== 'personal') { continue; }
             $viafId = (string) ($item['viafid'] ?? '');
             $term   = (string) ($item['term']   ?? '');
             if ($viafId === '' || $term === '') { continue; }

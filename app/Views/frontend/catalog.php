@@ -1439,7 +1439,13 @@ ob_start();
                         <ul class="list-unstyled mb-0">
                             <?php foreach ($archiveResults as $ar): ?>
                             <li class="mb-1">
-                                <a href="<?= $e($ar['url']) ?>" class="text-decoration-none">
+                                <?php
+                                $rawHref = (string) ($ar['url'] ?? '');
+                                if (!preg_match('#^/[A-Za-z0-9/_\-.~%]*$#', $rawHref)) {
+                                    $rawHref = '#';
+                                }
+                                ?>
+                                <a href="<?= htmlspecialchars($rawHref, ENT_QUOTES, 'UTF-8') ?>" class="text-decoration-none">
                                     <?= $e($ar['label']) ?>
                                     <?php if (($ar['reference_code'] ?? '') !== ''): ?>
                                         <span class="text-muted small ms-1">(<?= $e($ar['reference_code']) ?>)</span>

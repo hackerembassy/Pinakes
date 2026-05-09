@@ -177,8 +177,10 @@ if ($bookISBN) {
         $sameAsLinks[] = 'https://www.worldcat.org/isbn/' . $isbn;
     }
 }
-// Add BIBFRAME instance persistent URI as sameAs identifier
-$sameAsLinks[] = absoluteUrl('/id/instance/' . (int) $book['id']);
+// Add BIBFRAME instance persistent URI as sameAs identifier only when plugin is active
+if (!empty($bibframePluginActive)) {
+    $sameAsLinks[] = absoluteUrl('/id/instance/' . (int) $book['id']);
+}
 $bookSchema["sameAs"] = $sameAsLinks;
 
 // Include ALL authors with proper Schema.org roles
@@ -2297,15 +2299,19 @@ $libroIdJs = (int)($book['id'] ?? 0);
 // FAIR Signposting <link> elements for HTML discovery (complement to HTTP Link headers)
 $headLinks = [
     [
-        'rel'  => 'describedby',
-        'type' => 'application/ld+json',
-        'href' => absoluteUrl('/api/bibframe/book/' . (int) $book['id']),
-    ],
-    [
         'rel'  => 'type',
         'href' => 'https://schema.org/' . \App\Support\MediaLabels::schemaOrgType($resolvedTipoMedia),
     ],
 ];
+// Only add BIBFRAME describedby link when the plugin is active
+if (!empty($bibframePluginActive)) {
+    $bibframeBookPath = str_replace('{id}', (string) (int) $book['id'], \App\Support\RouteTranslator::route('bibframe.book'));
+    array_unshift($headLinks, [
+        'rel'  => 'describedby',
+        'type' => 'application/ld+json',
+        'href' => absoluteUrl($bibframeBookPath),
+    ]);
+}
 
 // Prepare SEO variables for layout
 $seoTitle = $metaTitle;

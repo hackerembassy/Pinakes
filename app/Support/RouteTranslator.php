@@ -59,6 +59,7 @@ class RouteTranslator
         'api_book' => '/api/book',
         'api_home' => '/api/home',
         'language_switch' => '/language',
+        'bibframe.book'   => '/api/bibframe/book/{id}',
     ];
 
     /**

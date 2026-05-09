@@ -727,6 +727,15 @@ class FrontendController
         $shareUrl = absoluteUrl($canonicalPath);
         $shareTitle = $book['titolo'] ?? '';
 
+        // Check whether the BIBFRAME Linked Data plugin is active.
+        // Done before template include so the view can use $bibframePluginActive.
+        $bibframePluginActive = false;
+        $bibframePluginCheck = $db->query("SELECT 1 FROM plugins WHERE name = 'bibframe-linked-data' AND is_active = 1 LIMIT 1");
+        if ($bibframePluginCheck instanceof \mysqli_result) {
+            $bibframePluginActive = $bibframePluginCheck->num_rows === 1;
+            $bibframePluginCheck->free();
+        }
+
         // Render template
         $container = $this->container;
         ob_start();
@@ -739,10 +748,14 @@ class FrontendController
             isset($bookArr['formato'])    && is_string($bookArr['formato'])    ? $bookArr['formato']    : null,
             isset($bookArr['tipo_media']) && is_string($bookArr['tipo_media']) ? $bookArr['tipo_media'] : null
         );
+
         $signLinks = [
-            '<' . absoluteUrl('/api/bibframe/book/' . $book_id) . '>; rel="describedby"; type="application/ld+json"',
             '<https://schema.org/' . \App\Support\MediaLabels::schemaOrgType($tipoRes) . '>; rel="type"',
         ];
+        if ($bibframePluginActive) {
+            $bibframeBookPath = str_replace('{id}', (string) $book_id, RouteTranslator::route('bibframe.book'));
+            array_unshift($signLinks, '<' . absoluteUrl($bibframeBookPath) . '>; rel="describedby"; type="application/ld+json"');
+        }
         $primaryAuthor = $authors[0] ?? null;
         if (is_array($primaryAuthor)) {
             $viafUri = '';

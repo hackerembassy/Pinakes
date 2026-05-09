@@ -222,20 +222,18 @@ test.describe.serial('Interop specific — 15 persistent tests (v0.7.4)', () => 
     // ── Test 8: VIAF CSRF protection ──────────────────────────────────────────
 
     test('8. VIAF POST /api/viaf/author/{id}/set without CSRF token → error', async ({ request }) => {
-        test.skip(!ADMIN_EMAIL || !ADMIN_PASS, 'Missing admin credentials');
         const authorId = dbQuery("SELECT id FROM autori ORDER BY id LIMIT 1");
         if (!authorId) { return; }
+        // Send the request without any session cookie or Authorization header —
+        // the endpoint must reject an unauthenticated request with 401 or 403.
         const res = await request.post(`${BASE}/api/viaf/author/${authorId}/set`, {
             headers: {
-                Authorization: basicAuth(ADMIN_EMAIL, ADMIN_PASS),
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
             data: 'viaf_id=56629711',
         });
-        // Without CSRF token (non-Basic-Auth session), must fail with 400/403
-        // Note: Basic Auth bypasses CSRF — if endpoint enforces CSRF only for sessions,
-        // Basic Auth should succeed (200). This tests the path without a valid session cookie.
-        expect([200, 400, 403]).toContain(res.status());
+        // Must be rejected: 401 (unauthenticated) or 403 (forbidden/CSRF)
+        expect([401, 403]).toContain(res.status());
     });
 
     // ── Test 9: VIAF ISNI invalid check digit ─────────────────────────────────

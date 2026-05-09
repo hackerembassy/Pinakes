@@ -22,7 +22,7 @@
 CREATE TABLE IF NOT EXISTS oai_deleted_records (
     id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     entity_type  ENUM('book','archival_unit') NOT NULL,
-    entity_id    INT NOT NULL,
+    entity_id    BIGINT UNSIGNED NOT NULL,
     oai_id       VARCHAR(255) NOT NULL,
     datestamp    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),

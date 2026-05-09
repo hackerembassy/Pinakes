@@ -88,8 +88,6 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
     let seriesId = 0;
     /** @type {number} */
     let photoId = 0;
-    /** @type {number} */
-    let authorityId = 0;
 
     test.beforeAll(async ({ browser }) => {
         try { cleanupTag(TAG); } catch { /* table may not exist yet */ }
@@ -106,11 +104,6 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
 
     test.afterAll(async () => {
         try {
-            // Remove authority link before deleting units (FK cascade would also work)
-            if (Number.isInteger(authorityId) && authorityId > 0) {
-                dbExec(`DELETE FROM archival_unit_authority WHERE authority_id = ${authorityId}`);
-                dbExec(`DELETE FROM authority_records WHERE id = ${authorityId}`);
-            }
             cleanupTag(TAG);
         } catch { /* best-effort */ }
         await context?.close();

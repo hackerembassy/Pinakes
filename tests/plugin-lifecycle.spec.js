@@ -139,14 +139,19 @@ test.describe.serial('Plugin lifecycle — v0.7.4 (10 tests)', () => {
         await page.goto(`${BASE}/admin/plugins`);
 
         for (const plugin of allPlugins) {
+            // Check the DB directly before attempting activation — this is the
+            // authoritative source of truth and avoids relying on locale-specific
+            // message strings ("già attivo" / "already active" / "bereits aktiv").
+            const isActiveInDb = dbQuery(
+                `SELECT is_active FROM plugins WHERE id = ${plugin.id} LIMIT 1`
+            );
+            if (isActiveInDb === '1') {
+                // Plugin is already active — no activation needed; this is acceptable.
+                continue;
+            }
             const result = await pluginApiCall(page, 'activate', plugin.id);
-            // Accept success OR "already active" as valid — both mean plugin is active.
-            // Use success===false + non-empty message as locale-independent indicator
-            // (message text varies: "già attivo" IT, "already active" EN, "bereits aktiv" DE).
-            const alreadyActive = result.success === false && result.message && result.message.length > 0
-                && !result.error;
             expect(
-                result.success || alreadyActive,
+                result.success,
                 `Setup activate ${plugin.name}: ${result.message || result.error || ''}`
             ).toBe(true);
         }

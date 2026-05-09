@@ -1805,10 +1805,17 @@ $htmlLang = substr($currentLocale, 0, 2);
                     return '#';
                 }
                 const trimmed = value.trim();
-                if (trimmed.startsWith('javascript:')) {
+                // Reject control characters (chr 0–31)
+                if (/[\x00-\x1F]/.test(trimmed)) {
                     return '#';
                 }
-                if (trimmed.startsWith('/') || trimmed.startsWith('http')) {
+                // Reject dangerous schemes and protocol-relative URLs
+                const lower = trimmed.toLowerCase();
+                if (lower.startsWith('data:') || lower.startsWith('file:') || trimmed.startsWith('//')) {
+                    return '#';
+                }
+                // Accept only https?:// absolute URLs or /path relative URLs
+                if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('/')) {
                     return trimmed;
                 }
                 return '#';

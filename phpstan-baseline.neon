@@ -18,8 +18,3 @@ parameters:
 			count: 1
 			path: app/Models/BookRepository.php
 
-		-
-			message: '#^Negated boolean expression is always true\.$#'
-			identifier: booleanNot.alwaysTrue
-			count: 1
-			path: app/Support/QueryCache.php

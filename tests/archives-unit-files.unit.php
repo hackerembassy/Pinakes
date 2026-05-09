@@ -95,8 +95,30 @@ $check(
     str_contains($src, "'archival_unit_files'") && str_contains($src, 'ddlArchivalUnitFiles()'),
     '11. ensureSchema() steps array contains archival_unit_files => ddlArchivalUnitFiles()'
 );
+// Extract ensureSchema() body using brace-balancing — avoids fragile regex
+// that fails when the function body is long or contains nested closures.
+$ensureSchemaBody = '';
+$funcStart = strpos($src, 'function ensureSchema');
+if ($funcStart !== false) {
+    $braceStart = strpos($src, '{', $funcStart);
+    if ($braceStart !== false) {
+        $depth = 0;
+        $len   = strlen($src);
+        for ($i = $braceStart; $i < $len; $i++) {
+            if ($src[$i] === '{') {
+                $depth++;
+            } elseif ($src[$i] === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    $ensureSchemaBody = substr($src, $braceStart, $i - $braceStart + 1);
+                    break;
+                }
+            }
+        }
+    }
+}
 $check(
-    (bool) preg_match('/function ensureSchema[^}]+archival_unit_files/s', $src),
+    $ensureSchemaBody !== '' && str_contains($ensureSchemaBody, 'archival_unit_files'),
     '12. ddlArchivalUnitFiles() is called inside ensureSchema()'
 );
 
@@ -170,20 +192,24 @@ $check(
 
 // ── i18n: new multi-file strings in all three locales ────────────────────────
 echo "\n25. i18n strings for multi-file UI:\n";
-$itRaw  = (string) file_get_contents(__DIR__ . '/../locale/it_IT.json');
-$enRaw  = (string) file_get_contents(__DIR__ . '/../locale/en_US.json');
-$deRaw  = (string) file_get_contents(__DIR__ . '/../locale/de_DE.json');
+// All locales use Italian strings as keys; values are locale-specific translations.
+// The check verifies that each key exists in every locale file AND its value is non-empty.
+$itData = (array) json_decode((string) file_get_contents(__DIR__ . '/../locale/it_IT.json'), true);
+$enData = (array) json_decode((string) file_get_contents(__DIR__ . '/../locale/en_US.json'), true);
+$deData = (array) json_decode((string) file_get_contents(__DIR__ . '/../locale/de_DE.json'), true);
+$i18nKeys = ['Documenti scaricabili', 'Rimuovere questo file?', 'Aggiungi documento'];
+$i18nOk = true;
+foreach ($i18nKeys as $k) {
+    foreach (['it' => $itData, 'en' => $enData, 'de' => $deData] as $locale => $data) {
+        if (!array_key_exists($k, $data) || trim((string) $data[$k]) === '') {
+            $i18nOk = false;
+            echo "  MISSING or empty: '$k' in $locale\n";
+        }
+    }
+}
 $check(
-    str_contains($itRaw, '"Documenti scaricabili"') &&
-    str_contains($itRaw, '"Rimuovere questo file?"') &&
-    str_contains($itRaw, '"Aggiungi documento"') &&
-    str_contains($enRaw, '"Documenti scaricabili"') &&
-    str_contains($enRaw, '"Rimuovere questo file?"') &&
-    str_contains($enRaw, '"Aggiungi documento"') &&
-    str_contains($deRaw, '"Documenti scaricabili"') &&
-    str_contains($deRaw, '"Rimuovere questo file?"') &&
-    str_contains($deRaw, '"Aggiungi documento"'),
-    '25. "Documenti scaricabili", "Rimuovere questo file?", "Aggiungi documento" present in it/en/de locales'
+    $i18nOk,
+    '25. "Documenti scaricabili", "Rimuovere questo file?", "Aggiungi documento" present with non-empty values in it/en/de locales'
 );
 
 // ── Summary ───────────────────────────────────────────────────────────────────

@@ -105,6 +105,14 @@ test.describe.serial('FAIR Signposting — HTTP headers and HTML <link> (12 test
         const res = await fetchBookDetail(request);
         const link = res.headers()['link'] ?? '';
         expect(link).toContain(`/api/bibframe/book/${bookId}`);
+
+        // Live GET: the describedby URL must be reachable and return JSON-LD
+        const descRes = await request.get(`${BASE}/api/bibframe/book/${bookId}`, {
+            headers: { Accept: 'application/ld+json' },
+        });
+        expect(descRes.status()).toBe(200);
+        const ct = descRes.headers()['content-type'] ?? '';
+        expect(ct).toContain('application/ld+json');
     });
 
     test('4. describedby entry has type="application/ld+json"', async ({ request }) => {
@@ -169,7 +177,7 @@ test.describe.serial('FAIR Signposting — HTTP headers and HTML <link> (12 test
 
     // ── Schema.org sameAs BIBFRAME ────────────────────────────────────────────
 
-    test('12. Book Schema.org JSON-LD includes BIBFRAME /id/instance/{id} in sameAs', async ({ page }) => {
+    test('12. Book Schema.org JSON-LD includes BIBFRAME /id/instance/{id} in sameAs', async ({ page, request }) => {
         test.skip(bookId === 0, 'No test book');
         await page.goto(`${BASE}/libro/${bookId}`, { waitUntil: 'domcontentloaded' });
         const ldJson = await page.evaluate(() => {
@@ -191,5 +199,15 @@ test.describe.serial('FAIR Signposting — HTTP headers and HTML <link> (12 test
         const sameAsArr = Array.isArray(sameAs) ? sameAs : [sameAs];
         const hasBibframe = sameAsArr.some(u => String(u).includes(`/id/instance/${bookId}`));
         expect(hasBibframe).toBe(true);
+
+        // Live GET: the persistent URI in sameAs must be reachable (200)
+        // The BIBFRAME instance URI is served by the app at /api/bibframe/book/{id}
+        const bibframeUri = `${BASE}/api/bibframe/book/${bookId}`;
+        const bibRes = await request.get(bibframeUri, {
+            headers: { Accept: 'application/rdf+xml' },
+        });
+        expect(bibRes.status()).toBe(200);
+        const bibCt = bibRes.headers()['content-type'] ?? '';
+        expect(bibCt).toContain('application/rdf+xml');
     });
 });

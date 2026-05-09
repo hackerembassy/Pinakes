@@ -28,6 +28,8 @@ const ADMIN_PASS  = process.env.E2E_ADMIN_PASS  || '';
 const DB_USER    = process.env.E2E_DB_USER     || '';
 const DB_PASS    = process.env.E2E_DB_PASS     || '';
 const DB_NAME    = process.env.E2E_DB_NAME     || '';
+const DB_HOST    = process.env.E2E_DB_HOST     || '';
+const DB_PORT    = process.env.E2E_DB_PORT     || '';
 const DB_SOCKET  = process.env.E2E_DB_SOCKET   || '';
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
@@ -35,9 +37,14 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 test.skip(!ADMIN_EMAIL || !ADMIN_PASS || !DB_USER || !DB_NAME, 'E2E credentials not configured');
 
 function mysqlArgs(sql = '', batch = false) {
-    const args = ['-u', DB_USER];
-    if (DB_SOCKET) args.push('-S', DB_SOCKET);
-    args.push(DB_NAME);
+    const args = [];
+    if (DB_HOST) {
+        args.push('-h', DB_HOST);
+        if (DB_PORT) args.push('-P', DB_PORT);
+    } else if (DB_SOCKET) {
+        args.push('-S', DB_SOCKET);
+    }
+    args.push('-u', DB_USER, DB_NAME);
     if (batch) args.push('-N', '-B');
     if (sql !== '') args.push('-e', sql);
     return args;
@@ -215,6 +222,26 @@ test.describe.serial('Archives PR extended — v0.7.4 (35 tests)', () => {
             try {
                 const abs = path.join(PUBLIC_DIR, uploadedCoverPath);
                 if (fs.existsSync(abs)) fs.unlinkSync(abs);
+            } catch { /* best-effort */ }
+        }
+        // Remove document files uploaded by test 6 (legacy migration upload to itemA)
+        if (itemAId > 0) {
+            try {
+                // Collect physical file paths before deleting DB rows
+                const uploadedDocPaths = dbQuery(
+                    `SELECT file_path FROM archival_unit_files WHERE unit_id = ${itemAId}`
+                ).split('\n').filter(Boolean);
+                // Remove DB rows for the test's archival unit
+                dbExec(`DELETE FROM archival_unit_files WHERE unit_id = ${itemAId}`);
+                // Remove physical files that were uploaded under /uploads/archives/documents/
+                for (const relPath of uploadedDocPaths) {
+                    try {
+                        const absPath = path.join(PUBLIC_DIR, relPath.trim());
+                        if (absPath.includes('/uploads/archives/documents/') && fs.existsSync(absPath)) {
+                            fs.unlinkSync(absPath);
+                        }
+                    } catch { /* best-effort */ }
+                }
             } catch { /* best-effort */ }
         }
         // Restore legacy document_path if we set it
@@ -642,6 +669,11 @@ test.describe.serial('Archives PR extended — v0.7.4 (35 tests)', () => {
     test('33. POST /upload-document without CSRF token → not accepted (redirect or 403)', async () => {
         test.skip(itemBId === 0, 'Item B not seeded');
 
+        // Capture DB row count before the attempt
+        const cntBefore = parseInt(dbQuery(
+            `SELECT COUNT(*) FROM archival_unit_files WHERE unit_id = ${itemBId}`
+        ));
+
         const pdfBuffer = makeMinimalPdf('csrf-test');
         const res = await ctx.request.post(
             `${BASE}/admin/archives/${itemBId}/upload-document`,
@@ -653,12 +685,23 @@ test.describe.serial('Archives PR extended — v0.7.4 (35 tests)', () => {
                 maxRedirects: 0,
             }
         );
-        // Must NOT accept the upload: either 302/303 to error/login, or 403
-        expect(res.status()).not.toBe(200);
+        // Must NOT accept the upload: must respond with redirect or rejection code
+        expect([302, 303, 400, 403]).toContain(res.status());
+
+        // Side-effect check: no new file row was created
+        const cntAfter = parseInt(dbQuery(
+            `SELECT COUNT(*) FROM archival_unit_files WHERE unit_id = ${itemBId}`
+        ));
+        expect(cntAfter).toBe(cntBefore);
     });
 
     test('34. POST /upload-cover without CSRF token → not accepted (redirect or 403)', async () => {
         test.skip(itemBId === 0, 'Item B not seeded');
+
+        // Capture cover path before the attempt
+        const coverBefore = dbQuery(
+            `SELECT IFNULL(cover_image_path, 'NULL') FROM archival_units WHERE id = ${itemBId}`
+        );
 
         const jpgBuffer = makeMinimalJpeg();
         const res = await ctx.request.post(
@@ -671,7 +714,14 @@ test.describe.serial('Archives PR extended — v0.7.4 (35 tests)', () => {
                 maxRedirects: 0,
             }
         );
-        expect(res.status()).not.toBe(200);
+        // Must NOT accept the upload: must respond with redirect or rejection code
+        expect([302, 303, 400, 403]).toContain(res.status());
+
+        // Side-effect check: cover_image_path must be unchanged
+        const coverAfter = dbQuery(
+            `SELECT IFNULL(cover_image_path, 'NULL') FROM archival_units WHERE id = ${itemBId}`
+        );
+        expect(coverAfter).toBe(coverBefore);
     });
 
     test('35. POST /files/{fileId}/delete without CSRF token → not accepted', async () => {
