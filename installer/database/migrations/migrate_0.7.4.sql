@@ -492,6 +492,98 @@ ON DUPLICATE KEY UPDATE
     requires_app  = VALUES(requires_app),
     metadata      = VALUES(metadata);
 
+-- Legacy bundled plugin registrations. These rows pre-date the v0.7.x
+-- interoperability stack, but older release schemas may not have them in the
+-- plugin registry. Keep this in the release migration so upgrades land with the
+-- same plugin catalogue as fresh installs.
+INSERT INTO plugins
+    (name, display_name, description, version, author, author_url,
+     plugin_url, is_active, path, main_file, requires_php, requires_app,
+     metadata, installed_at)
+VALUES
+    ('api-book-scraper',
+     'API Book Scraper',
+     'Client per servizi web di scraping dati libri tramite ISBN/EAN con API key authentication. Priorità più alta di Open Library.',
+     '1.1.1', 'Fabiodalez', NULL,
+     NULL,
+     0, 'api-book-scraper', 'wrapper.php', '8.0', '0.4.0',
+     '{"category":"scraping","priority":3,"api_version":"1.0","documentation":"README.md","php_extensions":["curl","json"],"hooks":[]}',
+     NOW()),
+    ('deezer',
+     'Deezer Music Search',
+     'Integrazione con Deezer per arricchire i dati musicali. Cerca per titolo/artista, fornisce copertine HD, tracklist con durate, genere. Nessun token richiesto.',
+     '1.0.0', 'Fabiodalez', NULL,
+     'https://developers.deezer.com',
+     0, 'deezer', 'wrapper.php', '8.0', '0.5.0',
+     '{"category":"scraping","tags":["api","deezer","scraping","music","covers"],"priority":15,"optional":true}',
+     NOW()),
+    ('dewey-editor',
+     'Dewey Classification Editor',
+     'Editor visuale per gestire le classificazioni Dewey. Permette di aggiungere, modificare ed eliminare codici decimali, importare/esportare file JSON con validazione automatica.',
+     '1.0.1', 'Fabiodalez', NULL,
+     NULL,
+     0, 'dewey-editor', 'DeweyEditorPlugin.php', '7.4', '0.4.0',
+     '{"category":"admin","tags":["dewey","classification","editor","json","admin"],"priority":10}',
+     NOW()),
+    ('digital-library',
+     'Digital Library (eBooks/Audiobooks)',
+     'Gestione eBooks (PDF/ePub) e audiobooks con player integrato Green Audio Player e visualizzatore PDF inline. Consente upload, riproduzione e lettura di contenuti digitali direttamente nella biblioteca.',
+     '1.3.0', 'Fabiodalez', NULL,
+     NULL,
+     0, 'digital-library', 'wrapper.php', '8.0', '0.4.0',
+     '{"category":"media","priority":10,"php_extensions":["gd","fileinfo"],"hooks":[]}',
+     NOW()),
+    ('discogs',
+     'Music Scraper (Discogs, MusicBrainz, Deezer)',
+     'Scraping multi-sorgente di metadati musicali: Discogs (barcode/titolo), MusicBrainz + Cover Art Archive (fallback barcode), Deezer (copertine HD). Supporta CD, LP, vinili, cassette.',
+     '1.1.0', 'Fabiodalez', NULL,
+     'https://www.discogs.com',
+     0, 'discogs', 'wrapper.php', '8.0', '0.5.4',
+     '{"optional":true,"category":"scraping","tags":["api","discogs","musicbrainz","deezer","scraping","music","vinyl","cd"],"priority":8}',
+     NOW()),
+    ('goodlib',
+     'GoodLib — External Sources',
+     'Aggiunge badge cliccabili alla scheda libro per cercare su Anna''s Archive, Z-Library e Project Gutenberg con un click. Ispirato all''estensione browser GoodLib.',
+     '1.0.0', 'Fabiodalez', NULL,
+     NULL,
+     0, 'goodlib', 'wrapper.php', '8.0', '0.4.0',
+     '{"category":"discovery","priority":10,"php_extensions":[],"assets":{"css":[],"js":[]},"hooks":[]}',
+     NOW()),
+    ('musicbrainz',
+     'MusicBrainz + Cover Art Archive',
+     'Integrazione con MusicBrainz e Cover Art Archive per metadati musicali. Cerca per barcode, fornisce artista, album, tracklist, etichetta, copertine HD. Open data, nessun token richiesto.',
+     '1.0.0', 'Fabiodalez', NULL,
+     'https://musicbrainz.org',
+     0, 'musicbrainz', 'wrapper.php', '8.0', '0.5.0',
+     '{"category":"scraping","tags":["api","musicbrainz","coverart","scraping","music"],"priority":7,"optional":true}',
+     NOW()),
+    ('open-library',
+     'Open Library Scraper',
+     'Integrazione con le API di Open Library (openlibrary.org) per lo scraping di metadati dei libri. Fornisce dati completi su edizioni, opere, autori e copertine ad alta risoluzione.',
+     '1.0.1', 'Fabiodalez', NULL,
+     'https://openlibrary.org',
+     0, 'open-library', 'wrapper.php', '7.4', '0.4.0',
+     '{"category":"scraping","tags":["api","openlibrary","scraping","books","covers"],"priority":5}',
+     NOW()),
+    ('z39-server',
+     'Z39.50/SRU Integration (Server & Client)',
+     'Soluzione completa per l''interoperabilità bibliotecaria. Server SRU per esporre il catalogo e Client Z39.50/SRU per importazione (Copy Cataloging) e ricerca federata. Supporta MARC21, MARCXML, Dublin Core e MODS.',
+     '1.2.3', 'Fabiodalez', NULL,
+     'https://www.loc.gov/standards/sru/',
+     0, 'z39-server', 'Z39ServerPlugin.php', '7.4', '0.4.0',
+     '{"category":"protocol","tags":["z39.50","sru","marc","marcxml","dublin-core","protocol","interoperability","client","federated-search"],"priority":10}',
+     NOW())
+ON DUPLICATE KEY UPDATE
+    display_name  = VALUES(display_name),
+    description   = VALUES(description),
+    version       = VALUES(version),
+    plugin_url    = VALUES(plugin_url),
+    path          = VALUES(path),
+    main_file     = VALUES(main_file),
+    requires_php  = VALUES(requires_php),
+    requires_app  = VALUES(requires_app),
+    metadata      = VALUES(metadata);
+
 -- ─── archival_unit_files: multi-document support per archival unit ───────────
 -- archival_unit_files belongs to the Archives plugin.  If Archives was never
 -- activated on this install, archival_units does not exist yet; creating
@@ -583,3 +675,11 @@ SET @sql = IF(@c=0, 'ALTER TABLE archival_units ADD COLUMN version_note VARCHAR(
 PREPARE _stmt FROM @sql; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
 -- openurl-resolver registration is already covered by the INSERT above (line ~406).
+
+-- Backfill fr_FR into existing installs (mirrors migrate_0.5.9.1.sql pattern for de_DE).
+-- New installs get fr_FR via data_XX.sql; this ensures upgrade paths also have the row.
+-- INSERT IGNORE is idempotent: no-op if the row already exists.
+INSERT IGNORE INTO `languages`
+    (`code`, `name`, `native_name`, `flag_emoji`, `is_default`, `is_active`, `translation_file`, `total_keys`, `translated_keys`, `completion_percentage`)
+VALUES
+    ('fr_FR', 'French', 'Français', '🇫🇷', 0, 1, 'locale/fr_FR.json', 4080, 4080, 100.00);

@@ -907,17 +907,21 @@ $pluginSettings = $pluginSettings ?? [];
         },
         // [FR] France
         bnf: {
-            name: '[FR] BnF - Bibliotheque nationale de France',
+            name: '[FR] BnF - Bibliothèque nationale de France',
             url: 'http://catalogue.bnf.fr/api/SRU',
             db: '',
-            syntax: 'marcxml',
+            version: '1.2',
+            syntax: 'unimarcxchange',
+            quote_search_terms: true,
             indexes: { isbn: 'bib.isbn' }
         },
         sudoc: {
-            name: '[FR] SUDOC - Systeme Universitaire',
+            name: '[FR] SUDOC - Système Universitaire de Documentation',
             url: 'https://www.sudoc.abes.fr/cbs/sru/',
             db: '',
+            version: '1.1',
             syntax: 'unimarc',
+            quote_search_terms: false,
             indexes: { isbn: 'isb' }
         },
         // [US] USA
@@ -996,7 +1000,9 @@ $pluginSettings = $pluginSettings ?? [];
             name: preset.name,
             url: preset.url,
             db: preset.db,
+            version: preset.version || '1.1',
             syntax: preset.syntax,
+            quote_search_terms: preset.quote_search_terms || false,
             indexes: preset.indexes,
             enabled: true
         });
@@ -1060,14 +1066,16 @@ $pluginSettings = $pluginSettings ?? [];
 
     function addZ39ServerRow(server = null) {
         document.getElementById('z39NoServers').classList.add('hidden');
-        server = server || { name: '', url: '', db: '', syntax: 'marcxml', enabled: true };
+        server = server || { name: '', url: '', db: '', version: '1.1', syntax: 'marcxml', quote_search_terms: false, enabled: true };
 
         // Escape values to prevent XSS
-        const safeName = escapeHtml(server.name);
-        const safeUrl = escapeHtml(server.url);
-        const safeDb = escapeHtml(server.db);
+        const safeName = escapeHtml(server.name || '');
+        const safeUrl = escapeHtml(server.url || '');
+        const safeDb = escapeHtml(server.db || '');
+        const safeVersion = escapeHtml(server.version || '1.1');
         const safeIsbnIndex = escapeHtml(server.indexes?.isbn || 'isbn');
         const safeSyntax = escapeHtml(server.syntax || 'marcxml');
+        const quoteTerms = server.quote_search_terms ? 'checked' : '';
 
         const row = document.createElement('div');
         row.className = 'z39-server-row bg-gray-50 rounded-xl p-4 border border-gray-200 relative group';
@@ -1081,9 +1089,13 @@ $pluginSettings = $pluginSettings ?? [];
                 <label class="block text-xs font-medium text-gray-500 mb-1"><?= __("URL Endpoint SRU") ?></label>
                 <input type="url" name="server_url[]" value="${safeUrl}" placeholder="http://opac.sbn.it/sru" class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono">
             </div>
-            <div class="md:col-span-2">
+            <div class="md:col-span-1">
                 <label class="block text-xs font-medium text-gray-500 mb-1"><?= __("Database") ?></label>
                 <input type="text" name="server_db[]" value="${safeDb}" placeholder="nopac" class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div class="md:col-span-1">
+                <label class="block text-xs font-medium text-gray-500 mb-1"><?= __("Versione SRU") ?></label>
+                <input type="text" name="server_version[]" value="${safeVersion}" placeholder="1.1" class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono">
             </div>
             <div class="md:col-span-2">
                 <label class="block text-xs font-medium text-gray-500 mb-1"><?= __("Indice ISBN") ?></label>
@@ -1093,11 +1105,16 @@ $pluginSettings = $pluginSettings ?? [];
                 <label class="block text-xs font-medium text-gray-500 mb-1"><?= __("Sintassi") ?></label>
                 <select name="server_syntax[]" class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
                     <option value="marcxml" ${safeSyntax === 'marcxml' ? 'selected' : ''}>MARCXML</option>
+                    <option value="unimarcxchange" ${safeSyntax === 'unimarcxchange' ? 'selected' : ''}>UNIMARC/MARCXchange</option>
                     <option value="unimarc" ${safeSyntax === 'unimarc' ? 'selected' : ''}>UNIMARC</option>
                     <option value="mods" ${safeSyntax === 'mods' ? 'selected' : ''}>MODS</option>
                     <option value="dc" ${safeSyntax === 'dc' ? 'selected' : ''}>Dublin Core</option>
                 </select>
             </div>
+        </div>
+        <div class="mt-2 flex items-center gap-2">
+            <input type="checkbox" name="server_quote_terms[]" value="1" ${quoteTerms} class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+            <label class="text-xs text-gray-500"><?= __("Racchiudi il termine di ricerca tra virgolette CQL (es. BnF)") ?></label>
         </div>
         <div class="absolute top-2 right-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <button type="button" onclick="this.closest('.z39-server-row').remove(); checkEmptyServers();" class="text-red-500 hover:text-red-700 p-2">
@@ -1159,7 +1176,9 @@ $pluginSettings = $pluginSettings ?? [];
                 name: name,
                 url: url,
                 db: row.querySelector('[name="server_db[]"]').value.trim(),
+                version: row.querySelector('[name="server_version[]"]')?.value.trim() || '1.1',
                 syntax: row.querySelector('[name="server_syntax[]"]').value,
+                quote_search_terms: row.querySelector('[name="server_quote_terms[]"]')?.checked || false,
                 indexes: {
                     isbn: row.querySelector('[name="server_isbn_index[]"]').value || 'isbn'
                 },

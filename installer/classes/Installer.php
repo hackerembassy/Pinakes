@@ -9,13 +9,11 @@ class Installer {
         'admin_notifications',
         'api_keys',
         'autori',
-        'author_authority_alternates',
         'cms_pages',
         'collane',
         'consent_log',
         'contact_messages',
         'copie',
-        'digital_assets',
         'donazioni',
         'editori',
         'email_templates',
@@ -32,13 +30,8 @@ class Installer {
         'libri_donati',
         'libri_tag',
         'log_modifiche',
-        'mag_project_config',
         'mensole',
         'migrations',
-        'ncip_partners',
-        'ncip_transactions',
-        'oai_deleted_records',
-        'oai_resumption_tokens',
         'plugin_data',
         'plugin_hooks',
         'plugin_logs',
@@ -89,12 +82,14 @@ class Installer {
             $normalizedLocale = 'en_US';
         } elseif ($normalizedLocale === 'de' || $normalizedLocale === 'de_de') {
             $normalizedLocale = 'de_DE';
+        } elseif ($normalizedLocale === 'fr' || $normalizedLocale === 'fr_fr') {
+            $normalizedLocale = 'fr_FR';
         } elseif ($normalizedLocale === 'it' || $normalizedLocale === 'it_it') {
             $normalizedLocale = 'it_IT';
         }
 
         // Fallback safety
-        if (!in_array($normalizedLocale, ['it_IT', 'en_US', 'de_DE'], true)) {
+        if (!in_array($normalizedLocale, ['it_IT', 'en_US', 'de_DE', 'fr_FR'], true)) {
             $normalizedLocale = 'it_IT';
         }
 
@@ -264,7 +259,7 @@ class Installer {
         // Get locale from session first (most reliable), fallback to .env
         $locale = $_SESSION['app_locale'] ?? ($this->config['APP_LOCALE'] ?? 'it');
 
-        // Convert locale code to full form (supports it, it_IT, en, en_US)
+        // Convert locale code to full form (supports it, it_IT, en, en_US, de, de_DE, fr, fr_FR)
         $localeMap = [
             'it' => 'it_IT',
             'it_it' => 'it_IT',
@@ -272,6 +267,8 @@ class Installer {
             'en_us' => 'en_US',
             'de' => 'de_DE',
             'de_de' => 'de_DE',
+            'fr' => 'fr_FR',
+            'fr_fr' => 'fr_FR',
         ];
         $normalizedLocale = strtolower(str_replace('-', '_', $locale));
         $fullLocale = $localeMap[$normalizedLocale] ?? 'it_IT';
@@ -805,6 +802,7 @@ class Installer {
             'it' => 'it_IT', 'it_it' => 'it_IT',
             'en' => 'en_US', 'en_us' => 'en_US',
             'de' => 'de_DE', 'de_de' => 'de_DE',
+            'fr' => 'fr_FR', 'fr_fr' => 'fr_FR',
         ];
         $supportedLocales = array_values(array_unique(array_values($localeMap)));
         $normalized = strtolower(str_replace('-', '_', $rawLocale));
@@ -1206,6 +1204,9 @@ HTACCESS;
         if ($locale === 'de' || $locale === 'de_de') {
             return 'de_DE';
         }
+        if ($locale === 'fr' || $locale === 'fr_fr') {
+            return 'fr_FR';
+        }
         if ($locale === 'it' || $locale === 'it_it') {
             return 'it_IT';
         }
@@ -1386,7 +1387,7 @@ HTACCESS;
         };
 
         // Generic plugin installer
-        $installPlugin = function(string $pluginName, array $additionalHooks = [], bool $activate = true) use ($pdo, $ensureHooks, &$results) {
+        $installPlugin = function(string $pluginName, array $additionalHooks = []) use ($pdo, $ensureHooks, &$results) {
             try {
                 $pluginDir = $this->baseDir . '/storage/plugins/' . $pluginName;
 
@@ -1412,12 +1413,11 @@ HTACCESS;
                 $pluginId = (int)$stmt->fetchColumn();
 
                 if (!$pluginId) {
-                    $isActiveBit = $activate ? 1 : 0;
                     $insertStmt = $pdo->prepare("
                         INSERT INTO plugins (name, display_name, description, version, author, author_url, plugin_url,
                             is_active, path, main_file, requires_php, requires_app, metadata, installed_at)
                         VALUES (:name, :display_name, :description, :version, :author, :author_url, :plugin_url,
-                            {$isActiveBit}, :path, :main_file, :requires_php, :requires_app, :metadata, NOW())
+                            1, :path, :main_file, :requires_php, :requires_app, :metadata, NOW())
                     ");
 
                     $insertStmt->execute([
@@ -1450,8 +1450,7 @@ HTACCESS;
                     $ensureHooks($pluginId, $hooks, $callbackClass);
                 }
 
-                $status = $activate ? 'installed_and_activated' : 'installed_inactive';
-                $results[] = ['name' => $pluginName, 'status' => $status, 'plugin_id' => $pluginId];
+                $results[] = ['name' => $pluginName, 'status' => 'installed_and_activated', 'plugin_id' => $pluginId];
 
             } catch (Exception $e) {
                 $results[] = ['name' => $pluginName, 'status' => 'error', 'message' => $e->getMessage()];
@@ -1471,14 +1470,6 @@ HTACCESS;
         $installPlugin('dewey-editor', [
             ['name' => 'app.routes.register', 'callback_method' => 'registerRoutes', 'priority' => 10]
         ]);
-
-        // Register interoperability plugins as inactive (optional — user activates them)
-        $installPlugin('oai-pmh-server', [], false);
-        $installPlugin('viaf-authority', [], false);
-        $installPlugin('ncip-server', [], false);
-        $installPlugin('bibframe-linked-data', [], false);
-        $installPlugin('resource-sync', [], false);
-        $installPlugin('openurl-resolver', [], false);
 
         // Configure Z39 Server with SBN (Servizio Bibliotecario Nazionale) as default
         $this->configureZ39DefaultSettings($pdo);

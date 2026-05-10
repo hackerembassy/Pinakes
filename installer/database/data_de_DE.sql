@@ -314,7 +314,8 @@ INSERT IGNORE INTO `email_templates` VALUES (18,'loan_pickup_cancelled','de_DE',
 INSERT INTO `languages` (`code`, `name`, `native_name`, `flag_emoji`, `is_default`, `is_active`, `translation_file`, `total_keys`, `translated_keys`, `completion_percentage`) VALUES
 ('it_IT', 'Italian', 'Italiano', '🇮🇹', 0, 1, NULL, 2015, 2015, 100.00),
 ('en_US', 'English', 'English', '🇬🇧', 0, 1, 'locale/en_US.json', 2015, 1988, 98.66),
-('de_DE', 'German', 'Deutsch', '🇩🇪', 1, 1, 'locale/de_DE.json', 4009, 4009, 100.00)
+('de_DE', 'German', 'Deutsch', '🇩🇪', 1, 1, 'locale/de_DE.json', 4009, 4009, 100.00),
+('fr_FR', 'French', 'Français', '🇫🇷', 0, 1, 'locale/fr_FR.json', 4080, 4080, 100.00)
 ON DUPLICATE KEY UPDATE name = VALUES(name), native_name = VALUES(native_name), flag_emoji = VALUES(flag_emoji), translation_file = VALUES(translation_file), total_keys = VALUES(total_keys), translated_keys = VALUES(translated_keys), completion_percentage = VALUES(completion_percentage), is_active = VALUES(is_active), is_default = VALUES(is_default);
 
 -- Home Content (German)

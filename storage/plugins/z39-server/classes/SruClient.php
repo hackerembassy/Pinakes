@@ -147,10 +147,12 @@ class SruClient
         }
 
         // Build query parameters
+        // quote_search_terms: some servers (e.g. BNF) require the term wrapped in CQL quotes
+        $quotedTerm = !empty($server['quote_search_terms']) ? '"' . $term . '"' : $term;
         $params = [
             'operation' => 'searchRetrieve',
             'version' => $version,
-            'query' => $cqlIndex . '=' . $term,
+            'query' => $cqlIndex . '=' . $quotedTerm,
             'recordSchema' => $recordSchema,
             'maximumRecords' => 1
         ];
@@ -180,9 +182,13 @@ class SruClient
         $xpath->registerNamespace('marc', 'http://www.loc.gov/MARC21/slim');
         $xpath->registerNamespace('dc', 'http://purl.org/dc/elements/1.1/');
         $xpath->registerNamespace('oai_dc', 'http://www.openarchives.org/OAI/2.0/oai_dc/');
+        $xpath->registerNamespace('mxc', 'info:lc/xmlns/marcxchange-v2');
 
-        // Check for records
+        // Check for records — try registered namespace then local-name() fallback
         $numberOfRecords = $xpath->query('//sru:numberOfRecords');
+        if ($numberOfRecords->length === 0) {
+            $numberOfRecords = $xpath->query('//*[local-name()="numberOfRecords"]');
+        }
         if ($numberOfRecords->length > 0 && (int) $numberOfRecords->item(0)->nodeValue === 0) {
             return null;
         }
@@ -190,6 +196,7 @@ class SruClient
         // Extract record data based on schema
         return match ($recordSchema) {
             'marcxml' => $this->parseMarcXml($xpath),
+            'unimarcxchange', 'marcxchange', 'unimarc' => $this->parseMarcxchangeXml($xpath),
             'dc', 'oai_dc' => $this->parseDublinCore($xpath),
             default => $this->parseMarcXml($xpath),
         };
@@ -534,6 +541,197 @@ class SruClient
         ];
 
         return $map[$code] ?? strtoupper($code);
+    }
+
+    /**
+     * Parse MARCXchange/UNIMARC response (used by BNF and other French libraries)
+     *
+     * UNIMARC field mapping (differs completely from MARC21):
+     *   200 $a = title, $e = subtitle, $f = statement of responsibility
+     *   214 $c = publisher, $d = year  (or legacy 210 $c/$d)
+     *   700 $a/$b = first author (Nom/Prénom), 701 = additional, 702 = other
+     *   010 $a = ISBN, 073 $a = EAN-13
+     *   215 $a = extent/pages
+     *   461 $t = series title
+     *   676 $a = Dewey classification
+     *   101 $a = language code (ISO 639-2/B)
+     *   330 $a = abstract/description
+     *   600-608 $a = subject headings
+     */
+    private function parseMarcxchangeXml(DOMXPath $xpath): ?array
+    {
+        // Try MARCXchange namespace first, fall back to local-name() for namespace-less records
+        $record = $xpath->query('//mxc:record')->item(0);
+        if (!$record) {
+            $record = $xpath->query('//*[local-name()="record"]')->item(0);
+        }
+        if (!$record) {
+            return null;
+        }
+
+        $book = [
+            'title' => '',
+            'subtitle' => '',
+            'authors' => [],
+            'publisher' => '',
+            'pubDate' => '',
+            'year' => '',
+            'isbn13' => '',
+            'isbn10' => '',
+            'language' => '',
+            'pages' => '',
+            'description' => '',
+            'classificazione_dewey' => '',
+            'source' => 'Z39.50/SRU (BNF/UNIMARC)'
+        ];
+
+        // Helper: get first subfield value by UNIMARC tag and subfield code
+        $getSub = function (string $tag, string $code) use ($xpath, $record): ?string {
+            $nodes = $xpath->query(".//*[local-name()='datafield'][@tag='$tag']/*[local-name()='subfield'][@code='$code']", $record);
+            return $nodes->length > 0 ? trim($nodes->item(0)->nodeValue) : null;
+        };
+
+        // Helper: get all subfield values for a given tag+code
+        $getAllSub = function (string $tag, string $code) use ($xpath, $record): array {
+            $nodes = $xpath->query(".//*[local-name()='datafield'][@tag='$tag']/*[local-name()='subfield'][@code='$code']", $record);
+            $values = [];
+            foreach ($nodes as $node) {
+                $v = trim($node->nodeValue);
+                if ($v !== '') {
+                    $values[] = $v;
+                }
+            }
+            return $values;
+        };
+
+        // Clean MARC-8 control characters and excess whitespace
+        $clean = static function (?string $s): string {
+            if ($s === null) {
+                return '';
+            }
+            $s = (string) preg_replace('/[\x{0080}-\x{009F}]/u', '', $s);
+            return trim((string) preg_replace('/\s+/u', ' ', $s));
+        };
+
+        // Title (200 $a) and subtitle (200 $e)
+        $book['title'] = $clean($getSub('200', 'a'));
+        $book['subtitle'] = $clean($getSub('200', 'e'));
+
+        // Remove trailing ISBD punctuation
+        $book['title'] = rtrim($book['title'], ' /:;=');
+        $book['subtitle'] = rtrim($book['subtitle'], ' /:;=');
+
+        // Authors: UNIMARC 700 (first author), 701 (other authors), 702 (contributor)
+        // Subfields: $a = surname, $b = forename — combine as "Surname, Forename"
+        foreach (['700', '701', '702'] as $tag) {
+            $nameNodes = $xpath->query(".//*[local-name()='datafield'][@tag='$tag']", $record);
+            foreach ($nameNodes as $nameNode) {
+                $surname = '';
+                $forename = '';
+                foreach ($nameNode->childNodes as $sub) {
+                    if ($sub->nodeType !== XML_ELEMENT_NODE) {
+                        continue;
+                    }
+                    /** @var \DOMElement $sub */
+                    $code = $sub->getAttribute('code');
+                    if ($code === 'a') {
+                        $surname = trim($sub->nodeValue);
+                    } elseif ($code === 'b') {
+                        $forename = trim($sub->nodeValue);
+                    }
+                }
+                $name = $forename !== '' ? $surname . ', ' . $forename : $surname;
+                $name = $clean(rtrim($name, ' ,.'));
+                if ($name !== '' && !in_array($name, $book['authors'], true)) {
+                    $book['authors'][] = $name;
+                }
+            }
+        }
+
+        // Publisher: 214 $c (UNIMARC 2014+), fallback 210 $c
+        $publisher = $getSub('214', 'c') ?? $getSub('210', 'c');
+        $book['publisher'] = $clean(rtrim((string) $publisher, ' ,:;'));
+
+        // Year: 214 $d, fallback 210 $d
+        $year = $getSub('214', 'd') ?? $getSub('210', 'd');
+        if ($year !== null && preg_match('/(\d{4})/', $year, $m)) {
+            $book['year'] = $m[1];
+            $book['pubDate'] = $m[1] . '-01-01';
+        }
+
+        // ISBN (010 $a) — may have dashes; strip non-numeric
+        $isbnValues = $getAllSub('010', 'a');
+        foreach ($isbnValues as $raw) {
+            $isbn = preg_replace('/[^0-9X]/i', '', $raw);
+            if (strlen($isbn) === 13 && $book['isbn13'] === '') {
+                $book['isbn13'] = $isbn;
+            } elseif (strlen($isbn) === 10 && $book['isbn10'] === '') {
+                $book['isbn10'] = $isbn;
+            }
+        }
+
+        // EAN (073 $a)
+        $ean = $getSub('073', 'a');
+        if ($ean !== null && $book['isbn13'] === '') {
+            $eanClean = preg_replace('/[^0-9]/', '', $ean);
+            if (strlen($eanClean) === 13) {
+                $book['isbn13'] = $eanClean;
+            }
+        }
+
+        // Pages (215 $a) — e.g. "324 p." or "324 pages"
+        $extent = $getSub('215', 'a');
+        if ($extent !== null && preg_match('/(\d+)/', $extent, $m)) {
+            $book['pages'] = $m[1];
+        }
+
+        // Language (101 $a) — ISO 639-2/B code
+        $lang = $getSub('101', 'a');
+        if ($lang !== null) {
+            $book['language'] = $this->marcLanguageToName(strtolower(substr($lang, 0, 3)));
+        }
+
+        // Abstract/Description (330 $a)
+        $abstract = $getSub('330', 'a');
+        $book['description'] = $clean($abstract);
+
+        // Dewey (676 $a)
+        $dewey = $getSub('676', 'a');
+        if ($dewey !== null && preg_match('/(\d{3}(?:\.\d+)?)/', $dewey, $m)) {
+            $book['classificazione_dewey'] = $m[1];
+        }
+
+        // Series (461 $t)
+        $series = $getSub('461', 't');
+        if ($series !== null) {
+            $book['numero_serie'] = $clean($series);
+        }
+
+        // Subject headings as keywords (600-608 $a)
+        $subjects = [];
+        for ($tag = 600; $tag <= 608; $tag++) {
+            foreach ($getAllSub((string) $tag, 'a') as $subj) {
+                $subj = $clean(rtrim($subj, ' .,;'));
+                if ($subj !== '' && !in_array($subj, $subjects, true)) {
+                    $subjects[] = $subj;
+                }
+            }
+        }
+        if (!empty($subjects)) {
+            $book['keywords'] = implode(', ', $subjects);
+        }
+
+        // Sanitize text fields
+        foreach (['publisher', 'description'] as $field) {
+            $book[$field] = $clean($book[$field]);
+        }
+
+        // Add 'author' field as string for compatibility
+        if (!empty($book['authors'])) {
+            $book['author'] = implode(', ', $book['authors']);
+        }
+
+        return $book;
     }
 
     /**

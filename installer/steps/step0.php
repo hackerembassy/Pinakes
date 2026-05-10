@@ -8,8 +8,8 @@
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['language'])) {
     $selectedLanguage = $_POST['language'];
 
-    // Validate language — use canonical locale codes (it_IT, en_US, de_DE)
-    $allowedLanguages = ['it_IT', 'en_US', 'de_DE'];
+    // Validate language — use canonical locale codes (it_IT, en_US, de_DE, fr_FR)
+    $allowedLanguages = ['it_IT', 'en_US', 'de_DE', 'fr_FR'];
     if (!in_array($selectedLanguage, $allowedLanguages, true)) {
         $selectedLanguage = 'it_IT'; // Fallback to Italian
     }
@@ -19,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['language'])) {
     $_SESSION['installer_language'] = match($selectedLanguage) {
         'en_US' => 'en',
         'de_DE' => 'de',
+        'fr_FR' => 'fr',
         default => 'it',
     };
     // app_locale is used by the installer __() helper and must match I18n locale codes
@@ -41,11 +42,12 @@ renderHeader(0, 'Selezione Lingua');
 <div style="text-align: center; padding: 40px 20px;">
     <div style="font-size: 64px; margin-bottom: 30px;">🌍</div>
 
-    <h2 class="step-title">Seleziona la Lingua / Select Language / Sprache wählen</h2>
+    <h2 class="step-title">Seleziona la Lingua / Select Language / Sprache wählen / Choisir la Langue</h2>
     <p class="step-description" style="max-width: 600px; margin: 0 auto 40px;">
         Scegli la lingua per l'installazione e per l'applicazione.<br>
         Choose the language for installation and application.<br>
-        Wählen Sie die Sprache für die Installation und die Anwendung.
+        Wählen Sie die Sprache für die Installation und die Anwendung.<br>
+        Choisissez la langue pour l'installation et l'application.
     </p>
 
     <form method="POST" action="index.php?step=0" style="max-width: 500px; margin: 0 auto;">
@@ -132,10 +134,35 @@ renderHeader(0, 'Selezione Lingua');
                     </div>
                 </div>
             </label>
+            <!-- French Option -->
+            <label class="language-option <?= $currentLanguage === 'fr' ? 'selected' : '' ?>">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <input
+                        type="radio"
+                        name="language"
+                        value="fr_FR"
+                        <?= $currentLanguage === 'fr' ? 'checked' : '' ?>
+                        class="language-radio"
+                    >
+                    <svg width="48" height="24" viewBox="0 0 60 30" style="border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);" aria-hidden="true" focusable="false">
+                        <rect width="20" height="30" fill="#002395"/>
+                        <rect x="20" width="20" height="30" fill="#FFFFFF"/>
+                        <rect x="40" width="20" height="30" fill="#ED2939"/>
+                    </svg>
+                    <div style="text-align: left; flex: 1;">
+                        <div style="font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+                            Français
+                        </div>
+                        <div style="font-size: 13px; color: #64748b;">
+                            Langue par défaut pour toute l'application
+                        </div>
+                    </div>
+                </div>
+            </label>
         </div>
 
         <button type="submit" class="btn btn-primary btn-lg">
-            <?= match($currentLanguage) { 'en' => 'Continue', 'de' => 'Weiter', default => 'Continua' } ?> <i class="fas fa-arrow-right"></i>
+            <?= match($currentLanguage) { 'en' => 'Continue', 'de' => 'Weiter', 'fr' => 'Continuer', default => 'Continua' } ?> <i class="fas fa-arrow-right"></i>
         </button>
     </form>
 </div>

@@ -65,4 +65,36 @@ return [
             'cookie_marketing_description' => 'These cookies are used to deliver personalized advertisements.',
         ],
     ],
+    'fr_FR' => [
+        'app' => [
+            'footer_description' => 'Votre système Pinakes pour cataloguer, gérer et partager votre collection de livres.',
+        ],
+        'contacts' => [
+            'page_title' => 'Contactez-nous',
+            'page_content' => '<p>Contactez-nous pour toute information.</p>',
+            'privacy_text' => 'Vos données sont protégées conformément à notre politique de confidentialité.',
+        ],
+        'privacy' => [
+            'page_title' => 'Politique de confidentialité',
+            'page_content' => '<p>Votre vie privée est importante pour nous.</p>',
+            'cookie_banner_language' => 'fr',
+            'cookie_banner_country' => 'FR',
+            'cookie_policy_content' => '<p>Cette page explique comment nous utilisons les cookies sur notre site web.</p>',
+        ],
+        'cookie_banner' => [
+            'banner_description' => '<p>Nous utilisons des cookies pour améliorer votre expérience. En continuant à naviguer sur ce site, vous acceptez notre utilisation des cookies.</p>',
+            'accept_all_text' => 'Tout accepter',
+            'reject_non_essential_text' => 'Refuser les non essentiels',
+            'save_selected_text' => 'Accepter la sélection',
+            'preferences_button_text' => 'Préférences',
+            'preferences_title' => 'Personnaliser vos préférences en matière de cookies',
+            'preferences_description' => '<p>Nous respectons votre droit à la vie privée. Vous pouvez choisir de ne pas autoriser certains types de cookies. Vos préférences s\'appliqueront à l\'ensemble du site web.</p>',
+            'cookie_essential_name' => 'Cookies essentiels',
+            'cookie_essential_description' => 'Ces cookies sont nécessaires au fonctionnement du site et ne peuvent pas être désactivés.',
+            'cookie_analytics_name' => 'Cookies analytiques',
+            'cookie_analytics_description' => 'Ces cookies nous aident à comprendre comment les visiteurs interagissent avec le site web.',
+            'cookie_marketing_name' => 'Cookies marketing',
+            'cookie_marketing_description' => 'Ces cookies sont utilisés pour diffuser des publicités personnalisées.',
+        ],
+    ],
 ];
