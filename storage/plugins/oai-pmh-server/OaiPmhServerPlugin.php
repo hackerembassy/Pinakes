@@ -25,7 +25,7 @@ use Psr\Http\Message\ServerRequestInterface;
  * Endpoint: GET/POST /oai
  * Supported verbs: Identify, ListMetadataFormats, ListRecords, ListIdentifiers,
  *                  GetRecord, ListSets
- * Metadata formats: oai_dc, marcxml, mods, mag
+ * Metadata formats: oai_dc, marcxml, mods, mag, unimarc
  * Sets: books, archives (archives set only when archives plugin is active)
  * deletedRecord: persistent (tracked via oai_deleted_records + MySQL triggers)
  * Resumption tokens: DB-backed with 24h TTL

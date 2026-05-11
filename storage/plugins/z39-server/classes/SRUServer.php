@@ -1056,22 +1056,24 @@ class SRUServer
         $root = $xml->createElementNS(self::NS_SRU, $rootElement);
         $xml->appendChild($root);
 
-        $versionEl = $xml->createElement('version', $this->escapeXml($version));
+        $ns = self::NS_SRU;
+
+        $versionEl = $xml->createElementNS($ns, 'version', $this->escapeXml($version));
         $root->appendChild($versionEl);
 
-        $diagnostics = $xml->createElement('diagnostics');
+        $diagnostics = $xml->createElementNS($ns, 'diagnostics');
         $root->appendChild($diagnostics);
 
-        $diagnostic = $xml->createElement('diagnostic');
+        $diagnostic = $xml->createElementNS($ns, 'diagnostic');
         $diagnostics->appendChild($diagnostic);
 
-        $uri = $xml->createElement('uri', self::NS_DIAG . $code);
+        $uri = $xml->createElementNS($ns, 'uri', self::NS_DIAG . $code);
         $diagnostic->appendChild($uri);
 
-        $details = $xml->createElement('details', $this->escapeXml($message));
+        $details = $xml->createElementNS($ns, 'details', $this->escapeXml($message));
         $diagnostic->appendChild($details);
 
-        $messageEl = $xml->createElement('message', $this->escapeXml($message));
+        $messageEl = $xml->createElementNS($ns, 'message', $this->escapeXml($message));
         $diagnostic->appendChild($messageEl);
 
         return $xml->saveXML();

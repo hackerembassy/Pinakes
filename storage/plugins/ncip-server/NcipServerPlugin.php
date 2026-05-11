@@ -255,7 +255,7 @@ class NcipServerPlugin
         string $error = '',
         string $success = ''
     ): ResponseInterface {
-        if (!$this->requireAdmin()) {
+        if (!$this->requireAdminOrStaff()) {
             return $response->withStatus(302)->withHeader('Location', url('/admin/login'));
         }
         $partners   = $this->fetchAllPartners();
@@ -275,7 +275,7 @@ class NcipServerPlugin
         ServerRequestInterface $request,
         ResponseInterface $response
     ): ResponseInterface {
-        if (!$this->requireAdmin()) {
+        if (!$this->requireAdminOrStaff()) {
             return $response->withStatus(403);
         }
         $body  = (array) ($request->getParsedBody() ?? []);
@@ -311,7 +311,7 @@ class NcipServerPlugin
         ResponseInterface $response,
         int $id
     ): ResponseInterface {
-        if (!$this->requireAdmin()) {
+        if (!$this->requireAdminOrStaff()) {
             return $response->withStatus(403);
         }
         $body  = (array) ($request->getParsedBody() ?? []);
@@ -335,7 +335,7 @@ class NcipServerPlugin
         ServerRequestInterface $request,
         ResponseInterface $response
     ): ResponseInterface {
-        if (!$this->requireAdmin()) {
+        if (!$this->requireAdminOrStaff()) {
             return $response->withStatus(302)->withHeader('Location', url('/admin/login'));
         }
         $params  = $request->getQueryParams();
@@ -377,10 +377,10 @@ class NcipServerPlugin
         return $response;
     }
 
-    private function requireAdmin(): bool
+    private function requireAdminOrStaff(): bool
     {
         return isset($_SESSION['user']) &&
-            (($_SESSION['user']['tipo_utente'] ?? '') === 'admin');
+            in_array($_SESSION['user']['tipo_utente'] ?? '', ['admin', 'staff'], true);
     }
 
     /**
@@ -1209,7 +1209,7 @@ class NcipServerPlugin
             $ins->close();
 
             $upd = $this->db->prepare(
-                'UPDATE libri SET copie_disponibili = GREATEST(0, copie_disponibili - 1) WHERE id = ?'
+                'UPDATE libri SET copie_disponibili = GREATEST(0, copie_disponibili - 1) WHERE id = ? AND deleted_at IS NULL'
             );
             if ($upd === false) { $this->db->rollback(); return null; }
             $upd->bind_param('i', $bookId);
@@ -1320,7 +1320,7 @@ class NcipServerPlugin
         $stmt->close();
 
         $upd = $this->db->prepare(
-            'UPDATE libri SET copie_disponibili = LEAST(copie_totali, copie_disponibili + 1) WHERE id = ?'
+            'UPDATE libri SET copie_disponibili = LEAST(copie_totali, copie_disponibili + 1) WHERE id = ? AND deleted_at IS NULL'
         );
         if ($upd === false) { $this->db->rollback(); return; }
         $upd->bind_param('i', $bookId);

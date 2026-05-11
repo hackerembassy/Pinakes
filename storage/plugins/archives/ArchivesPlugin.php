@@ -236,11 +236,13 @@ class ArchivesPlugin
 
     /**
      * Execute the DDL for archival_units, authority_records, and the
-     * M:N link table. Errors are logged but don't abort activation —
-     * the admin can inspect the log and retry. Partial success is
-     * acceptable because each CREATE is IF NOT EXISTS + independent.
+     * M:N link table. CREATE TABLE failures are logged and reported
+     * via the returned 'failed' list without throwing. However, the
+     * subsequent migrateImageColumns() and migrateArchivalUnitFilesFK()
+     * calls throw RuntimeException on failure, which aborts activation.
      *
      * @return array{created: list<string>, failed: list<string>}
+     * @throws \RuntimeException If a schema migration step fails.
      */
     public function ensureSchema(): array
     {

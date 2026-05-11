@@ -555,7 +555,7 @@ class SruClient
      *   700 $a/$b = first author (Nom/Prénom), 701 = additional, 702 = other
      *   010 $a = ISBN, 073 $a = EAN-13
      *   215 $a = extent/pages
-     *   461 $t = series title
+     *   461 $t = series title, $v = volume number; 225 $a/$v = alternate series statement
      *   676 $a = Dewey classification
      *   101 $a = language code (ISO 639-2/B)
      *   330 $a = abstract/description
@@ -704,10 +704,15 @@ class SruClient
             $book['classificazione_dewey'] = $m[1];
         }
 
-        // Series (461 $t)
-        $series = $getSub('461', 't');
-        if ($series !== null) {
-            $book['numero_serie'] = $clean($series);
+        // Series: 461 $t (linked series title) or 225 $a (series statement);
+        // volume number from 461 $v or 225 $v
+        $seriesTitle = $getSub('461', 't') ?? $getSub('225', 'a');
+        if ($seriesTitle !== null) {
+            $book['collana'] = $clean(rtrim((string) $seriesTitle, ' /:;=.,'));
+        }
+        $volumeNumber = $getSub('461', 'v') ?? $getSub('225', 'v');
+        if ($volumeNumber !== null) {
+            $book['numero_serie'] = mb_substr($clean($volumeNumber), 0, 50);
         }
 
         // Subject headings as keywords (600-608 $a)

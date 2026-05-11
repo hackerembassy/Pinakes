@@ -48,15 +48,41 @@ class ViafAuthorityPlugin
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    public function ensureSchema(): void
+    /**
+     * @return array{created:list<string>, failed:list<string>}
+     */
+    public function ensureSchema(): array
     {
-        $this->ensureSchemaColumns();
-        $this->ensureAlternatesTable();
+        $created = [];
+        $failed  = [];
+
+        try {
+            $this->ensureSchemaColumns();
+            $created[] = 'autori_authority_columns';
+        } catch (\Throwable $e) {
+            SecureLogger::error('[ViafAuthority] ensureSchemaColumns failed: ' . $e->getMessage());
+            $failed[] = 'autori_authority_columns';
+        }
+
+        try {
+            $this->ensureAlternatesTable();
+            $created[] = 'author_authority_alternates';
+        } catch (\Throwable $e) {
+            SecureLogger::error('[ViafAuthority] ensureAlternatesTable failed: ' . $e->getMessage());
+            $failed[] = 'author_authority_alternates';
+        }
+
+        return ['created' => $created, 'failed' => $failed];
     }
 
     public function onActivate(): void
     {
-        $this->ensureSchema();
+        $result = $this->ensureSchema();
+        if (!empty($result['failed'])) {
+            throw new \RuntimeException(
+                '[ViafAuthority] Schema activation failed for: ' . implode(', ', $result['failed'])
+            );
+        }
         $this->db->begin_transaction();
         try {
             $this->registerHookInDb('app.routes.register', 'registerRoutes', 20);
@@ -69,7 +95,12 @@ class ViafAuthorityPlugin
 
     public function onInstall(): void
     {
-        $this->ensureSchema();
+        $result = $this->ensureSchema();
+        if (!empty($result['failed'])) {
+            throw new \RuntimeException(
+                '[ViafAuthority] Schema install failed for: ' . implode(', ', $result['failed'])
+            );
+        }
     }
 
     public function onDeactivate(): void

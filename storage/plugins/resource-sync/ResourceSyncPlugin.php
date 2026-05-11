@@ -488,9 +488,11 @@ class ResourceSyncPlugin
             $offset = max(0, $page) * 500;
             $stmt->bind_param('sssii', $since, $since, $since, $limit, $offset);
         } else {
+            // Include recent tombstones (≤30 days) for ResourceSync — intentional exception to strict deleted_at IS NULL rule
             $stmt = $this->db->prepare(
                 'SELECT id, updated_at, created_at, deleted_at, 0 AS is_new_entry
                  FROM libri
+                 WHERE (deleted_at IS NULL OR deleted_at >= DATE_SUB(NOW(), INTERVAL 30 DAY))
                  ORDER BY COALESCE(deleted_at, updated_at, created_at) DESC
                  LIMIT ? OFFSET ?'
             );

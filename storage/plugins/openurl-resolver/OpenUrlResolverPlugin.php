@@ -190,7 +190,7 @@ class OpenUrlResolverPlugin
         if ($isbn !== '') {
             $book = $this->findBookByIsbn($isbn);
             if ($book !== null) {
-                $url = $this->localBookUrl($request, (int) $book['id']);
+                $url = $this->localBookUrl($request, $book);
                 return $response->withStatus(302)->withHeader('Location', $url);
             }
         }
@@ -363,16 +363,24 @@ class OpenUrlResolverPlugin
             : self::WORLDCAT_SEARCH;
     }
 
-    private function localBookUrl(ServerRequestInterface $request, int $bookId): string
+    /**
+     * Build the absolute URL to the local book detail page, respecting the
+     * installation locale (route_path('book') resolves to '/libro' in it_IT
+     * and '/book' in en_US, etc.) and the configured base path.
+     *
+     * @param array<string, mixed> $book
+     */
+    private function localBookUrl(ServerRequestInterface $request, array $book): string
     {
-        $uri      = $request->getUri();
-        $basePath = defined('BASE_PATH') ? rtrim((string) BASE_PATH, '/') : '';
-        $origin   = $uri->getScheme() . '://' . $uri->getHost();
-        $port     = $uri->getPort();
+        $uri    = $request->getUri();
+        $origin = $uri->getScheme() . '://' . $uri->getHost();
+        $port   = $uri->getPort();
         if ($port !== null && !(($uri->getScheme() === 'http' && $port === 80) || ($uri->getScheme() === 'https' && $port === 443))) {
             $origin .= ':' . $port;
         }
-        return $origin . $basePath . '/libro/' . $bookId;
+        // book_url() already includes the base path AND respects the locale
+        // (slug-based canonical path). Do NOT prepend basePath again here.
+        return $origin . book_url($book);
     }
 
     // ─── DB helpers ───────────────────────────────────────────────────────────
@@ -384,8 +392,15 @@ class OpenUrlResolverPlugin
     {
         $col  = strlen($isbn) === 13 ? 'isbn13' : 'isbn10';
         $stmt = $this->db->prepare(
-            "SELECT id, titolo FROM libri
-              WHERE {$col} = ? AND deleted_at IS NULL
+            "SELECT l.id, l.titolo,
+                    (SELECT a.nome
+                       FROM libri_autori la
+                       JOIN autori a ON a.id = la.autore_id
+                      WHERE la.libro_id = l.id
+                      ORDER BY COALESCE(la.ordine_credito, 0), la.autore_id
+                      LIMIT 1) AS autore_principale
+               FROM libri l
+              WHERE l.{$col} = ? AND l.deleted_at IS NULL
               LIMIT 1"
         );
         if ($stmt === false) { return null; }
