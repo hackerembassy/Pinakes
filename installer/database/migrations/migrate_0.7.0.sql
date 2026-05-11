@@ -139,6 +139,21 @@ PREPARE _stmt2 FROM @sql2;
 EXECUTE _stmt2;
 DEALLOCATE PREPARE _stmt2;
 
+-- If the table was created by a pre-release dev build using old column names
+-- (source_code/source_id/source_uri/preferred_form), drop and recreate it.
+-- The table held no real user data in those dev installs — it is safe to drop.
+SET @old_schema = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'author_authority_alternates'
+      AND COLUMN_NAME  = 'source_code'
+);
+SET @sql_drop = IF(@old_schema > 0,
+    'DROP TABLE author_authority_alternates',
+    'SELECT 1'
+);
+PREPARE _drop FROM @sql_drop; EXECUTE _drop; DEALLOCATE PREPARE _drop;
+
 CREATE TABLE IF NOT EXISTS author_authority_alternates (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     autore_id   INT NOT NULL,
