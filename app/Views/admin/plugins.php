@@ -1113,8 +1113,10 @@ $pluginSettings = $pluginSettings ?? [];
             </div>
         </div>
         <div class="mt-2 flex items-center gap-2">
-            <input type="checkbox" name="server_quote_terms[]" value="1" ${quoteTerms} class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-            <label class="text-xs text-gray-500"><?= __("Racchiudi il termine di ricerca tra virgolette CQL (es. BnF)") ?></label>
+            <label class="text-xs text-gray-500 flex items-center gap-2">
+                <input type="checkbox" name="server_quote_terms[]" value="1" ${quoteTerms} class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                <?= __("Racchiudi il termine di ricerca tra virgolette CQL (es. BnF)") ?>
+            </label>
         </div>
         <div class="absolute top-2 right-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <button type="button" onclick="this.closest('.z39-server-row').remove(); checkEmptyServers();" class="text-red-500 hover:text-red-700 p-2">

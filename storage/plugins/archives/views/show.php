@@ -249,6 +249,26 @@ $id = (int) $row['id'];
                     </dd>
                 </div>
             <?php endif; ?>
+            <?php if (!empty($row['iiif_manifest_url'])): ?>
+                <?php
+                $iiifUrl      = trim((string) $row['iiif_manifest_url']);
+                $isSafeIiifUrl = filter_var($iiifUrl, FILTER_VALIDATE_URL) !== false
+                    && (bool) preg_match('/^https?:\/\//i', $iiifUrl);
+                ?>
+                <div class="px-6 py-3 grid grid-cols-3 gap-4">
+                    <dt class="text-sm font-medium text-gray-500"><?= __("URL manifest IIIF (server esterno)") ?></dt>
+                    <dd class="col-span-2 text-sm text-gray-900">
+                        <?php if ($isSafeIiifUrl): ?>
+                            <a href="<?= $e($iiifUrl) ?>" target="_blank" rel="noopener noreferrer"
+                               class="text-blue-600 hover:underline font-mono text-xs">
+                                <?= $e($iiifUrl) ?>
+                            </a>
+                        <?php else: ?>
+                            <span class="font-mono text-xs"><?= $e($iiifUrl) ?></span>
+                        <?php endif; ?>
+                    </dd>
+                </div>
+            <?php endif; ?>
             <?php if (!empty($row['version_note'])): ?>
                 <div class="px-6 py-3 grid grid-cols-3 gap-4">
                     <dt class="text-sm font-medium text-gray-500"><?= __("Nota di versione") ?></dt>

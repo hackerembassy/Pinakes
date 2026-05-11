@@ -1712,7 +1712,7 @@ class ArchivesPlugin
         $stmt->bind_param('ii', $fileId, $unitId);
         $stmt->execute();
         $result = $stmt->get_result();
-        $file   = $result->fetch_assoc();
+        $file   = $result instanceof \mysqli_result ? $result->fetch_assoc() : null;
         $stmt->close();
 
         if ($file === null) {
@@ -4677,7 +4677,8 @@ class ArchivesPlugin
         }
         $stmt->bind_param('i', $id);
         $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
+        $res = $stmt->get_result();
+        $row = $res instanceof \mysqli_result ? $res->fetch_assoc() : null;
         $stmt->close();
 
         if ($row === null) {
@@ -6420,6 +6421,10 @@ class ArchivesPlugin
      */
     private function archiveSearchPattern(string $q): string
     {
+        // Escape LIKE wildcards (% and _) and the escape character itself
+        // so literal user input doesn't leak through as wildcards. Backslash
+        // must be escaped first to avoid double-escaping the new sequences.
+        $q    = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
         $stem = strlen($q) >= 5 ? substr($q, 0, -1) : $q;
         return '%' . $stem . '%';
     }

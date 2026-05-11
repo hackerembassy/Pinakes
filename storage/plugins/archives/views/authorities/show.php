@@ -40,7 +40,10 @@ $id = (int) $row['id'];
 ?>
 <div class="p-6 max-w-4xl mx-auto">
     <div class="flex items-center gap-3 mb-2">
-        <button type="button" onclick="history.back()" class="btn-secondary text-xs px-3 py-1.5">
+        <button type="button"
+                data-fallback-url="<?= $e(url('/admin/archives/authorities')) ?>"
+                onclick="if (document.referrer && document.referrer.indexOf(window.location.origin) === 0) { history.back(); } else { window.location.href = this.getAttribute('data-fallback-url'); }"
+                class="btn-secondary text-xs px-3 py-1.5">
             &larr; <?= __("Indietro") ?>
         </button>
         <nav class="text-sm text-gray-500">

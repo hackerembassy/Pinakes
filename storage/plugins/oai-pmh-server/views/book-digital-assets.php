@@ -189,6 +189,8 @@ function oaiFormatBytes(int $bytes): string
     var MSG_ERR_NET = <?= json_encode(__('Errore di rete.'), JSON_HEX_TAG) ?>;
     var MSG_ERR     = <?= json_encode(__('Errore'), JSON_HEX_TAG) ?>;
     var MSG_DEL     = <?= json_encode(__('Elimina'), JSON_HEX_TAG) ?>;
+    var MSG_LOADING = <?= json_encode(__('Salvataggio...'), JSON_HEX_TAG) ?>;
+    var ADD_BTN_HTML = '<i class="fas fa-check"></i> ' + <?= json_encode(__('Aggiungi'), JSON_HEX_TAG) ?>;
 
     document.getElementById('oai-toggle-add-form').addEventListener('click', function () {
         document.getElementById('oai-add-form').classList.toggle('hidden');
@@ -217,8 +219,13 @@ function oaiFormatBytes(int $bytes): string
     }
 
     document.getElementById('oai-add-asset-btn').addEventListener('click', function () {
+        var btn = this;
         var url = val('oai-new-url').trim();
         if (!url) { setError(MSG_ERR_URL); return; }
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.classList.add('opacity-60', 'cursor-not-allowed');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + MSG_LOADING;
         fetch(ADD_URL, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF},
@@ -236,7 +243,12 @@ function oaiFormatBytes(int $bytes): string
             clearForm();
             document.getElementById('oai-add-form').classList.add('hidden');
         })
-        .catch(function () { setError(MSG_ERR_NET); });
+        .catch(function () { setError(MSG_ERR_NET); })
+        .finally(function () {
+            btn.disabled = false;
+            btn.classList.remove('opacity-60', 'cursor-not-allowed');
+            btn.innerHTML = ADD_BTN_HTML;
+        });
     });
 
     document.getElementById('oai-assets-tbody').addEventListener('click', function (e) {

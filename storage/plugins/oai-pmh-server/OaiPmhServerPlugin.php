@@ -117,9 +117,10 @@ class OaiPmhServerPlugin
             'oai_deleted_records' => "CREATE TABLE IF NOT EXISTS oai_deleted_records (
                 id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 entity_type  ENUM('book','archival_unit') NOT NULL,
-                entity_id    INT NOT NULL,
+                entity_id    BIGINT UNSIGNED NOT NULL,
                 oai_id       VARCHAR(255) NOT NULL,
                 datestamp    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 UNIQUE KEY uq_entity (entity_type, entity_id),
                 KEY idx_datestamp (datestamp),
@@ -129,7 +130,6 @@ class OaiPmhServerPlugin
             'oai_resumption_tokens' => "CREATE TABLE IF NOT EXISTS oai_resumption_tokens (
                 token      VARCHAR(64) NOT NULL,
                 payload    JSON NOT NULL,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 expires_at DATETIME NOT NULL,
                 PRIMARY KEY (token),
                 KEY idx_expires (expires_at)

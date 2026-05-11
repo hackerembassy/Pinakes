@@ -559,7 +559,7 @@ class BibframeLinkedDataPlugin
                 if (in_array($prop, ['@id', '@type'], true)) { continue; }
                 if (!is_array($val)) {
                     // scalar value — emit as a literal
-                    $turtleVal = '"' . addslashes((string) $val) . '"';
+                    $turtleVal = '"' . $this->escapeTurtleString((string) $val) . '"';
                 } else {
                     $turtleVal = $this->turtleValues($val, $ctx);
                 }
