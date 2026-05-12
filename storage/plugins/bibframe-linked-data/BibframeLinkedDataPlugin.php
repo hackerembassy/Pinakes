@@ -356,6 +356,15 @@ class BibframeLinkedDataPlugin
 
         $work['bf:content'] = ['@type' => 'bf:Content', '@id' => 'http://id.loc.gov/vocabulary/contentTypes/txt'];
 
+        // FIX F045: Work-level VIAF link (mirrors per-author VIAF pattern below).
+        // If the book record carries a Work-level VIAF identifier, expose it as
+        // owl:sameAs on the bf:Work — same shape used for bf:Person agents.
+        if ($viafId !== '') {
+            $work['owl:sameAs'] = [
+                '@id' => 'https://viaf.org/viaf/' . rawurlencode($viafId),
+            ];
+        }
+
         // Contributions (authors)
         $contributions = [];
         foreach ($authors as $a) {

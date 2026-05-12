@@ -324,13 +324,26 @@ class ArchivesPlugin
         }
     }
 
+    // FIX F028: docblock rewritten to match current behavior — migrates
+    // descriptive, image-item, IIIF, rights, ARK and version columns, and
+    // ensures the uq_ark_identifier UNIQUE KEY exists; throws RuntimeException
+    // on ALTER failure so callers can abort activation.
     /**
-     * Additive migration for phase 5 image-item columns. Checks the
-     * information_schema for each column and runs an ALTER TABLE ADD
-     * COLUMN when missing. Idempotent; safe to call on every activation.
+     * Additive migration for archival_units. Checks information_schema for
+     * each column listed below and runs ALTER TABLE ADD COLUMN when missing;
+     * also ensures the UNIQUE KEY uq_ark_identifier exists on in-place
+     * upgrades (fresh installs get it from ddlArchivalUnits()).
+     *
+     * Columns migrated include the original image-item set plus
+     * iiif_manifest_url, rights_statement_url, ark_identifier and
+     * version_note added in later phases.
      *
      * MySQL 5.7 / MariaDB 10.x don't support ADD COLUMN IF NOT EXISTS
      * consistently, which is why we pre-check instead.
+     *
+     * Throws \RuntimeException if any ALTER fails — callers should let it
+     * propagate so activation aborts rather than leaving a half-migrated
+     * schema behind.
      */
     private function migrateImageColumns(): void
     {
@@ -875,7 +888,8 @@ class ArchivesPlugin
         $app->get('/archive', $publicIndex);
         $app->get('/archive/{slug:[a-z0-9-]+}-{id:[0-9]+}', $publicShow);
         $app->get('/archive/{id:[0-9]+}', $publicShow);
-        foreach (['it_IT', 'en_US', 'de_DE'] as $locale) {
+        // FIX F029: include fr_FR so the localised /archives route registers for French installs.
+        foreach (['it_IT', 'en_US', 'de_DE', 'fr_FR'] as $locale) {
             $base = $publicRouteFor($locale);
             if (!empty($base) && $base !== '/archive') {
                 $app->get($base, $publicIndex);
@@ -1408,17 +1422,17 @@ class ArchivesPlugin
         );
         if ($stmt === false) {
             SecureLogger::error('[Archives] delete prepare failed: ' . $this->db->error, ['id' => $id]);
-            return $response->withHeader('Location', htmlspecialchars(url('/admin/archives/' . $id), ENT_QUOTES, 'UTF-8'))->withStatus(303);
+            return $response->withHeader('Location', url('/admin/archives/' . $id) /* FIX F032 */)->withStatus(303);
         }
         $stmt->bind_param('i', $id);
         if (!$stmt->execute()) {
             SecureLogger::error('[Archives] destroyAction execute failed: ' . $stmt->error, ['id' => $id]);
             $stmt->close();
-            return $response->withHeader('Location', htmlspecialchars(url('/admin/archives/' . $id), ENT_QUOTES, 'UTF-8'))
+            return $response->withHeader('Location', url('/admin/archives/' . $id) /* FIX F032 */)
                 ->withStatus(303);
         }
         $stmt->close();
-        return $response->withHeader('Location', htmlspecialchars(url('/admin/archives'), ENT_QUOTES, 'UTF-8'))->withStatus(303);
+        return $response->withHeader('Location', url('/admin/archives') /* FIX F032 */)->withStatus(303);
     }
 
     // ── Phase 5+ — cover + document asset upload ─────────────────────────
@@ -1529,14 +1543,14 @@ class ArchivesPlugin
         $stmt = $this->db->prepare($sql);
         if ($stmt === false) {
             SecureLogger::error('[Archives] removeAssetAction prepare failed: ' . $this->db->error, ['id' => $id]);
-            return $response->withHeader('Location', htmlspecialchars(url('/admin/archives/' . $id), ENT_QUOTES, 'UTF-8'))->withStatus(303);
+            return $response->withHeader('Location', url('/admin/archives/' . $id) /* FIX F032 */)->withStatus(303);
         }
         $stmt->bind_param('i', $id);
         if (!$stmt->execute()) {
             SecureLogger::error('[Archives] removeAssetAction execute failed after file deletion: ' . $stmt->error, ['id' => $id, 'note' => 'physical file may be orphaned']);
         }
         $stmt->close();
-        return $response->withHeader('Location', htmlspecialchars(url('/admin/archives/' . $id), ENT_QUOTES, 'UTF-8'))->withStatus(303);
+        return $response->withHeader('Location', url('/admin/archives/' . $id) /* FIX F032 */)->withStatus(303);
     }
 
     /**
@@ -1610,10 +1624,17 @@ class ArchivesPlugin
         }
         $ext = $mimeToExt[$mime];
 
-        // Remove any previous file to avoid orphans.
+        // FIX F031: defer legacy file removal until after the new file is
+        // successfully recorded. For 'cover' the UPDATE overwrites the same
+        // column so we can still unlink the predecessor here. For 'document'
+        // the new entry lives in archival_unit_files (a separate table) and
+        // the legacy document_path file must NOT be removed until the INSERT
+        // succeeds — otherwise an INSERT failure would also clean up the new
+        // file (further down) and orphan no reference, resulting in net data
+        // loss. The deferred unlink is performed below after a confirmed INSERT.
         $existingPathField = $kind === 'cover' ? 'cover_image_path' : 'document_path';
         $existingPath = (string) ($row[$existingPathField] ?? '');
-        if ($existingPath !== '') {
+        if ($kind === 'cover' && $existingPath !== '') {
             $oldFs = __DIR__ . '/../../../public' . $existingPath;
             if (is_file($oldFs)) {
                 @unlink($oldFs);
@@ -1678,6 +1699,16 @@ class ArchivesPlugin
                         $nullStmt->bind_param('i', $id);
                         $nullStmt->execute();
                         $nullStmt->close();
+                    }
+                    // FIX F031: now that the new archival_unit_files row is
+                    // committed and the legacy columns are cleared, the old
+                    // file on disk is orphaned and safe to unlink. Done last
+                    // so an earlier failure leaves the legacy file intact.
+                    if ($existingPath !== '') {
+                        $oldFs = __DIR__ . '/../../../public' . $existingPath;
+                        if (is_file($oldFs)) {
+                            @unlink($oldFs);
+                        }
                     }
                 } else {
                     $movedPath = $targetDirFs . '/' . $basename;
@@ -2078,17 +2109,17 @@ class ArchivesPlugin
         );
         if ($stmt === false) {
             SecureLogger::error('[Archives] authority delete prepare failed: ' . $this->db->error, ['id' => $id]);
-            return $response->withHeader('Location', htmlspecialchars(url('/admin/archives/authorities/' . $id), ENT_QUOTES, 'UTF-8'))->withStatus(303);
+            return $response->withHeader('Location', url('/admin/archives/authorities/' . $id) /* FIX F032 */)->withStatus(303);
         }
         $stmt->bind_param('i', $id);
         if (!$stmt->execute()) {
             SecureLogger::error('[Archives] authorityDestroyAction execute failed: ' . $stmt->error, ['id' => $id]);
             $stmt->close();
-            return $response->withHeader('Location', htmlspecialchars(url('/admin/archives/authorities/' . $id), ENT_QUOTES, 'UTF-8'))
+            return $response->withHeader('Location', url('/admin/archives/authorities/' . $id) /* FIX F032 */)
                 ->withStatus(303);
         }
         $stmt->close();
-        return $response->withHeader('Location', htmlspecialchars(url('/admin/archives/authorities'), ENT_QUOTES, 'UTF-8'))->withStatus(303);
+        return $response->withHeader('Location', url('/admin/archives/authorities') /* FIX F032 */)->withStatus(303);
     }
 
     /**
@@ -2130,7 +2161,7 @@ class ArchivesPlugin
         }
 
         return $response
-            ->withHeader('Location', htmlspecialchars(url('/admin/archives/' . $archivalUnitId), ENT_QUOTES, 'UTF-8'))
+            ->withHeader('Location', url('/admin/archives/' . $archivalUnitId) /* FIX F032 */)
             ->withStatus(303);
     }
 
@@ -2193,7 +2224,7 @@ class ArchivesPlugin
             }
         }
         return $response
-            ->withHeader('Location', htmlspecialchars(url('/admin/archives/authorities/' . $authorityId), ENT_QUOTES, 'UTF-8'))
+            ->withHeader('Location', url('/admin/archives/authorities/' . $authorityId) /* FIX F032 */)
             ->withStatus(303);
     }
 
@@ -6427,7 +6458,11 @@ class ArchivesPlugin
         // so literal user input doesn't leak through as wildcards. Backslash
         // must be escaped first to avoid double-escaping the new sequences.
         $q    = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
-        $stem = strlen($q) >= 5 ? substr($q, 0, -1) : $q;
+        // FIX F034: use mb_strlen / mb_substr so the stem trim is multibyte-safe.
+        // strlen()/substr() count bytes — for UTF-8 accented input ("città",
+        // "éditeur") this both miscounts length and can truncate inside a
+        // multibyte sequence, producing an invalid LIKE pattern.
+        $stem = mb_strlen($q, 'UTF-8') >= 5 ? mb_substr($q, 0, -1, 'UTF-8') : $q;
         return '%' . $stem . '%';
     }
 

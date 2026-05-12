@@ -2831,7 +2831,8 @@ class OaiPmhServerPlugin
         if ($stmt === false) {
             return $this->jsonError($response, 'Errore database.');
         }
-        $stmt->bind_param('issssiii', $bookId, $url, $filetype, $md5, $filesize, $width, $height, $ppi);
+        // FIX F067: bind_param type string corrected from 'issssiii' to 'isssiiii' to match arg order (i,s,s,s,i,i,i,i)
+        $stmt->bind_param('isssiiii', $bookId, $url, $filetype, $md5, $filesize, $width, $height, $ppi);
         if (!$stmt->execute()) {
             $stmt->close();
             return $this->jsonError($response, 'Errore nel salvataggio.');

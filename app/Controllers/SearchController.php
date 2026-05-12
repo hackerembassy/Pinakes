@@ -231,7 +231,12 @@ class SearchController
             $publisherResults = $this->searchPublishersWithDetails($db, $q);
             $results = array_merge($results, $publisherResults);
 
-            // Plugin sources (e.g. archive units via Archives plugin hook).
+            // FIX F004: Cap core results to leave headroom for plugin sources,
+            // mirroring the admin unifiedSearch pattern. Without this cap, core
+            // results (up to 10 books + 5 authors + publishers) could fill the
+            // final 15-slot limit and silently drop plugin-provided entries
+            // (e.g. archive units from the Archives plugin) after Hooks::apply.
+            $results = array_slice($results, 0, 12);
             $results = \App\Support\Hooks::apply('search.unified.sources', $results, [$q]);
         }
 

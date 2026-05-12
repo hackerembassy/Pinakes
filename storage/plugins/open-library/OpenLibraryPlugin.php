@@ -337,7 +337,9 @@ class OpenLibraryPlugin
             if (str_starts_with($key, '_')) {
                 continue; // Skip internal fields
             }
-            if (!isset($existing[$key]) || $existing[$key] === '' ||
+            // FIX F072: restore || === null branch (matches "fill empty fields" intent; aligns with api-book-scraper)
+            // Use array_key_exists so === null branch remains meaningful for PHPStan
+            if (!array_key_exists($key, $existing) || $existing[$key] === '' || $existing[$key] === null ||
                 (is_array($existing[$key]) && empty($existing[$key]))) {
                 $existing[$key] = $value;
             }

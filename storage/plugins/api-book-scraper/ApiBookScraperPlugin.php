@@ -340,8 +340,10 @@ class ApiBookScraperPlugin
                 }
 
                 // Fill empty fields in existing data with API data
+                // FIX F027: restore null handling (matches comment intent "fill empty fields")
+                // Use array_key_exists so === null branch remains meaningful for PHPStan
                 foreach ($bookData as $key => $value) {
-                    if (!isset($existing[$key]) || $existing[$key] === '') {
+                    if (!array_key_exists($key, $existing) || $existing[$key] === '' || $existing[$key] === null) {
                         $existing[$key] = $value;
                     }
                 }

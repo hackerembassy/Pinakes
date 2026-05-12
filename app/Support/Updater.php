@@ -2622,8 +2622,11 @@ class Updater
             if ($parentTarget !== false) {
                 $parentTarget = str_replace('\\', '/', $parentTarget);
             }
-            if ($parentTarget !== false && $realDest !== false && strpos($parentTarget, $realDest) !== 0) {
-                throw new Exception(sprintf(__('Percorso non valido nel pacchetto: %s'), $relativePath));
+            if ($parentTarget !== false && $realDest !== false) {
+                // FIX F010: prevent prefix-collision (cf. F018). '/var/www/dest2' must not pass when $realDest='/var/www/dest'.
+                if ($parentTarget !== $realDest && !str_starts_with($parentTarget, $realDest . '/')) {
+                    throw new Exception(sprintf(__('Percorso non valido nel pacchetto: %s'), $relativePath));
+                }
             }
 
             foreach ($this->skipPaths as $skipPath) {

@@ -2156,6 +2156,12 @@ return function (App $app): void {
     // API per scraping dati libro tramite ISBN - PROTETTO: Solo admin e staff
     $app->get("/api/scrape/isbn", function ($request, $response) {
         $controller = new \App\Controllers\ScrapeController();
+        // FIX F003: mark this as the top-level HTTP entry so byIsbn() can safely
+        // release the session lock (session_write_close). In-process callers
+        // (LibriController::fetchCover, Support\ScrapingService::scrapeBookData)
+        // do NOT set this attribute, so the session stays open and their
+        // subsequent $_SESSION writes are preserved.
+        $request = $request->withAttribute('scrape.http_entry', true);
         return $controller->byIsbn($request, $response);
     })->add(new \App\Middleware\RateLimitMiddleware(30, 60))->add(new AdminAuthMiddleware()); // 30 requests per minute
 

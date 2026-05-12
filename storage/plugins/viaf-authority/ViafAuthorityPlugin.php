@@ -559,15 +559,55 @@ class ViafAuthorityPlugin
         $isniIdParam  = $isniRaw !== '' ? $isniRaw : null;
         $isniUriParam = $isniIdParam !== null ? 'https://isni.org/isni/' . $isniIdParam : null;
 
-        $authSource     = $isniIdParam !== null ? 'isni' : null;
-        $authConfidence = $isniIdParam !== null ? 'exact' : null;
-        $stmt = $this->db->prepare(
-            'UPDATE autori SET isni_id = ?, isni_uri = ?, authority_source = ?, authority_confidence = ? WHERE id = ?'
+        // FIX F081: preserve existing VIAF authority assignment when setting/clearing ISNI.
+        // The previous code unconditionally rewrote authority_source/authority_confidence,
+        // clobbering a prior VIAF assignment on the same author row. Mirror the asymmetric
+        // semantics of setAuthorAuthorityAction: VIAF wins over ISNI as the authority source.
+        $hasViaf = false;
+        $selStmt = $this->db->prepare(
+            'SELECT viaf_id, authority_source FROM autori WHERE id = ?'
         );
-        if ($stmt === false) {
+        if ($selStmt === false) {
             return $this->json($response, ['error' => true, 'message' => __('Errore interno.')], 500);
         }
-        $stmt->bind_param('ssssi', $isniIdParam, $isniUriParam, $authSource, $authConfidence, $id);
+        $selStmt->bind_param('i', $id);
+        if (!$selStmt->execute()) {
+            $selStmt->close();
+            return $this->json($response, ['error' => true, 'message' => __('Errore interno.')], 500);
+        }
+        $existingViafId = null;
+        $existingSource = null;
+        $selStmt->bind_result($existingViafId, $existingSource);
+        $rowFound = $selStmt->fetch();
+        $selStmt->close();
+        if ($rowFound !== true) {
+            return $this->json($response, ['error' => true, 'message' => __('Autore non trovato.')], 404);
+        }
+        if ($existingViafId !== null && $existingViafId !== '' && $existingSource === 'viaf') {
+            $hasViaf = true;
+        }
+
+        // FIX F081: branch on existing VIAF state to decide whether to touch authority_source/confidence.
+        if ($hasViaf) {
+            // Preserve VIAF: only update isni_id / isni_uri, leave authority_source/confidence as-is.
+            $stmt = $this->db->prepare(
+                'UPDATE autori SET isni_id = ?, isni_uri = ? WHERE id = ?'
+            );
+            if ($stmt === false) {
+                return $this->json($response, ['error' => true, 'message' => __('Errore interno.')], 500);
+            }
+            $stmt->bind_param('ssi', $isniIdParam, $isniUriParam, $id);
+        } else {
+            $authSource     = $isniIdParam !== null ? 'isni' : null;
+            $authConfidence = $isniIdParam !== null ? 'exact' : null;
+            $stmt = $this->db->prepare(
+                'UPDATE autori SET isni_id = ?, isni_uri = ?, authority_source = ?, authority_confidence = ? WHERE id = ?'
+            );
+            if ($stmt === false) {
+                return $this->json($response, ['error' => true, 'message' => __('Errore interno.')], 500);
+            }
+            $stmt->bind_param('ssssi', $isniIdParam, $isniUriParam, $authSource, $authConfidence, $id);
+        }
         $ok       = $stmt->execute();
         $affected = $stmt->affected_rows;
         $stmt->close();

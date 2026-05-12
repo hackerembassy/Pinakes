@@ -337,11 +337,20 @@ ON DUPLICATE KEY UPDATE
 -- (e.g. a de_DE user on an it_IT install) can still have their locale
 -- restored by RememberMeMiddleware → I18n::setLocale(), which gates on
 -- `languages` table membership.
+-- FIX F020: added ON DUPLICATE KEY UPDATE so re-running this seeder on an
+-- existing DB (recovery / reinstall-test.sh path) doesn't fail with a
+-- duplicate-key error on `languages.code`. Mirrors data_de_DE.sql:319.
+-- FIX F023: total_keys/translated_keys/completion_percentage updated to real
+-- JSON key counts (jq '[paths(scalars)] | length'): it_IT=493, en_US=4653,
+-- de_DE=4653, fr_FR=4993. Previous values (2015/4009/4080) were stale and
+-- inconsistent with migrate_0.7.5.sql (which used 4145). Fresh installs now
+-- match the actual translation file contents.
 INSERT INTO `languages` (`code`, `name`, `native_name`, `flag_emoji`, `is_default`, `is_active`, `translation_file`, `total_keys`, `translated_keys`, `completion_percentage`) VALUES
-('it_IT', 'Italian', 'Italiano', '🇮🇹', 1, 1, NULL, 2015, 2015, 100.00),
-('en_US', 'English', 'English', '🇬🇧', 0, 1, 'locale/en_US.json', 2015, 1988, 98.66),
-('de_DE', 'German', 'Deutsch', '🇩🇪', 0, 1, 'locale/de_DE.json', 4009, 4009, 100.00),
-('fr_FR', 'French', 'Français', '🇫🇷', 0, 1, 'locale/fr_FR.json', 4080, 4080, 100.00);
+('it_IT', 'Italian', 'Italiano', '🇮🇹', 1, 1, NULL, 493, 493, 100.00),
+('en_US', 'English', 'English', '🇬🇧', 0, 1, 'locale/en_US.json', 4653, 4653, 100.00),
+('de_DE', 'German', 'Deutsch', '🇩🇪', 0, 1, 'locale/de_DE.json', 4653, 4653, 100.00),
+('fr_FR', 'French', 'Français', '🇫🇷', 0, 1, 'locale/fr_FR.json', 4993, 4993, 100.00)
+ON DUPLICATE KEY UPDATE name = VALUES(name), native_name = VALUES(native_name), flag_emoji = VALUES(flag_emoji), translation_file = VALUES(translation_file), total_keys = VALUES(total_keys), translated_keys = VALUES(translated_keys), completion_percentage = VALUES(completion_percentage), is_active = VALUES(is_active), is_default = VALUES(is_default);
 
 
 SET FOREIGN_KEY_CHECKS=1;

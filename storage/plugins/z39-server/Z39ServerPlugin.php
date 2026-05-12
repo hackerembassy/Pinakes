@@ -761,8 +761,10 @@ class Z39ServerPlugin
             return $new;
         }
 
+        // FIX F083: restore || === null branch (aligns with comment "fill empty fields" + api-book-scraper / open-library)
+        // Use array_key_exists so === null branch remains meaningful for PHPStan
         foreach ($new as $key => $value) {
-            if (!isset($existing[$key]) || $existing[$key] === '') {
+            if (!array_key_exists($key, $existing) || $existing[$key] === '' || $existing[$key] === null) {
                 $existing[$key] = $value;
             }
         }
@@ -890,12 +892,11 @@ class Z39ServerPlugin
             return null;
         }
 
-        // Get encryption key from environment (same order as PluginManager)
-        $envPluginKey = getenv('PLUGIN_ENCRYPTION_KEY');
-        $envAppKey    = getenv('APP_KEY');
-        $rawKey = ($envPluginKey !== false && $envPluginKey !== '')
-            ? $envPluginKey
-            : (($envAppKey !== false && $envAppKey !== '') ? $envAppKey : null);
+        // FIX F084: match PluginManager::getEncryptionKey() order — $_ENV first then getenv
+        // (phpdotenv createImmutable populates $_ENV but not getenv by default)
+        $envPluginKey = ($_ENV['PLUGIN_ENCRYPTION_KEY'] ?? '') ?: (getenv('PLUGIN_ENCRYPTION_KEY') ?: '');
+        $envAppKey    = ($_ENV['APP_KEY'] ?? '') ?: (getenv('APP_KEY') ?: '');
+        $rawKey = $envPluginKey !== '' ? $envPluginKey : ($envAppKey !== '' ? $envAppKey : null);
         if ($rawKey === null) {
             // No key available, cannot decrypt
             \App\Support\SecureLogger::error('[Z39 Server Plugin] Cannot decrypt setting: PLUGIN_ENCRYPTION_KEY not available');
