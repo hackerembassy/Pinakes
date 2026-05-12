@@ -1825,7 +1825,7 @@ $htmlLang = substr($currentLocale, 0, 2);
                 }
                 // Accept only https?:// absolute URLs or /path relative URLs
                 if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('/')) {
-                    return trimmed;
+                    return escapeHtml(trimmed);
                 }
                 return '#';
             };

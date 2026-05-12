@@ -191,6 +191,19 @@ $schemaAuthors = [];
 $schemaTranslators = [];
 $schemaIllustrators = [];
 $schemaEditors = [];
+$validExternalSameAs = static function (mixed $uri): ?string {
+    if (!is_string($uri)) {
+        return null;
+    }
+    $uri = trim($uri);
+    if ($uri === ''
+        || filter_var($uri, FILTER_VALIDATE_URL) === false
+        || !preg_match('#^https?://#i', $uri)
+        || strpbrk($uri, "<>,\r\n") !== false) {
+        return null;
+    }
+    return $uri;
+};
 foreach ($authors as $authorData) {
     $name = trim(html_entity_decode($authorData['nome'] ?? '', ENT_QUOTES, 'UTF-8'));
     if ($name === '') {
@@ -199,13 +212,16 @@ foreach ($authors as $authorData) {
     $person = ["@type" => "Person", "name" => $name];
     // Add VIAF/ISNI sameAs when available (from viaf-authority plugin columns)
     $personSameAs = [];
-    if (!empty($authorData['viaf_uri']) && is_string($authorData['viaf_uri'])) {
-        $personSameAs[] = $authorData['viaf_uri'];
+    if (!empty($authorData['viaf_uri']) && ($viafUri = $validExternalSameAs($authorData['viaf_uri'])) !== null) {
+        $personSameAs[] = $viafUri;
     } elseif (!empty($authorData['viaf_id']) && is_string($authorData['viaf_id'])) {
-        $personSameAs[] = 'https://viaf.org/viaf/' . rawurlencode($authorData['viaf_id']);
+        $viafId = trim($authorData['viaf_id']);
+        if (preg_match('/^\d+$/', $viafId)) {
+            $personSameAs[] = 'https://viaf.org/viaf/' . $viafId;
+        }
     }
-    if (!empty($authorData['isni_uri']) && is_string($authorData['isni_uri'])) {
-        $personSameAs[] = $authorData['isni_uri'];
+    if (!empty($authorData['isni_uri']) && ($isniUri = $validExternalSameAs($authorData['isni_uri'])) !== null) {
+        $personSameAs[] = $isniUri;
     } elseif (!empty($authorData['isni_id']) && is_string($authorData['isni_id'])) {
         $isniNorm = preg_replace('/\s+/', '', $authorData['isni_id']);
         if ($isniNorm !== null && preg_match('/^\d{15}[\dX]$/i', $isniNorm)) {

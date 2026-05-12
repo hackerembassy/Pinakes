@@ -70,8 +70,6 @@ test.describe.serial('BIBFRAME Persistent URIs — /id/work and /id/instance (15
     let bookId = 0;
 
     test.beforeAll(async () => {
-        // Pre-cleanup: remove stale entries from prior failed runs.
-        try { dbExec("DELETE FROM libri WHERE titolo LIKE 'E2E_BIBFRAME_LD_URI%'"); } catch { /* best-effort */ }
         dbExec(
             `INSERT INTO libri (titolo, anno_pubblicazione, created_at, updated_at) ` +
             `VALUES ('${TAG}', 2024, NOW(), NOW())`

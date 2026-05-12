@@ -65,6 +65,9 @@ test.describe.serial('BIBFRAME 2.0 Linked Data plugin — v0.7.1 (10 tests)', ()
         testBookId = parseInt(
             dbQuery(`SELECT id FROM libri WHERE titolo='${TAG}' AND deleted_at IS NULL LIMIT 1`)
         );
+        if (!Number.isInteger(testBookId) || testBookId <= 0) {
+            throw new Error(`Failed to create BIBFRAME test book (id=${testBookId})`);
+        }
     });
 
     test.afterAll(async () => {

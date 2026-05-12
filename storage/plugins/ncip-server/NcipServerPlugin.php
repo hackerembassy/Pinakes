@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Plugins\NcipServer;
 
 use App\Support\HookManager;
+use App\Support\RateLimiter;
 use App\Support\SecureLogger;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -1443,6 +1444,17 @@ class NcipServerPlugin
             return null;
         }
 
+        $server = $request->getServerParams();
+        $remoteAddr = is_string($server['REMOTE_ADDR'] ?? null) ? (string) $server['REMOTE_ADDR'] : 'unknown';
+        $rateKey = 'ncip_basic:' . $remoteAddr . ':' . strtolower($email);
+        if (RateLimiter::isLimited($rateKey, 10, 900)) {
+            SecureLogger::warning('[NCIP] Basic auth rate limit exceeded', [
+                'remote_addr' => $remoteAddr,
+                'email_hash'  => hash('sha256', strtolower($email)),
+            ]);
+            return null;
+        }
+
         $stmt = $this->db->prepare(
             "SELECT id, nome, email, password, tipo_utente
                FROM utenti
@@ -1463,6 +1475,8 @@ class NcipServerPlugin
         if (!password_verify($password, (string) ($user['password'] ?? ''))) {
             return null;
         }
+
+        RateLimiter::reset($rateKey);
 
         return $user;
     }

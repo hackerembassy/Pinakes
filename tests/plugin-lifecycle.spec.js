@@ -88,6 +88,8 @@ test.describe.serial('Plugin lifecycle — v0.7.4 (10 tests)', () => {
     let interopPlugins = [];
     /** @type {number} */
     let hookCountAfterFirstActivation = 0;
+    /** @type {Map<number, number>} */
+    const hookCountsAfterFirstActivation = new Map();
 
     test.beforeAll(async ({ browser }) => {
         context = await browser.newContext();
@@ -204,6 +206,14 @@ test.describe.serial('Plugin lifecycle — v0.7.4 (10 tests)', () => {
             `SELECT COUNT(*) FROM plugin_hooks WHERE plugin_id IN (${pluginIds})`
         ));
         expect(hookCountAfterFirstActivation).toBeGreaterThan(0);
+        hookCountsAfterFirstActivation.clear();
+        for (const plugin of interopPlugins) {
+            const count = parseInt(dbQuery(
+                `SELECT COUNT(*) FROM plugin_hooks WHERE plugin_id = ${plugin.id}`
+            ));
+            expect(count, `${plugin.name} has no hooks after activation`).toBeGreaterThan(0);
+            hookCountsAfterFirstActivation.set(plugin.id, count);
+        }
     });
 
     // ── Test 7: Second deactivation cycle ────────────────────────────────────
@@ -235,11 +245,12 @@ test.describe.serial('Plugin lifecycle — v0.7.4 (10 tests)', () => {
     test('9. Hook count same after second activation as after first', async () => {
         test.skip(interopPlugins.length === 0 || hookCountAfterFirstActivation === 0, 'Prerequisites not met');
 
-        const pluginIds = interopPlugins.map(p => p.id).join(',');
-        const count = parseInt(dbQuery(
-            `SELECT COUNT(*) FROM plugin_hooks WHERE plugin_id IN (${pluginIds})`
-        ));
-        expect(count).toBe(hookCountAfterFirstActivation);
+        for (const plugin of interopPlugins) {
+            const count = parseInt(dbQuery(
+                `SELECT COUNT(*) FROM plugin_hooks WHERE plugin_id = ${plugin.id}`
+            ));
+            expect(count, `${plugin.name} hook count changed`).toBe(hookCountsAfterFirstActivation.get(plugin.id));
+        }
     });
 
     // ── Test 10: Critical tables survive full lifecycle ───────────────────────

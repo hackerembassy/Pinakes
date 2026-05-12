@@ -6,6 +6,22 @@
 -- To load: mysql -u <user> -p <db> < tests/seeds/authors-with-viaf.sql
 
 -- FK-safe cleanup before re-seeding:
+DELETE FROM author_authority_alternates
+WHERE autore_id IN (SELECT id FROM autori WHERE nome LIKE 'SEED_VIAF_%');
+SET @autori_authority_link_exists = (
+    SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'autori_authority_link'
+);
+SET @cleanup_autori_authority_link_sql = IF(
+    @autori_authority_link_exists > 0,
+    'DELETE FROM autori_authority_link WHERE autori_id IN (SELECT id FROM autori WHERE nome LIKE ''SEED_VIAF_%'')',
+    'SELECT 1'
+);
+PREPARE cleanup_autori_authority_link_stmt FROM @cleanup_autori_authority_link_sql;
+EXECUTE cleanup_autori_authority_link_stmt;
+DEALLOCATE PREPARE cleanup_autori_authority_link_stmt;
 DELETE FROM libri_autori
 WHERE autore_id IN (SELECT id FROM autori WHERE nome LIKE 'SEED_VIAF_%');
 DELETE FROM autori WHERE nome LIKE 'SEED_VIAF_%';

@@ -266,13 +266,14 @@ test.describe.serial('Code Quality — 15 static analysis tests', () => {
             ...glob('storage/plugins', '.php'),
         ].map(f => fs.readFileSync(f, 'utf-8')).join('\n');
 
-        const DOC_RE   = /`GET (\/(?:api|resync|oai|openurl|archives)[^\s`{]+)/g;
+        const DOC_RE   = /`GET (\/(?:api|resync|oai|openurl|archives)[^\s`]+)/g;
         const violations = [];
         const normalizedPhpSources = phpSources.replace(/\{([^}:]+):[^}]+\}/g, '{$1}');
+        const normalizedRouteSources = normalizedPhpSources.replace(/\{[^}:]+(?::[^}]+)?\}/g, '{}');
         let m;
         while ((m = DOC_RE.exec(readme)) !== null) {
-            const search = m[1].replace(/\/$/, '');
-            if (!normalizedPhpSources.includes(search)) violations.push(m[1]);
+            const search = m[1].replace(/\/$/, '').replace(/\{[^}:]+(?::[^}]+)?\}/g, '{}');
+            if (!normalizedRouteSources.includes(search)) violations.push(m[1]);
         }
         expect(violations,
             `Endpoints documented in README but no matching route found in PHP:\n${violations.map(v => '  GET ' + v).join('\n')}`

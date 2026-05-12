@@ -30,6 +30,7 @@ const DB_USER   = process.env.E2E_DB_USER   || '';
 const DB_PASS   = process.env.E2E_DB_PASS   || '';
 const DB_NAME   = process.env.E2E_DB_NAME   || '';
 const DB_SOCKET = process.env.E2E_DB_SOCKET || '';
+const TAG       = `E2E_Signposting_Book_${Date.now()}`;
 
 function mysqlArgs(sql, batch = false) {
     const args = [];
@@ -60,10 +61,10 @@ test.describe.serial('FAIR Signposting — HTTP headers and HTML <link> (12 test
     test.beforeAll(async ({ request }) => {
         dbExec(
             "INSERT INTO libri (titolo, anno_pubblicazione, created_at, updated_at) " +
-            "VALUES ('E2E_Signposting_Book', 2024, NOW(), NOW())"
+            `VALUES ('${TAG}', 2024, NOW(), NOW())`
         );
         bookId = parseInt(
-            dbQuery("SELECT id FROM libri WHERE titolo='E2E_Signposting_Book' AND deleted_at IS NULL LIMIT 1")
+            dbQuery(`SELECT id FROM libri WHERE titolo='${TAG}' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1`)
         ) || 0;
 
         if (bookId > 0) {
@@ -74,7 +75,7 @@ test.describe.serial('FAIR Signposting — HTTP headers and HTML <link> (12 test
     });
 
     test.afterAll(async () => {
-        try { dbExec("DELETE FROM libri WHERE titolo='E2E_Signposting_Book'"); } catch { /* best-effort */ }
+        try { if (bookId > 0) dbExec(`DELETE FROM libri WHERE id=${bookId}`); } catch { /* best-effort */ }
     });
 
     /** Follow redirects and return the final response for a book detail page. */

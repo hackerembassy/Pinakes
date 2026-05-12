@@ -36,6 +36,12 @@ if (!class_exists('ViafAuthorityPlugin', false)) {
             \App\Support\SecureLogger::debug('[ViafAuthority] Plugin installed');
         }
 
+        public function onUninstall(): void
+        {
+            $this->instance->onUninstall();
+            \App\Support\SecureLogger::debug('[ViafAuthority] Plugin uninstalled');
+        }
+
         /** @param array<int, mixed> $args */
         public function __call(string $method, array $args): mixed
         {

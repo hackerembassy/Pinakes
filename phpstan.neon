@@ -11,4 +11,4 @@ parameters:
 	scanDirectories:
 		- storage/plugins
 	phpVersion: 80200
-	reportUnmatchedIgnoredErrors: false
+	reportUnmatchedIgnoredErrors: true

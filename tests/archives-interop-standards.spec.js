@@ -5,7 +5,7 @@
  * 25 tests covering:
  *  - CRUD with new fields: ark_identifier, version_note, rights_statement_url
  *  - IIIF Presentation API 3.0: behavior, requiredStatement, provider, rights,
- *    nested Range structures (§1.1), authority links, ARK in seeAlso
+ *    nested Range structures (§1.1), ARK in seeAlso
  *  - Per-unit EAD3 export (/archives/{id}/ead.xml) including <dao> element
  *  - Per-unit METS export (/archives/{id}/mets.xml) with DC + EAD3 + fileSec
  *  - Dublin Core XML with ARK and rights_statement_url
@@ -13,7 +13,6 @@
  *  - OAI-PMH Identify verb
  *  - AtoM ISAD(G) area labels visible in admin form
  *  - headLinks (EAD3/METS link rel="alternate") in admin and public show views
- *  - Authority record linked to unit — appears in IIIF metadata and EAD3
  *
  * Requires standard E2E env vars (E2E_BASE_URL, E2E_ADMIN_EMAIL, etc.).
  * Run: /tmp/run-e2e.sh tests/archives-interop-standards.spec.js --config=tests/playwright.config.js --workers=1
@@ -246,10 +245,14 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
         await page.selectOption('select[name="level"]', 'item');
         await page.fill('input[name="constructed_title"]', 'E2E Photo Item');
         await page.fill('input[name="parent_id"]', String(seriesId));
-        // specific_material is inside a <details> accordion — open it first
-        const details = page.locator('details').filter({ hasText: 'Materiale specifico' });
-        if (!await details.evaluate(el => el.hasAttribute('open'))) {
-            await details.locator('summary').click();
+        // specific_material is inside a localized <details> accordion; target the field, not the label text.
+        const materialDetails = page.locator('details:has(select[name="specific_material"])').first();
+        if (await materialDetails.count() > 0) {
+            await materialDetails.evaluate(el => {
+                if (el instanceof HTMLDetailsElement) {
+                    el.open = true;
+                }
+            });
         }
         await page.selectOption('select[name="specific_material"]', 'photograph');
         await Promise.all([
@@ -262,8 +265,8 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
 
     // ── IIIF Presentation API 3.0 ─────────────────────────────────────────────
 
-    test('9. IIIF manifest is valid JSON-LD with @context and required fields', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/manifest.json`);
+    test('9. IIIF manifest is valid JSON-LD with @context and required fields', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/manifest.json`);
         expect(res.status()).toBe(200);
         const ct = res.headers()['content-type'] || '';
         expect(ct).toContain('application/ld+json');
@@ -274,8 +277,8 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
         expect(Array.isArray(body['metadata'])).toBe(true);
     });
 
-    test('10. IIIF manifest contains requiredStatement and provider (IIIF Agent)', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/manifest.json`);
+    test('10. IIIF manifest contains requiredStatement and provider (IIIF Agent)', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/manifest.json`);
         const body = await res.json();
         expect(body['requiredStatement']).toBeDefined();
         expect(body['requiredStatement']['label']).toBeDefined();
@@ -284,14 +287,14 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
         expect(body['provider'][0]['homepage']).toBeDefined();
     });
 
-    test('11. IIIF manifest has rights field from rights_statement_url', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/manifest.json`);
+    test('11. IIIF manifest has rights field from rights_statement_url', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/manifest.json`);
         const body = await res.json();
         expect(body['rights']).toBe(RIGHTS_URL);
     });
 
-    test('12. IIIF manifest contains ARK in metadata and seeAlso', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/manifest.json`);
+    test('12. IIIF manifest contains ARK in metadata and seeAlso', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/manifest.json`);
         const body = await res.json();
 
         // ARK in metadata array
@@ -309,22 +312,22 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
         expect(arkSeeAlso['id']).toContain(ARK_ID);
     });
 
-    test('13. IIIF manifest behavior=paged for text fonds', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/manifest.json`);
+    test('13. IIIF manifest behavior=paged for text fonds', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/manifest.json`);
         const body = await res.json();
         // fonds has default specific_material='text' → behavior=['paged']
         expect(Array.isArray(body['behavior'])).toBe(true);
         expect(body['behavior']).toContain('paged');
     });
 
-    test('14. IIIF manifest behavior=individuals for photograph item', async () => {
-        const res = await page.request.get(`${BASE}/archives/${photoId}/manifest.json`);
+    test('14. IIIF manifest behavior=individuals for photograph item', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${photoId}/manifest.json`);
         const body = await res.json();
         expect(body['behavior']).toContain('individuals');
     });
 
-    test('15. IIIF manifest nested Range structures for child series', async () => {
-        const res = await page.request.get(`${BASE}/archives/${seriesId}/manifest.json`);
+    test('15. IIIF manifest nested Range structures for child series', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${seriesId}/manifest.json`);
         const body = await res.json();
         // structures may be absent if no canvas — the unit has no image.
         // Verify at minimum that seeAlso includes EAD3 and METS.
@@ -335,8 +338,8 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
 
     // ── IIIF Collection ───────────────────────────────────────────────────────
 
-    test('16. IIIF root collection.json is a valid Collection', async () => {
-        const res = await page.request.get(`${BASE}/archives/collection.json`);
+    test('16. IIIF root collection.json is a valid Collection', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/collection.json`);
         expect(res.status()).toBe(200);
         const body = await res.json();
         expect(body['@context']).toBe('http://iiif.io/api/presentation/3/context.json');
@@ -344,8 +347,8 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
         expect(Array.isArray(body['items'])).toBe(true);
     });
 
-    test('17. IIIF sub-collection for fonds contains the child series', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/collection.json`);
+    test('17. IIIF sub-collection for fonds contains the child series', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/collection.json`);
         expect(res.status()).toBe(200);
         const body = await res.json();
         expect(body['type']).toBe('Collection');
@@ -356,8 +359,8 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
 
     // ── EAD3 per-unit ─────────────────────────────────────────────────────────
 
-    test('18. GET /archives/{id}/ead.xml returns valid EAD3 XML', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/ead.xml`);
+    test('18. GET /archives/{id}/ead.xml returns valid EAD3 XML', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/ead.xml`);
         expect(res.status()).toBe(200);
         const ct = res.headers()['content-type'] || '';
         expect(ct).toContain('application/xml');
@@ -367,8 +370,8 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
         expect(text).toContain('<archdesc');
     });
 
-    test('19. EAD3 contains ARK as <recordid> and IIIF <dao> element', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/ead.xml`);
+    test('19. EAD3 contains ARK as <recordid> and IIIF <dao> element', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/ead.xml`);
         const text = await res.text();
         expect(text).toContain(ARK_ID);
         expect(text).toContain('<daoset');
@@ -387,8 +390,8 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
 
     // ── METS per-unit ─────────────────────────────────────────────────────────
 
-    test('21. GET /archives/{id}/mets.xml returns valid METS 1.12 XML', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/mets.xml`);
+    test('21. GET /archives/{id}/mets.xml returns valid METS 1.12 XML', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/mets.xml`);
         expect(res.status()).toBe(200);
         const ct = res.headers()['content-type'] || '';
         expect(ct).toContain('application/xml');
@@ -399,8 +402,8 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
         expect(text).toContain('<mets:structMap');
     });
 
-    test('22. METS contains DC inline (dmdSec/DMD01) and EAD3 by reference (DMD02)', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/mets.xml`);
+    test('22. METS contains DC inline (dmdSec/DMD01) and EAD3 by reference (DMD02)', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/mets.xml`);
         const text = await res.text();
         expect(text).toContain('ID="DMD01"');
         expect(text).toContain('ID="DMD02"');
@@ -409,8 +412,8 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
         expect(text).toContain('/ead.xml');
     });
 
-    test('23. METS fileSec contains IIIF manifest reference', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/mets.xml`);
+    test('23. METS fileSec contains IIIF manifest reference', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/mets.xml`);
         const text = await res.text();
         expect(text).toContain('IIIF_MANIFEST');
         expect(text).toContain('/manifest.json');
@@ -419,8 +422,8 @@ test.describe.serial('Archives interoperability standards (25 tests)', () => {
 
     // ── Dublin Core XML ───────────────────────────────────────────────────────
 
-    test('24. GET /archives/{id}/dc.xml contains ARK as dc:identifier and rights URL', async () => {
-        const res = await page.request.get(`${BASE}/archives/${fondsId}/dc.xml`);
+    test('24. GET /archives/{id}/dc.xml contains ARK as dc:identifier and rights URL', async ({ request }) => {
+        const res = await request.get(`${BASE}/archives/${fondsId}/dc.xml`);
         expect(res.status()).toBe(200);
         const text = await res.text();
         expect(text).toContain(ARK_ID);

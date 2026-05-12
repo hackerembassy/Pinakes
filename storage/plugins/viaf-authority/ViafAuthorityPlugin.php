@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Plugins\ViafAuthority;
 
 use App\Support\HookManager;
+use App\Support\RateLimiter;
 use App\Support\SecureLogger;
 use mysqli;
 use Psr\Http\Message\ResponseInterface;
@@ -104,6 +105,11 @@ class ViafAuthorityPlugin
     }
 
     public function onDeactivate(): void
+    {
+        $this->deleteHooksFromDb();
+    }
+
+    public function onUninstall(): void
     {
         $this->deleteHooksFromDb();
     }
@@ -360,6 +366,12 @@ class ViafAuthorityPlugin
         }
         if (strlen($q) < 2) {
             return $this->json($response, ['error' => true, 'message' => __('La query deve avere almeno 2 caratteri.')], 400);
+        }
+
+        $server = $request->getServerParams();
+        $remoteAddr = is_string($server['REMOTE_ADDR'] ?? null) ? (string) $server['REMOTE_ADDR'] : 'unknown';
+        if (RateLimiter::isLimited('viaf_suggest:' . $remoteAddr, 60, 60)) {
+            return $this->json($response, ['error' => true, 'message' => __('Troppe richieste. Riprova più tardi.')], 429);
         }
 
         $url = self::VIAF_SUGGEST_URL . urlencode($q);

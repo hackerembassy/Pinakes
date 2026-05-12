@@ -178,8 +178,9 @@ class UNIMARCXMLFormatter extends RecordFormatter
 
     private function cf(string $tag, string $value): \DOMElement
     {
-        $field = $this->doc->createElement('controlfield', $this->escapeXml($value));
+        $field = $this->doc->createElement('controlfield');
         $field->setAttribute('tag', $tag);
+        $field->appendChild($this->doc->createTextNode($value));
         return $field;
     }
 
@@ -193,8 +194,9 @@ class UNIMARCXMLFormatter extends RecordFormatter
         $field->setAttribute('ind1', $ind1);
         $field->setAttribute('ind2', $ind2);
         foreach ($subfields as [$code, $value]) {
-            $sub = $this->doc->createElement('subfield', $this->escapeXml($value));
+            $sub = $this->doc->createElement('subfield');
             $sub->setAttribute('code', $code);
+            $sub->appendChild($this->doc->createTextNode($value));
             $field->appendChild($sub);
         }
         return $field;

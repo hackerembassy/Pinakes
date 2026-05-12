@@ -41,9 +41,14 @@ SET @fk_exists = (
     FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
     WHERE TABLE_SCHEMA = DATABASE()
       AND TABLE_NAME = 'copie'
-      AND COLUMN_NAME = 'sede_id'
-      AND REFERENCED_TABLE_NAME = 'sedi'
-      AND REFERENCED_COLUMN_NAME = 'id'
+      AND (
+          CONSTRAINT_NAME = 'fk_copie_sede_id'
+          OR (
+              COLUMN_NAME = 'sede_id'
+              AND REFERENCED_TABLE_NAME = 'sedi'
+              AND REFERENCED_COLUMN_NAME = 'id'
+          )
+      )
 );
 SET @sql = IF(
     @fk_exists = 0,

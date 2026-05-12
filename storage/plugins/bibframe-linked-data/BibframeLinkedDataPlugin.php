@@ -691,6 +691,8 @@ class BibframeLinkedDataPlugin
         $xw->startElementNs('rdf', 'RDF', self::RDF_NS);
         $xw->writeAttributeNs('xmlns', 'bf',   null, self::BF_NS);
         $xw->writeAttributeNs('xmlns', 'rdfs', null, self::RDFS_NS);
+        $xw->writeAttributeNs('xmlns', 'owl',  null, 'http://www.w3.org/2002/07/owl#');
+        $xw->writeAttributeNs('xmlns', 'xsd',  null, self::XSD_NS);
 
         foreach ((array) ($graph['@graph'] ?? []) as $node) {
             if (!is_array($node)) { continue; }
@@ -700,29 +702,81 @@ class BibframeLinkedDataPlugin
             [$tPfx, $tLocal] = explode(':', $type, 2);
             $xw->startElementNs($tPfx, $tLocal, null);
             $xw->writeAttributeNs('rdf', 'about', null, $id);
-            // bf:title mainTitle as simple property
-            $titleNode = $node['bf:title'] ?? null;
-            if (is_array($titleNode) && !empty($titleNode['bf:mainTitle']['@value'])) {
-                $xw->startElementNs('bf', 'title', null);
-                $lang = (string) ($titleNode['bf:mainTitle']['@language'] ?? '');
-                if ($lang !== '') {
-                    $xw->writeAttribute('xml:lang', $lang);
-                }
-                $xw->text((string) $titleNode['bf:mainTitle']['@value']);
-                $xw->endElement();
-            }
-            // rdfs:label if present at top level
-            if (!empty($node['rdfs:label'])) {
-                $xw->startElementNs('rdfs', 'label', null);
-                $xw->text((string) $node['rdfs:label']);
-                $xw->endElement();
-            }
+            $this->writeRdfXmlProperties($xw, $node);
             $xw->endElement();
         }
 
         $xw->endElement(); // rdf:RDF
         $xw->endDocument();
         return $xw->outputMemory();
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     */
+    private function writeRdfXmlProperties(\XMLWriter $xw, array $node): void
+    {
+        foreach ($node as $predicate => $value) {
+            if (!is_string($predicate) || $predicate === '@id' || $predicate === '@type' || !str_contains($predicate, ':')) {
+                continue;
+            }
+            if (is_array($value) && array_is_list($value)) {
+                foreach ($value as $entry) {
+                    $this->writeRdfXmlProperty($xw, $predicate, $entry);
+                }
+                continue;
+            }
+            $this->writeRdfXmlProperty($xw, $predicate, $value);
+        }
+    }
+
+    private function writeRdfXmlProperty(\XMLWriter $xw, string $predicate, mixed $value): void
+    {
+        [$pfx, $local] = explode(':', $predicate, 2);
+        $xw->startElementNs($pfx, $local, null);
+
+        if (is_array($value)) {
+            if (!empty($value['@id'])) {
+                $xw->writeAttributeNs('rdf', 'resource', null, (string) $value['@id']);
+                $xw->endElement();
+                return;
+            }
+            if (array_key_exists('@value', $value)) {
+                if (!empty($value['@language'])) {
+                    $xw->writeAttribute('xml:lang', (string) $value['@language']);
+                }
+                if (!empty($value['@type']) && is_string($value['@type']) && str_contains($value['@type'], ':')) {
+                    $xw->writeAttributeNs('rdf', 'datatype', null, $this->expandCurie($value['@type']));
+                }
+                $xw->text((string) $value['@value']);
+                $xw->endElement();
+                return;
+            }
+            if (!empty($value['@type']) && is_string($value['@type']) && str_contains($value['@type'], ':')) {
+                [$typePfx, $typeLocal] = explode(':', $value['@type'], 2);
+                $xw->startElementNs($typePfx, $typeLocal, null);
+                $this->writeRdfXmlProperties($xw, $value);
+                $xw->endElement();
+                $xw->endElement();
+                return;
+            }
+        }
+
+        $xw->text((string) $value);
+        $xw->endElement();
+    }
+
+    private function expandCurie(string $curie): string
+    {
+        [$pfx, $local] = explode(':', $curie, 2);
+        return match ($pfx) {
+            'bf'   => self::BF_NS . $local,
+            'rdf'  => self::RDF_NS . $local,
+            'rdfs' => self::RDFS_NS . $local,
+            'xsd'  => self::XSD_NS . $local,
+            'owl'  => 'http://www.w3.org/2002/07/owl#' . $local,
+            default => $curie,
+        };
     }
 
     // ── DB helpers ────────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@
  *  1.  GET /admin/plugins/ncip-server/partners without auth → redirect to login
  *  2.  GET /admin/plugins/ncip-server/transactions without auth → redirect to login
  *  3.  Admin can access partners page (200 OK)
- *  4.  Partners page contains "Aggiungi Partner" heading/button
+ *  4.  Partners page contains the NCIP partners heading and add form button
  *  5.  Partners page has the add-partner form with required inputs
  *  6.  Admin can submit the add-partner form and partner is created
  *  7.  Newly added partner appears in the partners list
@@ -39,13 +39,20 @@ const BASE        = process.env.E2E_BASE_URL    || 'http://localhost:8081';
 const DB_USER     = process.env.E2E_DB_USER     || '';
 const DB_PASS     = process.env.E2E_DB_PASS     || '';
 const DB_NAME     = process.env.E2E_DB_NAME     || '';
+const DB_HOST     = process.env.E2E_DB_HOST     || '';
+const DB_PORT     = process.env.E2E_DB_PORT     || '';
 const DB_SOCKET   = process.env.E2E_DB_SOCKET   || '';
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
 const ADMIN_PASS  = process.env.E2E_ADMIN_PASS  || '';
 
 function mysqlArgs(sql, batch = false) {
     const args = [];
-    if (DB_SOCKET) args.push('-S', DB_SOCKET);
+    if (DB_HOST) {
+        args.push('-h', DB_HOST);
+        if (DB_PORT) args.push('-P', DB_PORT);
+    } else if (DB_SOCKET) {
+        args.push('-S', DB_SOCKET);
+    }
     args.push('-u', DB_USER, DB_NAME);
     if (batch) args.push('-N', '-B');
     if (sql !== '') args.push('-e', sql);
@@ -88,6 +95,8 @@ test.describe.serial('NCIP Admin UI — partners and transactions (8 tests)', ()
     test.afterAll(async () => {
         // Clean up test partner rows if any survived (FK-safe order)
         try {
+            dbExec(`DELETE FROM ncip_transactions
+                    WHERE partner_id IN (SELECT id FROM ncip_partners WHERE name LIKE 'E2E_NCIP_Partner_%')`);
             dbExec(`DELETE FROM ncip_transactions WHERE prestito_id IS NULL AND request_id LIKE '%E2E%'`);
             dbExec(`DELETE FROM ncip_partners WHERE name LIKE 'E2E_NCIP_Partner_%'`);
         } catch { /* best-effort */ }
@@ -122,11 +131,11 @@ test.describe.serial('NCIP Admin UI — partners and transactions (8 tests)', ()
         expect(page.url()).not.toContain('login');
     });
 
-    test('4. Partners page contains "Aggiungi Partner" heading/button', async () => {
+    test('4. Partners page contains NCIP partners heading and add form button', async () => {
         await page.goto(PARTNERS_URL);
         await page.waitForLoadState('networkidle');
-        const addText = page.getByText(/Aggiungi Partner/i).first();
-        await expect(addText).toBeVisible();
+        await expect(page.locator('h1').filter({ hasText: /NCIP/i }).first()).toBeVisible();
+        await expect(page.locator('form button[type="submit"]').first()).toBeVisible();
     });
 
     test('5. Partners page has add-partner form with name and endpoint inputs', async () => {
@@ -169,6 +178,6 @@ test.describe.serial('NCIP Admin UI — partners and transactions (8 tests)', ()
         const title = page.locator('h1').first();
         await expect(title).toBeVisible();
         const titleText = await title.textContent();
-        expect(titleText ?? '').toMatch(/transazion/i);
+        expect(titleText ?? '').toMatch(/transactions|transazioni/i);
     });
 });
