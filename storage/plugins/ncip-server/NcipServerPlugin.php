@@ -36,6 +36,15 @@ class NcipServerPlugin
     private const NCIP_NS      = 'http://www.niso.org/2008/ncip';
     private const NCIP_VERSION = 'http://www.niso.org/schemas/ncip/v2_02/ncip_v2_02.xsd';
 
+    /**
+     * Maximum accepted request body size for the unauthenticated /ncip endpoint.
+     *
+     * FIX F048: tightened from 1 MiB to 256 KiB. NCIP request messages are
+     * typically a few KB; SimpleXML retains the parsed DOM in memory so the
+     * effective allocation is several multiples of the raw byte length.
+     */
+    private const MAX_REQUEST_BYTES = 262_144;
+
     /** @phpstan-ignore property.onlyWritten */
     private HookManager $hookManager;
     private \mysqli $db;
@@ -256,7 +265,12 @@ class NcipServerPlugin
         string $success = ''
     ): ResponseInterface {
         if (!$this->requireAdminOrStaff()) {
-            return $response->withStatus(302)->withHeader('Location', url('/admin/login'));
+            // FIX F047: use locale-aware translated route instead of hardcoded /admin/login
+            // (which does not exist; canonical login route is /accedi (IT) or /login (EN)).
+            return $response->withStatus(302)->withHeader(
+                'Location',
+                url(\App\Support\RouteTranslator::route('login'))
+            );
         }
         $partners   = $this->fetchAllPartners();
         $csrfToken  = \App\Support\Csrf::ensureToken();
@@ -336,7 +350,11 @@ class NcipServerPlugin
         ResponseInterface $response
     ): ResponseInterface {
         if (!$this->requireAdminOrStaff()) {
-            return $response->withStatus(302)->withHeader('Location', url('/admin/login'));
+            // FIX F047: use locale-aware translated route instead of hardcoded /admin/login.
+            return $response->withStatus(302)->withHeader(
+                'Location',
+                url(\App\Support\RouteTranslator::route('login'))
+            );
         }
         $params  = $request->getQueryParams();
         $perPage = 50;
@@ -400,6 +418,10 @@ class NcipServerPlugin
         ServerRequestInterface $request,
         ResponseInterface $response
     ): ResponseInterface {
+        // FIX F048: tighten body cap from 1 MiB to 256 KiB. NCIP messages are
+        // typically < 10 KB; the endpoint is reachable unauthenticated, so a
+        // smaller cap reduces the DoS surface (SimpleXML retains the parsed
+        // DOM in memory, amplifying allocation vs. the raw byte size).
         $body = (string) $request->getBody();
         if (trim($body) === '') {
             return $this->xmlResponse(
@@ -407,14 +429,16 @@ class NcipServerPlugin
                 $this->buildProblem('Empty request body', 'empty-request')
             );
         }
-        if (strlen($body) > 1_048_576) {
+        if (strlen($body) > self::MAX_REQUEST_BYTES) {
             return $this->xmlResponse(
                 $response->withStatus(413),
                 $this->buildProblem('Request body too large', 'oversized-request')
             );
         }
 
-        // Parse incoming NCIP XML
+        // Parse incoming NCIP XML. LIBXML_NONET disables network entity
+        // resolution; LIBXML_NOERROR suppresses libxml warnings as we already
+        // surface a clean 400 below on parse failure.
         $xml = @simplexml_load_string($body, \SimpleXMLElement::class, LIBXML_NOERROR | LIBXML_NONET);
         if ($xml === false) {
             return $this->xmlResponse(
@@ -422,6 +446,8 @@ class NcipServerPlugin
                 $this->buildProblem('Malformed XML', 'invalid-xml')
             );
         }
+        // Free the original body string; the SimpleXML tree is the working copy.
+        unset($body);
 
         // Authenticate caller from HTTP Basic auth
         $caller = $this->authenticate($request);
@@ -429,7 +455,7 @@ class NcipServerPlugin
         // Determine the message type (first child element after NCIPMessage root)
         $messageType = $this->detectMessageType($xml);
 
-        return match ($messageType) {
+        $result = match ($messageType) {
             'LookupItem'          => $this->handleLookupItem($request, $response, $xml),
             'LookupUser'          => $this->handleLookupUser($request, $response, $xml, $caller),
             'CheckOutItem'        => $this->handleCheckOutItem($request, $response, $xml, $caller),
@@ -445,6 +471,13 @@ class NcipServerPlugin
                 )
             ),
         };
+
+        // FIX F048: explicitly release the SimpleXMLElement before returning.
+        // SimpleXML holds the parsed DOM until refcount hits zero; nudging GC
+        // here keeps peak memory bounded on bursty unauthenticated traffic.
+        unset($xml);
+
+        return $result;
     }
 
     // ─── Message handlers ─────────────────────────────────────────────────────
@@ -1312,12 +1345,41 @@ class NcipServerPlugin
         );
         if ($stmt === false) { $this->db->rollback(); return; }
         $stmt->bind_param('i', $loanId);
-        if (!$stmt->execute() || $stmt->affected_rows !== 1) {
+        if (!$stmt->execute()) {
             $stmt->close();
             $this->db->rollback();
             return;
         }
+        // FIX F052: distinguish "loan already closed" (affected_rows === 0 because
+        // the WHERE excludes 'restituito' rows) from a genuine failure. NCIP
+        // CheckInItem must be idempotent — replays of the same request from a
+        // partner must not roll back or error out. If the row exists but is
+        // already in terminal state, exit cleanly without touching libri.
+        $loanAffected = $stmt->affected_rows;
         $stmt->close();
+
+        if ($loanAffected === 0) {
+            // Either the loan id no longer exists, or it is already 'restituito'.
+            // Verify with a SELECT to choose between silent no-op and rollback.
+            $check = $this->db->prepare('SELECT stato FROM prestiti WHERE id = ? LIMIT 1');
+            if ($check === false) { $this->db->rollback(); return; }
+            $check->bind_param('i', $loanId);
+            $check->execute();
+            $res = $check->get_result();
+            $row = ($res instanceof \mysqli_result) ? $res->fetch_assoc() : null;
+            $check->close();
+
+            if (is_array($row) && (string) ($row['stato'] ?? '') === 'restituito') {
+                // Idempotent replay: already returned. Release the transaction
+                // without modifying copie_disponibili (which was incremented
+                // the first time the loan was closed).
+                $this->db->commit();
+                return;
+            }
+            // Loan not found, or in some other unexpected state — abort safely.
+            $this->db->rollback();
+            return;
+        }
 
         $upd = $this->db->prepare(
             'UPDATE libri SET copie_disponibili = LEAST(copie_totali, copie_disponibili + 1) WHERE id = ? AND deleted_at IS NULL'

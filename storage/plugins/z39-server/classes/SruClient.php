@@ -80,14 +80,13 @@ class SruClient
      */
     private function queryServerWithRetry(array $server, string $index, string $term): ?array
     {
-        // Elapsed-based rate limiter: max 1 request/second per server (static across instances)
+        // Elapsed-based rate limiter: max 1 request/second per server.
+        // FIX F088: process-shared if APCu/file-lock available; per-process otherwise (degraded).
+        // Without cross-process coordination, multi-worker setups (PHP-FPM, mod_php with multiple
+        // workers, CLI parallelism) would issue N×1 req/s instead of the documented 1 req/s.
         static $lastRequest = [];
         $serverKey = $server['url'] ?? 'unknown';
-        $now = microtime(true);
-        if (isset($lastRequest[$serverKey]) && ($now - $lastRequest[$serverKey]) < 1.0) {
-            usleep((int)((1.0 - ($now - $lastRequest[$serverKey])) * 1_000_000));
-        }
-        $lastRequest[$serverKey] = microtime(true);
+        $this->enforceRateLimit($serverKey, $lastRequest);
 
         $lastException = null;
         $attempts = 0;
@@ -116,6 +115,81 @@ class SruClient
         }
 
         return null;
+    }
+
+    /**
+     * Enforce a max-1-request-per-second rate limit per server.
+     *
+     * Strategy (FIX F088):
+     *  1. APCu (when available): use apcu_cas / apcu_store with a TTL key so all workers on the
+     *     box see the same "last request" timestamp.
+     *  2. File-lock fallback: a tiny per-server lock file in sys_get_temp_dir() is opened with
+     *     flock(LOCK_EX), the previous timestamp is read, we sleep if needed, then write the
+     *     fresh timestamp before releasing the lock.
+     *  3. Degraded fallback: in-process static array (original behavior, per-process only).
+     *
+     * @param string                $serverKey   stable per-server identifier (URL)
+     * @param array<string, float>  $lastRequest in-process fallback state, passed by reference
+     */
+    private function enforceRateLimit(string $serverKey, array &$lastRequest): void
+    {
+        $minIntervalSeconds = 1.0;
+        $now = microtime(true);
+
+        // Tier 1: APCu shared across workers on the same machine
+        if (function_exists('apcu_fetch') && function_exists('apcu_store')) {
+            $apcuKey = 'sru_rate_' . md5($serverKey);
+            $success = false;
+            $previous = apcu_fetch($apcuKey, $success);
+            if ($success && is_numeric($previous)) {
+                $elapsed = $now - (float)$previous;
+                if ($elapsed < $minIntervalSeconds) {
+                    usleep((int)(($minIntervalSeconds - $elapsed) * 1_000_000));
+                }
+            }
+            // TTL of 2s is enough to enforce a 1s window without leaking entries
+            apcu_store($apcuKey, microtime(true), 2);
+            return;
+        }
+
+        // Tier 2: file lock shared across workers on the same machine
+        $lockDir = sys_get_temp_dir();
+        if ($lockDir !== '' && is_writable($lockDir)) {
+            $lockPath = $lockDir . DIRECTORY_SEPARATOR . 'pinakes_sru_rate_' . md5($serverKey) . '.lock';
+            $fh = @fopen($lockPath, 'c+');
+            if ($fh !== false) {
+                try {
+                    if (flock($fh, LOCK_EX)) {
+                        rewind($fh);
+                        $contents = stream_get_contents($fh);
+                        $previous = is_string($contents) && is_numeric(trim($contents)) ? (float)trim($contents) : 0.0;
+                        $elapsed = microtime(true) - $previous;
+                        if ($previous > 0 && $elapsed < $minIntervalSeconds) {
+                            usleep((int)(($minIntervalSeconds - $elapsed) * 1_000_000));
+                        }
+                        ftruncate($fh, 0);
+                        rewind($fh);
+                        fwrite($fh, (string)microtime(true));
+                        fflush($fh);
+                        flock($fh, LOCK_UN);
+                        fclose($fh);
+                        return;
+                    }
+                    fclose($fh);
+                } catch (\Throwable $e) {
+                    // Swallow and fall through to in-process limiter; rate limiting is best-effort.
+                    if (is_resource($fh)) {
+                        fclose($fh);
+                    }
+                }
+            }
+        }
+
+        // Tier 3 (degraded): in-process only
+        if (isset($lastRequest[$serverKey]) && ($now - $lastRequest[$serverKey]) < $minIntervalSeconds) {
+            usleep((int)(($minIntervalSeconds - ($now - $lastRequest[$serverKey])) * 1_000_000));
+        }
+        $lastRequest[$serverKey] = microtime(true);
     }
 
     /**
@@ -563,10 +637,12 @@ class SruClient
      */
     private function parseMarcxchangeXml(DOMXPath $xpath): ?array
     {
-        // Try MARCXchange namespace first, fall back to local-name() for namespace-less records
+        // FIX F091: try the MARCXchange namespace first, then fall back to records nested
+        // INSIDE <recordData> so we don't accidentally pick up the outer SRU <record> envelope
+        // (SRU response wraps each bibliographic record in <sru:record><sru:recordData>...).
         $record = $xpath->query('//mxc:record')->item(0);
         if (!$record) {
-            $record = $xpath->query('//*[local-name()="record"]')->item(0);
+            $record = $xpath->query("//*[local-name()='recordData']//*[local-name()='record']")->item(0);
         }
         if (!$record) {
             return null;

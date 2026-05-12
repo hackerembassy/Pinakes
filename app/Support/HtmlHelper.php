@@ -200,6 +200,36 @@ class HtmlHelper
     }
 
     /**
+     * FIX F007: Strip an optional :port suffix from a host string.
+     * Supports bracketed IPv6 literals ("[::1]:8080" → "[::1]").
+     */
+    private static function stripHostPort(string $host): string
+    {
+        $host = trim($host);
+        if ($host === '') {
+            return '';
+        }
+        // Bracketed IPv6: "[::1]" or "[::1]:8080"
+        if ($host[0] === '[') {
+            $end = strpos($host, ']');
+            if ($end !== false) {
+                return substr($host, 0, $end + 1);
+            }
+            return $host;
+        }
+        // Plain hostname or IPv4 with optional port
+        $colon = strrpos($host, ':');
+        if ($colon === false) {
+            return $host;
+        }
+        // Raw IPv6 (no brackets) contains multiple colons — leave intact
+        if (substr_count($host, ':') > 1) {
+            return $host;
+        }
+        return substr($host, 0, $colon);
+    }
+
+    /**
      * Checks whether the current REMOTE_ADDR is in the TRUSTED_PROXIES list.
      *
      * TRUSTED_PROXIES is a comma-separated list of exact IPs or CIDR ranges
@@ -209,6 +239,7 @@ class HtmlHelper
      * Supports:
      *  - Exact IPv4 / IPv6 match   (e.g. "127.0.0.1", "::1")
      *  - IPv4 CIDR notation        (e.g. "10.0.0.0/8", "192.168.1.0/24")
+     *  - IPv6 CIDR notation        (e.g. "2001:db8::/32", "fd00::/8")
      *
      * @return bool True when REMOTE_ADDR is in the trusted-proxy list
      */
@@ -236,7 +267,10 @@ class HtmlHelper
                 continue;
             }
 
-            // CIDR notation (IPv4 only for now, e.g. "10.0.0.0/8")
+            // FIX F006: CIDR notation — supports both IPv4 (/0-32) and IPv6 (/0-128)
+            // inet_pton returns 4 bytes for IPv4 and 16 bytes for IPv6; the byte-level
+            // mask construction below works for either, so long as network and remote
+            // address families match.
             if (strpos($entry, '/') !== false) {
                 [$network, $prefixLen] = explode('/', $entry, 2);
                 if (!is_numeric($prefixLen)) {
@@ -247,14 +281,33 @@ class HtmlHelper
                 if ($networkIp === false) {
                     continue;
                 }
-                // Only IPv4 CIDR supported
-                if (strlen($networkIp) !== 4 || strlen($remoteIp) !== 4) {
+                $networkLen = strlen($networkIp);
+                $remoteLen = strlen($remoteIp);
+                // Address families must match (4-byte IPv4 vs 16-byte IPv6).
+                // An entry from one family cannot match a remote from the other,
+                // so skip silently without logging — this is normal mixed-family config.
+                if ($networkLen !== $remoteLen) {
                     continue;
                 }
-                if ($prefixLen < 0 || $prefixLen > 32) {
+                $maxPrefix = $networkLen * 8; // 32 for IPv4, 128 for IPv6
+                if ($prefixLen < 0 || $prefixLen > $maxPrefix) {
                     continue;
                 }
-                $mask = $prefixLen === 0 ? "\x00\x00\x00\x00" : pack('N', ~((1 << (32 - $prefixLen)) - 1));
+                // Build a byte-level mask: $prefixLen leading 1-bits, zero-padded to $networkLen bytes.
+                // Works identically for IPv4 (4 bytes) and IPv6 (16 bytes).
+                $mask = '';
+                $fullBytes = intdiv($prefixLen, 8);
+                $remainderBits = $prefixLen % 8;
+                if ($fullBytes > 0) {
+                    $mask .= str_repeat("\xFF", $fullBytes);
+                }
+                if ($remainderBits > 0) {
+                    // High-order bits set, low-order cleared (e.g. /20 IPv4 → last byte = 0xF0)
+                    $mask .= chr((0xFF << (8 - $remainderBits)) & 0xFF);
+                }
+                if (strlen($mask) < $networkLen) {
+                    $mask .= str_repeat("\x00", $networkLen - strlen($mask));
+                }
                 if (($remoteIp & $mask) === ($networkIp & $mask)) {
                     return true;
                 }
@@ -331,8 +384,43 @@ class HtmlHelper
             return rtrim($canonicalUrl, '/');
         }
 
-        // Fallback sicuro: valida l'host corrente
+        // FIX F007: Determine source host with proxy-aware + whitelist validation.
+        // - APP_TRUSTED_HOSTS (comma-separated, optional) is a hard whitelist of allowed Host
+        //   values. When unset, behavior matches the pre-fix path (compat).
+        // - When behind a trusted proxy, prefer X-Forwarded-Host (validated against the
+        //   whitelist if set, otherwise accepted). When NOT behind a trusted proxy,
+        //   X-Forwarded-Host is ignored entirely.
+        // - HTTP_HOST is validated against APP_TRUSTED_HOSTS when set; on mismatch we fall
+        //   back to the first whitelisted entry to neutralize host-header poisoning.
+        $isTrustedProxy = self::isRemoteAddrTrustedProxy();
+
+        $trustedHostsRaw = $_ENV['APP_TRUSTED_HOSTS'] ?? getenv('APP_TRUSTED_HOSTS');
+        $trustedHostsEnv = is_string($trustedHostsRaw) ? trim($trustedHostsRaw) : '';
+        $trustedHosts = [];
+        if ($trustedHostsEnv !== '') {
+            foreach (explode(',', $trustedHostsEnv) as $h) {
+                $h = strtolower(trim($h));
+                if ($h !== '') {
+                    $trustedHosts[] = $h;
+                }
+            }
+        }
+
         $httpHost = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        if ($isTrustedProxy) {
+            $forwardedHost = $_SERVER['HTTP_X_FORWARDED_HOST'] ?? '';
+            if (is_string($forwardedHost) && $forwardedHost !== '') {
+                // X-Forwarded-Host may contain a comma-separated chain; take the first hop.
+                $forwardedHost = trim(explode(',', $forwardedHost)[0]);
+                if ($forwardedHost !== '') {
+                    // If a whitelist is configured, enforce it; otherwise accept (compat).
+                    if ($trustedHosts === []
+                        || in_array(strtolower(self::stripHostPort($forwardedHost)), $trustedHosts, true)) {
+                        $httpHost = $forwardedHost;
+                    }
+                }
+            }
+        }
 
         // Separa host e porta
         $port = null;
@@ -340,6 +428,13 @@ class HtmlHelper
         if (strpos($httpHost, ':') !== false) {
             [$host, $portStr] = explode(':', $httpHost, 2);
             $port = is_numeric($portStr) ? (int)$portStr : null;
+        }
+
+        // FIX F007: If APP_TRUSTED_HOSTS is configured, enforce it on the final host value.
+        // Mismatch → fall back to the first whitelisted entry (defense against Host header poisoning).
+        if ($trustedHosts !== [] && !in_array(strtolower($host), $trustedHosts, true)) {
+            $host = $trustedHosts[0];
+            $port = null;
         }
 
         // Whitelist di host validi per sviluppo locale
@@ -355,7 +450,7 @@ class HtmlHelper
         }
 
         $forwardedProto = '';
-        if (self::isRemoteAddrTrustedProxy()) {
+        if ($isTrustedProxy) {
             $forwardedProto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
         }
         $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')

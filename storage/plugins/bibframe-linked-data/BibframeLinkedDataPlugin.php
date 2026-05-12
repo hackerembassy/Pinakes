@@ -297,10 +297,16 @@ class BibframeLinkedDataPlugin
 
     private function wantsMachineReadable(string $accept): bool
     {
+        // FIX F044: Do NOT match plain `application/json` here. serializeResponse()
+        // emits `Content-Type: application/ld+json`, so a client that asked only
+        // for `application/json` would receive a different media type and a strict
+        // negotiator would reject the response. Clients that want the JSON-LD
+        // representation must request `application/ld+json` (or another RDF
+        // serialization) explicitly. Plain JSON callers fall through to the
+        // HTML-redirect branch like any other browser request.
         return str_contains($accept, 'application/ld+json')
             || str_contains($accept, 'text/turtle')
-            || str_contains($accept, 'application/rdf+xml')
-            || str_contains($accept, 'application/json');
+            || str_contains($accept, 'application/rdf+xml');
     }
 
     // ── BIBFRAME graph builder ────────────────────────────────────────────────

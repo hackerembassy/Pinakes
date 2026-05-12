@@ -1067,13 +1067,14 @@ class SRUServer
         $diagnostic = $xml->createElementNS($ns, 'diagnostic');
         $diagnostics->appendChild($diagnostic);
 
-        $uri = $xml->createElementNS($ns, 'uri', self::NS_DIAG . $code);
+        // FIX F086: diagnostic <uri>/<details>/<message> belong in NS_DIAG per SRU spec
+        $uri = $xml->createElementNS(self::NS_DIAG, 'uri', self::NS_DIAG . $code);
         $diagnostic->appendChild($uri);
 
-        $details = $xml->createElementNS($ns, 'details', $this->escapeXml($message));
+        $details = $xml->createElementNS(self::NS_DIAG, 'details', $this->escapeXml($message));
         $diagnostic->appendChild($details);
 
-        $messageEl = $xml->createElementNS($ns, 'message', $this->escapeXml($message));
+        $messageEl = $xml->createElementNS(self::NS_DIAG, 'message', $this->escapeXml($message));
         $diagnostic->appendChild($messageEl);
 
         return $xml->saveXML();

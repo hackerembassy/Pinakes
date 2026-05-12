@@ -101,7 +101,27 @@ class OaiPmhServerPlugin
         $this->deleteHooksFromDb();
     }
 
-    public function onUninstall(): void {}
+    // FIX F057: previously empty — left orphaned MySQL triggers
+    // (trg_libri_soft_delete, trg_archival_soft_delete) on `libri` and
+    // `archival_units` which would still fire on every soft-delete, inserting
+    // ghost rows into oai_deleted_records even after the plugin was removed.
+    //
+    // We drop the triggers explicitly. The tracking tables (oai_deleted_records,
+    // oai_resumption_tokens) are intentionally KEPT so historic deletion data
+    // is preserved across uninstall/reinstall cycles — preserving OAI harvester
+    // semantics (deletedRecord: persistent). Reinstalling the plugin will
+    // re-create the triggers via ensureSchema()/installTriggers().
+    public function onUninstall(): void
+    {
+        foreach (['trg_libri_soft_delete', 'trg_archival_soft_delete'] as $trg) {
+            if ($this->db->query("DROP TRIGGER IF EXISTS `{$trg}`") === false) {
+                SecureLogger::warning(
+                    '[OaiPmhServer] onUninstall: DROP TRIGGER failed for ' . $trg
+                    . ': ' . $this->db->error
+                );
+            }
+        }
+    }
 
     // ── Schema ────────────────────────────────────────────────────────────────
 
@@ -260,6 +280,20 @@ class OaiPmhServerPlugin
         return $columns;
     }
 
+    // FIX F058: previously logged-and-continued silently on CREATE TRIGGER
+    // failure (e.g. missing TRIGGER privilege on shared hosting like cPanel).
+    // The plugin would activate successfully and Identify would advertise
+    // deletedRecord: persistent, but soft-deletes wouldn't be tracked → OAI
+    // harvesters would never see deletion records and would believe the data
+    // is still there, breaking incremental sync.
+    //
+    // Soft-fallback approach (chosen for compat-friendliness with OAI harvesters):
+    // keep installTriggers() non-fatal but track whether the triggers actually
+    // got installed. oaiIdentify() inspects this state (via hasActiveTriggers())
+    // and downgrades deletedRecord to 'no' when triggers are missing — the
+    // OAI-PMH 2.0 spec explicitly allows this value and harvesters handle it
+    // gracefully. This matches the existing "table missing" branch which also
+    // returns silently.
     private function installTriggers(): void
     {
         $triggers = [
@@ -306,10 +340,40 @@ class OaiPmhServerPlugin
             if ($created === false) {
                 SecureLogger::error(
                     '[OaiPmhServer] CREATE TRIGGER ' . $name . ' failed: ' . $this->db->error
-                    . ' — deleted record tracking may be inactive'
+                    . ' — deleted record tracking inactive; Identify will advertise deletedRecord=no'
                 );
             }
         }
+    }
+
+    /**
+     * FIX F058 helper: returns true when at least one soft-delete trigger
+     * is actually installed in the current schema. Used by oaiIdentify()
+     * to decide between deletedRecord=persistent and deletedRecord=no, so
+     * we never falsely promise persistent tracking to OAI harvesters when
+     * the underlying triggers failed to install (missing TRIGGER privilege,
+     * shared hosting restrictions, etc.). Result is cached per request.
+     */
+    private ?bool $triggersActiveCache = null;
+
+    private function hasActiveTriggers(): bool
+    {
+        if ($this->triggersActiveCache !== null) {
+            return $this->triggersActiveCache;
+        }
+        $res = $this->db->query(
+            "SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.TRIGGERS
+              WHERE TRIGGER_SCHEMA = DATABASE()
+                AND TRIGGER_NAME IN ('trg_libri_soft_delete', 'trg_archival_soft_delete')"
+        );
+        $active = false;
+        if ($res instanceof \mysqli_result) {
+            $row = $res->fetch_assoc();
+            $res->free();
+            $active = ((int) ($row['c'] ?? 0)) > 0;
+        }
+        $this->triggersActiveCache = $active;
+        return $active;
     }
 
     // ── Hook registration ─────────────────────────────────────────────────────
@@ -434,7 +498,14 @@ class OaiPmhServerPlugin
 
         $verb    = (string) ($params['verb'] ?? '');
         $now     = gmdate('Y-m-d\TH:i:s\Z');
-        $baseUrl = absoluteUrl('/oai');
+        // FIX F059: OAI baseURL must be stable & not Host-header-spoofable —
+        // an attacker who can set the HTTP Host header could otherwise inject
+        // arbitrary domains into the OAI identifier scheme (oai:{host}:book:{id})
+        // and the <baseURL>/<request> response elements, poisoning downstream
+        // harvester caches. absoluteUrl() prefers APP_CANONICAL_URL when set;
+        // when it isn't, we log a one-shot warning so the operator knows the
+        // server is exposed to Host-header spoofing.
+        $baseUrl = $this->oaiBaseUrl();
         $host    = parse_url($baseUrl, PHP_URL_HOST) ?: 'localhost';
 
         $xw = new \XMLWriter();
@@ -486,6 +557,33 @@ class OaiPmhServerPlugin
 
         $response->getBody()->write($xw->outputMemory());
         return $response->withHeader('Content-Type', 'text/xml; charset=utf-8');
+    }
+
+    /**
+     * FIX F059: Build the OAI baseURL with explicit preference for
+     * APP_CANONICAL_URL over Host-header-derived values. absoluteUrl() already
+     * does this internally, but OAI-PMH responses are particularly sensitive
+     * to host spoofing (the host ends up embedded in oai:{host}:... identifiers
+     * that get cached by harvesters worldwide), so we additionally emit a
+     * one-shot SecureLogger warning when APP_CANONICAL_URL is unset.
+     */
+    private function oaiBaseUrl(): string
+    {
+        $canonical = $_ENV['APP_CANONICAL_URL']
+            ?? getenv('APP_CANONICAL_URL') ?: '';
+        if (!is_string($canonical) || $canonical === '') {
+            static $warned = false;
+            if (!$warned) {
+                SecureLogger::warning(
+                    '[OaiPmhServer] APP_CANONICAL_URL not configured — OAI '
+                    . 'baseURL will be derived from the HTTP Host header and '
+                    . 'is therefore vulnerable to Host-header spoofing. Set '
+                    . 'APP_CANONICAL_URL in .env to pin the OAI identifier scheme.'
+                );
+                $warned = true;
+            }
+        }
+        return absoluteUrl('/oai');
     }
 
     /**
@@ -626,7 +724,11 @@ class OaiPmhServerPlugin
         $xw->writeElement('protocolVersion', '2.0');
         $xw->writeElement('adminEmail', $adminMail);
         $xw->writeElement('earliestDatestamp', $earliest);
-        $xw->writeElement('deletedRecord', 'persistent');
+        // FIX F058: only advertise persistent deletion tracking when the
+        // underlying triggers are actually installed. On hosts where TRIGGER
+        // privilege is missing (shared cPanel/etc.) we downgrade to 'no' so
+        // harvesters don't expect tombstones we cannot supply.
+        $xw->writeElement('deletedRecord', $this->hasActiveTriggers() ? 'persistent' : 'no');
         $xw->writeElement('granularity', 'YYYY-MM-DDThh:mm:ssZ');
 
         // oai-identifier description (OAI Implementation Guidelines §2.1)
@@ -727,7 +829,46 @@ class OaiPmhServerPlugin
         $xw->writeElement('setName', __('Biblioteca — Catalogo libri'));
         $xw->endElement();
 
-        // Expose archives set only if archival_units table exists.
+        // FIX F060: previously advertised the `archives` setSpec based solely
+        // on archival_units TABLE existence, but the table persists across
+        // archives-plugin deactivate cycles (drop-on-uninstall only). That
+        // meant we'd advertise an empty set to harvesters whenever the plugin
+        // was deactivated-but-not-uninstalled, breaking OAI consumers that
+        // route harvest jobs by setSpec. Now we require BOTH the plugin to
+        // be active AND the table to exist (the AND keeps us defensive
+        // against fresh-activate races where the plugin row is flipped before
+        // its schema is ready).
+        if ($this->isArchivesSetExposed()) {
+            $xw->startElement('set');
+            $xw->writeElement('setSpec', 'archives');
+            $xw->writeElement('setName', __('Archivio — Unità archivistiche'));
+            $xw->endElement();
+        }
+
+        $xw->endElement(); // ListSets
+    }
+
+    /**
+     * FIX F060 helper: archives setSpec exposure gate.
+     * Plugin-active check uses PluginManager::isActive() (per-process cached).
+     * If the PluginManager construction fails for any reason (DI edge cases
+     * during install/upgrade) we fall back to the table-existence check so
+     * we don't break OAI mid-upgrade.
+     */
+    private function isArchivesSetExposed(): bool
+    {
+        $pluginActive = null;
+        try {
+            $pm = new \App\Support\PluginManager($this->db, $this->hookManager);
+            $pluginActive = $pm->isActive('archives');
+        } catch (\Throwable $e) {
+            SecureLogger::warning(
+                '[OaiPmhServer] PluginManager::isActive(archives) failed, '
+                . 'falling back to table-existence check: ' . $e->getMessage()
+            );
+        }
+
+        $tableExists = false;
         $chk = $this->db->query(
             "SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.TABLES
               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'archival_units'"
@@ -735,15 +876,14 @@ class OaiPmhServerPlugin
         if ($chk instanceof \mysqli_result) {
             $row = $chk->fetch_assoc();
             $chk->free();
-            if (($row['c'] ?? 0) > 0) {
-                $xw->startElement('set');
-                $xw->writeElement('setSpec', 'archives');
-                $xw->writeElement('setName', __('Archivio — Unità archivistiche'));
-                $xw->endElement();
-            }
+            $tableExists = ((int) ($row['c'] ?? 0)) > 0;
         }
 
-        $xw->endElement(); // ListSets
+        // If we couldn't read plugin state, defer to legacy behavior (table-only).
+        if ($pluginActive === null) {
+            return $tableExists;
+        }
+        return $pluginActive && $tableExists;
     }
 
     // ── ListRecords / ListIdentifiers ─────────────────────────────────────────
@@ -2244,16 +2384,28 @@ class OaiPmhServerPlugin
             'set'            => $set,
             'cursor'         => $cursor,
         ], JSON_UNESCAPED_SLASHES);
-        $expires = date('Y-m-d H:i:s', time() + self::TOKEN_TTL);
+        // FIX F063: previously computed `expires_at` with PHP `date(time()+TTL)`
+        // (server local TZ from date.timezone), but loadResumptionToken()
+        // compares against MySQL `NOW()` (MySQL session TZ). When PHP and MySQL
+        // ran in different time zones (common on shared hosting: PHP=Europe/Rome
+        // server-side default, MySQL=UTC), a freshly-minted token could already
+        // appear expired or live for the wrong duration → spurious
+        // badResumptionToken errors mid-harvest.
+        //
+        // Solution: compute the expiry in MySQL itself using
+        // DATE_ADD(NOW(), INTERVAL ? SECOND) so the TZ is whatever NOW() is —
+        // identical to the comparison side in loadResumptionToken().
+        $ttl = self::TOKEN_TTL;
 
         $stmt = $this->db->prepare(
-            'INSERT INTO oai_resumption_tokens (token, payload, expires_at) VALUES (?, ?, ?)'
+            'INSERT INTO oai_resumption_tokens (token, payload, expires_at) '
+            . 'VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND))'
         );
         if ($stmt === false) {
             SecureLogger::error('[OaiPmhServer] saveResumptionToken prepare() failed: ' . $this->db->error);
             return $token;
         }
-        $stmt->bind_param('sss', $token, $payload, $expires);
+        $stmt->bind_param('ssi', $token, $payload, $ttl);
         if (!$stmt->execute()) {
             SecureLogger::error('[OaiPmhServer] saveResumptionToken INSERT failed: ' . $stmt->error);
         }
@@ -2714,10 +2866,35 @@ class OaiPmhServerPlugin
         $baseAddr     = 24 + strlen($directory);
         $recordLength = $baseAddr + strlen($fieldData) + 1; // +1 for record terminator
 
+        // FIX F065: UNIMARC leader was inconsistent between MARCXML and binary
+        // (ISO 2709) serializations:
+        //   - MARCXML (line ~1339): "00000nam a2200000 u 4500"  ← correct
+        //   - binary (this fn):     "00000nam  2200000   4500"  ← missing
+        //     character coding scheme at pos 9 ('a' = UCS/Unicode) and the
+        //     descriptive cataloguing form at pos 18 ('u' = UNIMARC base level).
+        //
+        // UNIMARC leader layout (24 bytes total):
+        //   00-04  Record length      (5 digits)
+        //   05     Record status      'n'  (new)
+        //   06     Type of record     'a'  (printed language material)
+        //   07     Bibliographic level 'm'  (monograph)
+        //   08-09  Implementation     '  ' (two blanks)
+        //   10     Indicator count    '2'
+        //   11     Subfield code len  '2'
+        //   12-16  Base address       (5 digits)
+        //   17     Encoding level     ' '  (full level)
+        //   18     Descriptive form   'u'  (UNIMARC, IFLA 2008)
+        //   19     Reserved           ' '
+        //   20-23  Entry map          '4500'
+        //
+        // The XML and binary leaders now match exactly (modulo length & base
+        // address fields, which obviously differ); preserves backward compat
+        // with the existing `nam` prefix that test 14 verifies, and adds the
+        // missing 'a' + 'u' that strict UNIMARC validators expect.
         $leader = sprintf('%05d', $recordLength)
-            . 'nam  22'
+            . 'nam a22'
             . sprintf('%05d', $baseAddr)
-            . '   4500';
+            . ' u 4500';
 
         return $leader . $directory . $fieldData . $RT;
     }

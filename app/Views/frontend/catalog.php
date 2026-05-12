@@ -1441,7 +1441,10 @@ ob_start();
                             <li class="mb-1">
                                 <?php
                                 $rawHref = (string) ($ar['url'] ?? '');
-                                if (!preg_match('#^/[A-Za-z0-9/_\-.~%]*$#', $rawHref)) {
+                                // FIX F015: allow standard URL chars (query, fragment, percent-encoded)
+                                // but reject schemes (javascript:/data:) and CRLF injection by requiring
+                                // a leading slash and disallowing control characters.
+                                if (!preg_match('{^/[\w/\-.~%?&=:;,@!$\'()*+\[\]#]*$}', $rawHref)) {
                                     $rawHref = '#';
                                 }
                                 ?>

@@ -368,14 +368,17 @@ class ViafAuthorityPlugin
             return $this->json($response, ['error' => true, 'message' => __('Errore interno.')], 500);
         }
         curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS      => 3,
-            CURLOPT_CONNECTTIMEOUT => self::API_TIMEOUT,
-            CURLOPT_TIMEOUT        => self::API_TIMEOUT + 5,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS | CURLPROTO_HTTP,
-            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+            CURLOPT_RETURNTRANSFER  => true,
+            CURLOPT_FOLLOWLOCATION  => true,
+            CURLOPT_MAXREDIRS       => 3,
+            CURLOPT_CONNECTTIMEOUT  => self::API_TIMEOUT,
+            CURLOPT_TIMEOUT         => self::API_TIMEOUT + 5,
+            CURLOPT_SSL_VERIFYPEER  => true,
+            CURLOPT_PROTOCOLS       => CURLPROTO_HTTPS | CURLPROTO_HTTP,
+            // F079: pin redirect protocols too — older libcurl includes file:// in
+            // CURLOPT_REDIR_PROTOCOLS defaults, allowing SSRF via redirect chains.
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS | CURLPROTO_HTTP,
+            CURLOPT_HTTPHEADER      => ['Accept: application/json'],
         ]);
         $raw  = curl_exec($ch);
         $curlErr  = curl_error($ch);
@@ -814,12 +817,15 @@ class ViafAuthorityPlugin
      */
     private function reconcileSearch(string $query, int $limit): array
     {
-        $escaped = strtr($query, ['\\' => '\\\\', '%' => '\\%', '_' => '\\_']);
+        // F080: use a non-backslash ESCAPE char ('!') to avoid ambiguity around
+        // MySQL string-literal backslash processing and NO_BACKSLASH_ESCAPES sql_mode.
+        // ESCAPE expects a single character — passing '!' is unambiguous in every mode.
+        $escaped = strtr($query, ['!' => '!!', '%' => '!%', '_' => '!_']);
         $like    = '%' . $escaped . '%';
         $stmt  = $this->db->prepare(
             "SELECT id, nome, viaf_id, viaf_uri, isni_id
                FROM autori
-              WHERE nome LIKE ? ESCAPE '\\\\'
+              WHERE nome LIKE ? ESCAPE '!'
            ORDER BY nome
               LIMIT ?"
         );
@@ -962,14 +968,23 @@ class ViafAuthorityPlugin
         return password_verify($pass, (string) $row['password']);
     }
 
-    /** Validates CSRF token from body (csrf_token) or X-CSRF-Token header. Only required for session auth. */
+    /**
+     * Validates CSRF token from body (csrf_token) or X-CSRF-Token header.
+     *
+     * F082: Previously this method bypassed CSRF entirely when an
+     * `Authorization: Basic` header was present, on the assumption that Basic
+     * Auth clients don't ride a session. That bypass is unsafe: browsers attach
+     * Basic Auth credentials automatically to same-origin XHR/fetch once the
+     * user has authenticated, so a cross-site request can still ship valid
+     * credentials with attacker-controlled bodies — i.e. CSRF on write
+     * endpoints. CSRF protection is now enforced for all callers, including
+     * Basic Auth. **Breaking change for API clients**: Basic Auth requests to
+     * mutating endpoints (setAuthorViafAction / setAuthorIsniAction) must now
+     * include the CSRF token in the request body (`csrf_token`) or the
+     * `X-CSRF-Token` header.
+     */
     private function validateCsrf(ServerRequestInterface $request): bool
     {
-        // Basic Auth requests don't carry a session, so CSRF doesn't apply.
-        $authHeader = $request->getHeaderLine('Authorization');
-        if (str_starts_with($authHeader, 'Basic ')) {
-            return true;
-        }
         $body  = (array) ($request->getParsedBody() ?? []);
         $token = (string) ($body['csrf_token'] ?? $request->getHeaderLine('X-CSRF-Token'));
         return \App\Support\Csrf::validate($token !== '' ? $token : null);

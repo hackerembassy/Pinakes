@@ -147,13 +147,14 @@ if (!empty($breadcrumb)) {
         $breadcrumb
     );
 }
+// FIX F042: emit absolute URLs in JSON-LD (Schema.org consumers require absolute URIs)
 if ($coverUrl !== '') {
-    $schema['image'] = $coverUrl;
+    $schema['image'] = absoluteUrl($coverUrl);
 }
 if ($docUrl !== '') {
     $schema['associatedMedia'] = [
         '@type' => $docIsAudio ? 'AudioObject' : 'MediaObject',
-        'contentUrl' => $docUrl,
+        'contentUrl' => absoluteUrl($docUrl),
         'encodingFormat' => $docMime,
     ];
 }

@@ -66,8 +66,31 @@ class ResourceSyncPlugin
         }
     }
 
-    public function onInstall(): void {}
+    public function onInstall(): void
+    {
+        // FIX F077: seed default for the opt-in Basic Auth gate. Default '0' preserves
+        // current spec-compliant public behavior; operators can flip to '1' to require
+        // admin/staff Basic Auth on all four ResourceSync endpoints.
+        $this->seedSettingDefault('require_basic_auth', '0');
+    }
+
     public function onUninstall(): void {}
+
+    /**
+     * FIX F077: seed a default plugin setting on install (no-op if already present).
+     */
+    private function seedSettingDefault(string $key, string $value): void
+    {
+        if ($this->pluginId === null) { return; }
+        $stmt = $this->db->prepare(
+            'INSERT IGNORE INTO plugin_settings (plugin_id, setting_key, setting_value, created_at)
+             VALUES (?, ?, ?, NOW())'
+        );
+        if ($stmt === false) { return; }
+        $stmt->bind_param('iss', $this->pluginId, $key, $value);
+        $stmt->execute();
+        $stmt->close();
+    }
 
     private function registerHookInDb(string $hookName, string $method, int $priority): void
     {
@@ -119,6 +142,9 @@ class ResourceSyncPlugin
             ServerRequestInterface $request,
             ResponseInterface $response
         ) use ($plugin): ResponseInterface {
+            // FIX F077: opt-in admin/staff Basic Auth gate (default off for spec compliance).
+            $gate = null;
+            if (!$plugin->gateRequest($request, $response, $gate)) { return $gate; }
             return $plugin->sourceDescriptionAction($request, $response);
         });
 
@@ -126,6 +152,9 @@ class ResourceSyncPlugin
             ServerRequestInterface $request,
             ResponseInterface $response
         ) use ($plugin): ResponseInterface {
+            // FIX F077: opt-in admin/staff Basic Auth gate (default off for spec compliance).
+            $gate = null;
+            if (!$plugin->gateRequest($request, $response, $gate)) { return $gate; }
             return $plugin->capabilityListAction($request, $response);
         });
 
@@ -133,6 +162,9 @@ class ResourceSyncPlugin
             ServerRequestInterface $request,
             ResponseInterface $response
         ) use ($plugin): ResponseInterface {
+            // FIX F077: opt-in admin/staff Basic Auth gate (default off for spec compliance).
+            $gate = null;
+            if (!$plugin->gateRequest($request, $response, $gate)) { return $gate; }
             return $plugin->resourceListAction($request, $response);
         });
 
@@ -140,8 +172,111 @@ class ResourceSyncPlugin
             ServerRequestInterface $request,
             ResponseInterface $response
         ) use ($plugin): ResponseInterface {
+            // FIX F077: opt-in admin/staff Basic Auth gate (default off for spec compliance).
+            $gate = null;
+            if (!$plugin->gateRequest($request, $response, $gate)) { return $gate; }
             return $plugin->changeListAction($request, $response);
         });
+    }
+
+    /**
+     * FIX F077: opt-in Basic Auth gate.
+     *
+     * Returns true when the request is allowed to proceed. When the
+     * `require_basic_auth` setting is enabled, validates an admin/staff session
+     * or HTTP Basic Auth header; otherwise sets `$out` to a 401 challenge or 403
+     * response (RFC 7235 §3.1) and returns false. When the setting is disabled
+     * (default), this is a no-op — preserving ResourceSync spec compliance.
+     *
+     * @internal Called from route closures; public for closure visibility only.
+     */
+    public function gateRequest(
+        ServerRequestInterface $request,
+        ResponseInterface $response,
+        ?ResponseInterface &$out
+    ): bool {
+        if (!$this->isSettingEnabled('require_basic_auth', false)) {
+            return true;
+        }
+
+        // Session-based admin/staff access
+        if (
+            isset($_SESSION['user']) &&
+            in_array($_SESSION['user']['tipo_utente'] ?? '', ['admin', 'staff'], true)
+        ) {
+            return true;
+        }
+
+        $auth = $request->getHeaderLine('Authorization');
+        if ($auth !== '' && str_starts_with($auth, 'Basic ')) {
+            $decoded = base64_decode(substr($auth, 6), true);
+            if ($decoded !== false) {
+                $parts = explode(':', $decoded, 2);
+                if (count($parts) === 2 && $this->authenticateBasic($parts[0], $parts[1])) {
+                    return true;
+                }
+            }
+            // Credentials present but invalid
+            $out = $response->withStatus(403);
+            return false;
+        }
+
+        // No credentials provided — challenge the client
+        $out = $response
+            ->withStatus(401)
+            ->withHeader('WWW-Authenticate', 'Basic realm="ResourceSync"');
+        return false;
+    }
+
+    /**
+     * FIX F077: validate admin/staff credentials against the `utenti` table.
+     */
+    private function authenticateBasic(string $email, string $pass): bool
+    {
+        $stmt = $this->db->prepare(
+            "SELECT password FROM utenti
+             WHERE email = ? AND stato = 'attivo'
+               AND tipo_utente IN ('admin','staff')
+             LIMIT 1"
+        );
+        if ($stmt === false) { return false; }
+        $stmt->bind_param('s', $email);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = ($res instanceof \mysqli_result) ? $res->fetch_assoc() : null;
+        $stmt->close();
+        return $row !== null && password_verify($pass, (string) $row['password']);
+    }
+
+    /**
+     * FIX F077: fetch a plugin setting (raw, no decryption — booleans only here).
+     */
+    private function getSetting(string $key, string $default = ''): string
+    {
+        if ($this->pluginId === null) {
+            return $default;
+        }
+        $stmt = $this->db->prepare(
+            'SELECT setting_value FROM plugin_settings WHERE plugin_id = ? AND setting_key = ?'
+        );
+        if ($stmt === false) { return $default; }
+        $stmt->bind_param('is', $this->pluginId, $key);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = ($res instanceof \mysqli_result) ? $res->fetch_assoc() : null;
+        $stmt->close();
+        if ($row === null) { return $default; }
+        $value = $row['setting_value'];
+        return is_string($value) ? $value : $default;
+    }
+
+    /**
+     * FIX F077: check a boolean-style plugin setting.
+     */
+    private function isSettingEnabled(string $key, bool $default = false): bool
+    {
+        $value = $this->getSetting($key, $default ? '1' : '0');
+        return in_array($value, ['1', 'true', 'on', 'yes'], true);
     }
 
     // ─── Endpoint handlers ────────────────────────────────────────────────────
@@ -472,12 +607,20 @@ class ResourceSyncPlugin
         }
 
         if ($since !== null) {
-            // Include deleted records so harvesters can remove them
+            // FIX F078: bound tombstone exposure on `?from=` queries.
+            // - Live rows: deleted_at IS NULL AND updated_at >= ?  (soft-delete consistency)
+            // - Tombstones: deleted_at IS NOT NULL AND deleted_at >= ?
+            //   AND deleted_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+            //   This caps the tombstone window at 90 days regardless of how far back
+            //   the harvester asks (?from=1970-01-01 no longer leaks every soft-deleted
+            //   id/timestamp ever recorded).
             $stmt = $this->db->prepare(
                 'SELECT id, updated_at, created_at, deleted_at,
                         (created_at >= ?) AS is_new_entry
                  FROM libri
-                 WHERE updated_at >= ? OR deleted_at >= ?
+                 WHERE (deleted_at IS NULL AND updated_at >= ?)
+                    OR (deleted_at IS NOT NULL AND deleted_at >= ?
+                        AND deleted_at >= DATE_SUB(NOW(), INTERVAL 90 DAY))
                  ORDER BY COALESCE(deleted_at, updated_at) ASC
                  LIMIT ? OFFSET ?'
             );

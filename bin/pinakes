@@ -147,36 +147,54 @@ function cmd_viaf_reconcile_all(array $settings, array $opts): void
         $dryRun ? 'yes' : 'no'
     ));
 
-    // Fetch authors without viaf_id (apply LIMIT in SQL to avoid loading the full table)
-    $sql  = $limit !== PHP_INT_MAX
-        ? 'SELECT id, nome FROM autori WHERE viaf_id IS NULL ORDER BY id LIMIT ' . $limit
-        : 'SELECT id, nome FROM autori WHERE viaf_id IS NULL ORDER BY id';
-    $res  = $db->query($sql);
-    if (!($res instanceof \mysqli_result)) {
-        fwrite(STDERR, "ERROR: Failed to query autori\n");
-        exit(1);
-    }
-
-    $authors = [];
-    while ($r = $res->fetch_assoc()) {
-        $authors[] = $r;
-    }
-    $res->free();
-
-    $total    = count($authors);
-    $matched  = 0;
-    $skipped  = 0;
-    $errors   = 0;
+    // FIX F018: stream authors without viaf_id in bounded chunks to avoid
+    // loading the full table into PHP memory on large catalogs (100k+ authors).
+    // Uses keyset pagination on `id` so dry-run and skipped rows don't cause
+    // infinite loops (OFFSET would skip rows when UPDATEs shrink the result set).
+    $chunkSize = 500;
+    $lastId    = 0;
+    $matched   = 0;
+    $skipped   = 0;
+    $errors    = 0;
     $processed = 0;
+    $done      = false;
 
-    pinakes_log("Authors without viaf_id: {$total}");
+    pinakes_log('Fetching authors without viaf_id in chunks of ' . $chunkSize);
+
+    while (!$done) {
+        // Compute this chunk's size, respecting the optional --limit cap
+        if ($limit !== PHP_INT_MAX) {
+            $remaining = $limit - $processed;
+            if ($remaining <= 0) { break; }
+            $thisChunk = min($chunkSize, $remaining);
+        } else {
+            $thisChunk = $chunkSize;
+        }
+
+        $sql = 'SELECT id, nome FROM autori WHERE viaf_id IS NULL AND id > ' . (int) $lastId
+             . ' ORDER BY id LIMIT ' . (int) $thisChunk;
+        $res = $db->query($sql);
+        if (!($res instanceof \mysqli_result)) {
+            fwrite(STDERR, "ERROR: Failed to query autori\n");
+            exit(1);
+        }
+
+        $authors = [];
+        while ($r = $res->fetch_assoc()) {
+            $authors[] = $r;
+        }
+        $res->free();
+
+        $fetchedRows = count($authors);
+        if ($fetchedRows === 0) { break; }
 
     foreach ($authors as $author) {
-        if ($processed >= $limit) { break; }
+        if ($processed >= $limit) { $done = true; break; }
         $processed++;
 
         $name    = trim((string) $author['nome']);
         $authorId = (int) $author['id'];
+        $lastId   = $authorId; // advance keyset cursor
 
         if ($name === '') { $skipped++; continue; }
 
@@ -308,6 +326,12 @@ function cmd_viaf_reconcile_all(array $settings, array $opts): void
             $best['isni_id'] !== null ? ' ISNI=' . $best['isni_id'] : ''
         ));
         $matched++;
+    }
+
+        // FIX F018: if this chunk returned fewer rows than requested, no more
+        // rows remain — exit the streaming loop. Otherwise continue with the
+        // next keyset page based on the advanced $lastId cursor.
+        if ($fetchedRows < $thisChunk) { break; }
     }
 
     $db->close();

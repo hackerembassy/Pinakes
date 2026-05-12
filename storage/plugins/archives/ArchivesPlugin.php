@@ -5037,7 +5037,8 @@ class ArchivesPlugin
         }
         // Append the leaf itself
         $leafTitle = '';
-        $s2 = $this->db->prepare('SELECT constructed_title, formal_title FROM archival_units WHERE id = ?');
+        // FIX F033: add soft-delete guard (cf. CLAUDE.md soft-delete rule)
+        $s2 = $this->db->prepare('SELECT constructed_title, formal_title FROM archival_units WHERE id = ? AND deleted_at IS NULL');
         if ($s2 !== false) {
             $s2->bind_param('i', $leafId);
             $s2->execute();

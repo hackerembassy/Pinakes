@@ -7,20 +7,37 @@ namespace Z39Server;
 /**
  * UNIMARC/XML formatter for the SRU endpoint.
  *
- * Produces UNIMARC Bibliographic records serialised in the MARC21slim XML
- * container (same namespace as MARCXML) following the IFLA UNIMARC 2008 field
- * codes.  Mirrors the UNIMARC output of OaiPmhServerPlugin::writeBookUnimarc()
- * but works with the DOMDocument API used by the SRU record pipeline.
+ * Produces UNIMARC Bibliographic records serialised in the MARCXchange XML
+ * container (ISO 25577) following the IFLA UNIMARC 2008 field codes.
+ * Mirrors the UNIMARC output of OaiPmhServerPlugin::writeBookUnimarc() but
+ * works with the DOMDocument API used by the SRU record pipeline.
  *
  * recordSchema identifier: info:srw/schema/8/unimarcxml-v0.1
+ *
+ * FIX F092 (BREAKING CHANGE): record element is now emitted in the
+ * MARCXchange namespace (info:lc/xmlns/marcxchange-v2) instead of the MARC21
+ * slim namespace (http://www.loc.gov/MARC21/slim). The previous namespace
+ * advertised the payload as MARC21 to clients that dispatch on XML namespace,
+ * but the field codes (200/210/700 ...) are UNIMARC and would be misinterpreted
+ * as MARC21 tags (245/260/100 ...). MARCXchange is the IFLA-sanctioned XML
+ * container for UNIMARC. Harvesters/clients that hardcoded the MARC21 slim
+ * namespace for this endpoint must be updated to handle MARCXchange.
  */
 class UNIMARCXMLFormatter extends RecordFormatter
 {
-    private const NS_MARC = 'http://www.loc.gov/MARC21/slim';
+    /**
+     * MARCXchange namespace (ISO 25577) — the IFLA-sanctioned XML container
+     * for UNIMARC records. See: https://www.loc.gov/standards/iso25577/
+     */
+    private const NS_MARCXCHANGE = 'info:lc/xmlns/marcxchange-v2';
 
     public function format(array $record): \DOMElement
     {
-        $recordEl = $this->doc->createElementNS(self::NS_MARC, 'record');
+        // FIX F092: emit in MARCXchange namespace (not MARC21 slim) — UNIMARC
+        // field codes (200/210/700) belong to the MARCXchange container, not
+        // MARC21. Clients that dispatch on namespace previously misread this
+        // record as MARC21.
+        $recordEl = $this->doc->createElementNS(self::NS_MARCXCHANGE, 'record');
         $recordEl->setAttribute('type', 'Bibliographic');
 
         // Leader — 'nam': text language material, monograph

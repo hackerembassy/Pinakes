@@ -11,12 +11,15 @@ use App\Support\HtmlHelper;
 $addUrl     = htmlspecialchars(url('/admin/api/books/' . $bookId . '/digital-assets'), ENT_QUOTES, 'UTF-8');
 $deleteBase = url('/admin/api/books/' . $bookId . '/digital-assets');
 
-function oaiFormatBytes(int $bytes): string
-{
-    if ($bytes <= 0) return '';
-    if ($bytes >= 1_048_576) return number_format($bytes / 1_048_576, 1) . ' MB';
-    if ($bytes >= 1024)      return number_format($bytes / 1024, 1)      . ' KB';
-    return $bytes . ' B';
+// FIX F068: idempotent declaration (view may be included multiple times via hook)
+if (!function_exists('oaiFormatBytes')) {
+    function oaiFormatBytes(int $bytes): string
+    {
+        if ($bytes <= 0) return '';
+        if ($bytes >= 1_048_576) return number_format($bytes / 1_048_576, 1) . ' MB';
+        if ($bytes >= 1024)      return number_format($bytes / 1024, 1)      . ' KB';
+        return $bytes . ' B';
+    }
 }
 ?>
 

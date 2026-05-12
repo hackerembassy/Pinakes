@@ -181,7 +181,10 @@ if ($bookISBN) {
 if (!empty($bibframePluginActive)) {
     $sameAsLinks[] = absoluteUrl('/id/instance/' . (int) $book['id']);
 }
-$bookSchema["sameAs"] = $sameAsLinks;
+// FIX F012: skip empty sameAs to avoid noisy "sameAs": [] in JSON-LD
+if (!empty($sameAsLinks)) {
+    $bookSchema['sameAs'] = $sameAsLinks;
+}
 
 // Include ALL authors with proper Schema.org roles
 $schemaAuthors = [];

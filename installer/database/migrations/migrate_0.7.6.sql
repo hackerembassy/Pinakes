@@ -86,3 +86,31 @@ ON DUPLICATE KEY UPDATE
     requires_php  = VALUES(requires_php),
     requires_app  = VALUES(requires_app),
     metadata      = VALUES(metadata);
+
+-- ─── FIX F022: ensure fr_FR is_active=1 on installs that only ran migrate_0.7.4.sql ─
+--
+-- migrate_0.7.4.sql (lines 678-685) used `INSERT IGNORE` for the French language
+-- backfill, which means existing fr_FR rows where is_active=0 were NEVER updated.
+-- migrate_0.7.5.sql repaired this with ON DUPLICATE KEY UPDATE, but installs that
+-- only executed migrate_0.7.4.sql (without subsequently running 0.7.5.sql) still
+-- have fr_FR sitting at is_active=0 and the language remains hidden in the UI.
+--
+-- This statement guarantees fr_FR is active and its metadata is up-to-date for
+-- ANY install reaching v0.7.6, regardless of whether 0.7.5.sql was applied.
+-- Idempotent: re-running this migration is safe — the row is upserted to the
+-- same canonical values every time.
+--
+-- total_keys/translated_keys mirror F023's verified key count (4993).
+
+INSERT INTO `languages` (`code`, `name`, `native_name`, `flag_emoji`, `is_default`, `is_active`, `translation_file`, `total_keys`, `translated_keys`, `completion_percentage`, `created_at`, `updated_at`)
+VALUES ('fr_FR', 'French', 'Français', '🇫🇷', 0, 1, 'locale/fr_FR.json', 4993, 4993, 100.00, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+    is_active = 1,
+    name = VALUES(name),
+    native_name = VALUES(native_name),
+    flag_emoji = VALUES(flag_emoji),
+    translation_file = VALUES(translation_file),
+    total_keys = VALUES(total_keys),
+    translated_keys = VALUES(translated_keys),
+    completion_percentage = VALUES(completion_percentage),
+    updated_at = NOW();
