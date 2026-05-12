@@ -113,6 +113,11 @@ jobs:
         env:
           WORKSPACE: ${{ github.workspace }}
         run: |
+          path="${WORKSPACE}"
+          while [ "${path}" != "/" ]; do
+            sudo chmod o+x "${path}" || true
+            path="$(dirname "${path}")"
+          done
           sudo chmod 777 "${WORKSPACE}"
           sudo chmod -R 777 "${WORKSPACE}/storage"
           sudo mkdir -p "${WORKSPACE}/public/uploads"

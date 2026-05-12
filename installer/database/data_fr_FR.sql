@@ -325,7 +325,7 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), native_name = VALUES(native_name), 
 
 -- Home Content (French)
 INSERT INTO `home_content` (section_key, title, subtitle, content, button_text, button_link, is_active, display_order, created_at, updated_at) VALUES
-('hero', 'Votre bibliothèque numérique', 'Découvrez, réservez et gérez votre collection de livres', NULL, 'Découvrir le catalogue', '/catalog', 1, -2, NOW(), NOW()),
+('hero', 'Votre bibliothèque numérique', 'Découvrez, réservez et gérez votre collection de livres', NULL, 'Découvrir le catalogue', '/catalogue', 1, -2, NOW(), NOW()),
 ('features_title', 'Pourquoi choisir Pinakes', 'Une expérience bibliothécaire moderne et intuitive, toujours à portée de main', NULL, NULL, NULL, 1, 0, NOW(), NOW()),
 ('feature_1', 'Gestion simplifiée', 'Cataloguez vos livres, gérez les emprunts et les retours avec une interface intuitive et rapide', 'fas fa-tasks', NULL, NULL, 1, 1, NOW(), NOW()),
 ('feature_2', 'Catalogisation complète', 'Importez des données via ISBN, organisez par catégories, créez des étiquettes et suivez chaque exemplaire physique', 'fas fa-book', NULL, NULL, 1, 2, NOW(), NOW()),
@@ -335,7 +335,7 @@ INSERT INTO `home_content` (section_key, title, subtitle, content, button_text, 
 ('latest_books_title', 'Dernières acquisitions', 'Découvrez les derniers ajouts au catalogue', NULL, NULL, NULL, 1, 5, NOW(), NOW()),
 ('genre_carousel', 'Découvrez les genres principaux', 'Explorez nos racines thématiques et laissez-vous inspirer par les titres disponibles.', NULL, NULL, NULL, 1, 6, NOW(), NOW()),
 ('events', 'Événements à venir', 'Participez à nos prochaines rencontres', NULL, NULL, NULL, 1, 7, NOW(), NOW()),
-('cta', 'Prêt à commencer ?', 'Inscrivez-vous maintenant et commencez à explorer notre catalogue', NULL, 'S''inscrire maintenant', '/register', 1, 8, NOW(), NOW())
+('cta', 'Prêt à commencer ?', 'Inscrivez-vous maintenant et commencez à explorer notre catalogue', NULL, 'S''inscrire maintenant', '/inscription', 1, 8, NOW(), NOW())
 ON DUPLICATE KEY UPDATE title = VALUES(title), subtitle = VALUES(subtitle), content = VALUES(content), button_text = VALUES(button_text), button_link = VALUES(button_link), is_active = VALUES(is_active), display_order = VALUES(display_order), updated_at = NOW();
 
 -- Themes (French descriptions)

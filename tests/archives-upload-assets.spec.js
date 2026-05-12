@@ -15,7 +15,6 @@
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:8081';
@@ -50,17 +49,7 @@ const FIXTURES_DIR = path.join(__dirname, 'fixtures');
 
 const TEST_COVER = path.join(FIXTURES_DIR, 'archive-test-cover.jpg');
 const TEST_PDF   = path.join(FIXTURES_DIR, 'archive-test.pdf');
-const TEST_AUDIO = path.join(os.tmpdir(), 'archive-test-audio.wav');
-
-function ensureAudioFixture() {
-    fs.writeFileSync(TEST_AUDIO, Buffer.from([
-        0x52, 0x49, 0x46, 0x46, 0x2c, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
-        0x66, 0x6d, 0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
-        0x40, 0x1f, 0x00, 0x00, 0x80, 0x3e, 0x00, 0x00, 0x02, 0x00, 0x10, 0x00,
-        0x64, 0x61, 0x74, 0x61, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x7f,
-        0x00, 0x00, 0x01, 0x80,
-    ]));
-}
+const TEST_AUDIO = path.join(FIXTURES_DIR, 'archive-test-audio.mp3');
 
 test.describe.serial('Archives — upload cover / PDF / audio end-to-end', () => {
     /** @type {import('@playwright/test').BrowserContext} */
@@ -76,7 +65,6 @@ test.describe.serial('Archives — upload cover / PDF / audio end-to-end', () =>
     const ids = { pdf: 0, audio: 0, coverOnly: 0 };
 
     test.beforeAll(async ({ browser }) => {
-        ensureAudioFixture();
         // Sanity check: committed fixtures must be present in tests/fixtures/
         for (const fp of [TEST_COVER, TEST_PDF, TEST_AUDIO]) {
             expect(fs.existsSync(fp), `fixture missing: ${fp}`).toBe(true);

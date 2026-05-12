@@ -179,9 +179,9 @@ test.describe.serial('Phase 2: Route compatibility across locales', () => {
     expect(nonLegacyDupes, `Duplicate route paths: ${nonLegacyDupes.join(', ')}`).toHaveLength(0);
   });
 
-  test('2.9 fr_FR login route is /login (English slug, not /connexion)', () => {
+  test('2.9 fr_FR login route is localized to /connexion', () => {
     const routes = readJson(FR_ROUTES);
-    expect(routes['login']).toBe('/login');
+    expect(routes['login']).toBe('/connexion');
   });
 });
 
@@ -460,28 +460,23 @@ test.describe.serial('Phase 7: SruClient robustness checks', () => {
 // Phase 8: data_fr_FR route coherence
 // ═════════════════════════════════════════════════════════════════════════════
 test.describe.serial('Phase 8: data_fr_FR button links match routes_fr_FR.json', () => {
-  test('8.1 Hero button link /catalog matches routes_fr_FR catalog route', () => {
+  test('8.1 Hero button link matches routes_fr_FR catalog route', () => {
     const routes = readJson(FR_ROUTES);
     const seed = readFile(FR_SEED);
-    // Hero row button_link should be /catalog (matches routes_fr_FR.json catalog=/catalog)
-    expect(routes['catalog']).toBe('/catalog');
-    // Seed should not use /catalogue (which would 404 on FR install)
+    expect(routes['catalog']).toBe('/catalogue');
     const heroMatch = seed.match(/'hero'[^)]+button_link[^,)]*'([^']+)'/);
     if (heroMatch) {
       expect(heroMatch[1]).toBe(routes['catalog']);
     } else {
-      // Hero row uses positional values — find it differently
-      expect(seed).toMatch(/hero.*\/catalog[^u]/s);
-      expect(seed).not.toMatch(/hero.*\/catalogue/s);
+      expect(seed).toMatch(/hero.*\/catalogue/s);
     }
   });
 
-  test('8.2 CTA button link /register matches routes_fr_FR register route', () => {
+  test('8.2 CTA button link matches routes_fr_FR register route', () => {
     const routes = readJson(FR_ROUTES);
     const seed = readFile(FR_SEED);
-    expect(routes['register']).toBe('/register');
-    // CTA row should use /register
-    expect(seed).toContain("'/register'");
+    expect(routes['register']).toBe('/inscription');
+    expect(seed).toContain(`'${routes['register']}'`);
   });
 
   test('8.3 No /catalogo hardcoded in data_fr_FR.sql (Italian route)', () => {
