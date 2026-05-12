@@ -18,6 +18,8 @@
 
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:8082';
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
@@ -518,7 +520,18 @@ test.describe.serial('series/collane — CRUD + hierarchy + i18n (issue #110)', 
     const colsBefore = dbQuery("SHOW COLUMNS FROM collane").split('\n').length;
     // Re-apply via mysql; the migration uses INFORMATION_SCHEMA guards.
     try {
-      execFileSync('bash', ['-c', `mysql --socket=${DB_SOCKET} -u ${DB_USER} -p${DB_PASS} ${DB_NAME} < ${require('path').resolve(__dirname, '..', 'installer/database/migrations/migrate_0.5.9.5.sql')}`], { encoding: 'utf-8', timeout: 20000 });
+      const migrationPath = path.resolve(__dirname, '..', 'installer/database/migrations/migrate_0.5.9.5.sql');
+      const args = [];
+      if (DB_HOST) args.push('-h', DB_HOST);
+      if (DB_SOCKET) args.push('-S', DB_SOCKET);
+      args.push('-u', DB_USER);
+      if (DB_PASS !== '') args.push(`-p${DB_PASS}`);
+      args.push(DB_NAME);
+      execFileSync('mysql', args, {
+        encoding: 'utf-8',
+        input: fs.readFileSync(migrationPath, 'utf-8'),
+        timeout: 20000,
+      });
     } catch (e) {
       // Some statements (CHECK constraint already exists) may emit warnings
       // but should NOT throw on re-run; tolerate non-zero exit if no fatal.

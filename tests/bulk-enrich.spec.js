@@ -41,6 +41,7 @@ function dbExec(sql) {
 
 async function gotoBulkEnrich(page, attempts = 6) {
   let lastError;
+  let sawGatewayTimeout = false;
   for (let i = 0; i < attempts; i += 1) {
     try {
       await page.goto(`${BASE}/admin/libri/bulk-enrich`, {
@@ -51,6 +52,7 @@ async function gotoBulkEnrich(page, attempts = 6) {
       if (!body.includes('Gateway Timeout')) {
         return;
       }
+      sawGatewayTimeout = true;
     } catch (err) {
       lastError = err;
     }
@@ -58,6 +60,9 @@ async function gotoBulkEnrich(page, attempts = 6) {
   }
   if (lastError) {
     throw lastError;
+  }
+  if (sawGatewayTimeout) {
+    throw new Error('Bulk enrich page kept returning Gateway Timeout');
   }
 }
 
@@ -645,6 +650,7 @@ test.describe.serial('Bulk Enrichment', () => {
 
   test('18. Bulk enrich page shows stats cards', async () => {
     test.skip(!featureAvailable, 'Bulk enrich not available');
+    test.setTimeout(240000);
 
     await gotoBulkEnrich(page);
     await expect(page.locator('body')).not.toContainText('Gateway Timeout');
@@ -661,6 +667,7 @@ test.describe.serial('Bulk Enrichment', () => {
 
   test('19. Bulk enrich page has "Arricchisci Adesso" button', async () => {
     test.skip(!featureAvailable, 'Bulk enrich not available');
+    test.setTimeout(240000);
 
     await gotoBulkEnrich(page);
 
@@ -680,6 +687,7 @@ test.describe.serial('Bulk Enrichment', () => {
 
   test('20. Bulk enrich page has toggle switch', async () => {
     test.skip(!featureAvailable, 'Bulk enrich not available');
+    test.setTimeout(240000);
 
     await gotoBulkEnrich(page);
 

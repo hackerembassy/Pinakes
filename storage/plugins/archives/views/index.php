@@ -113,49 +113,114 @@ $renderRow = function (array $row, int $depth, array $visited = []) use (&$rende
 $rootRows = $byParent[0] ?? [];
 ?>
 <div class="p-6 max-w-7xl mx-auto">
-    <div class="flex items-center justify-between mb-6">
-        <div>
+    <div class="mb-5">
+        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h1 class="text-2xl font-bold text-gray-900"><?= __("Archivi") ?></h1>
-            <p class="text-sm text-gray-600 mt-1">
+            <p class="text-sm text-gray-500">
                 <?= __("Gestione materiale archivistico secondo standard ISAD(G) / ISAAR(CPF).") ?>
-                <a href="https://github.com/fabiodalez-dev/Pinakes/issues/103"
-                   class="text-blue-600 hover:underline" target="_blank" rel="noopener">
-                    Issue #103
-                </a>
             </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2 mt-3">
+            <?php /* desktop: tutti i bottoni secondari */ ?>
             <a href="<?= $e(url('/admin/archives/search')) ?>"
-               class="btn-secondary inline-flex items-center">
-                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               class="hidden sm:inline-flex btn-secondary items-center text-sm">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                           d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
                 <?= __("Ricerca") ?>
             </a>
             <a href="<?= $e(url('/admin/archives/authorities')) ?>"
-               class="btn-secondary inline-flex items-center">
+               class="hidden sm:inline-flex btn-secondary items-center text-sm">
                 <?= __("Authority records") ?>
             </a>
             <a href="<?= $e(url('/admin/archives/import')) ?>"
-               class="btn-secondary inline-flex items-center">
+               class="hidden sm:inline-flex btn-secondary items-center text-sm">
                 <?= __("Importa MARCXML") ?>
             </a>
             <a href="<?= $e(url('/admin/archives/export.xml')) ?>"
-               class="btn-secondary inline-flex items-center">
+               class="hidden sm:inline-flex btn-secondary items-center text-sm">
                 <?= __("Esporta MARCXML") ?>
             </a>
             <a href="<?= $e(url('/admin/archives/export.ead3')) ?>"
-               class="btn-secondary inline-flex items-center">
+               class="hidden sm:inline-flex btn-secondary items-center text-sm">
                 <?= __("Esporta EAD3") ?>
             </a>
             <a href="<?= $e(url('/archives/oai?verb=Identify')) ?>"
-               class="btn-secondary inline-flex items-center" target="_blank" rel="noopener">
+               class="hidden sm:inline-flex btn-secondary items-center text-sm" target="_blank" rel="noopener">
                 <?= __("OAI-PMH") ?>
             </a>
+
+            <?php /* mobile: dropdown "Altre azioni" */ ?>
+            <details class="relative sm:hidden" id="arc-actions-details">
+                <summary class="btn-secondary inline-flex items-center text-sm cursor-pointer select-none list-none">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                    <?= __("Azioni") ?>
+                    <svg class="w-3 h-3 ml-1.5 transition-transform arc-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </summary>
+                <div class="absolute left-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[200px]">
+                    <a href="<?= $e(url('/admin/archives/search')) ?>"
+                       class="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                        <svg class="w-4 h-4 mr-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <?= __("Ricerca") ?>
+                    </a>
+                    <a href="<?= $e(url('/admin/archives/authorities')) ?>"
+                       class="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                        <svg class="w-4 h-4 mr-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                        </svg>
+                        <?= __("Authority records") ?>
+                    </a>
+                    <hr class="my-1 border-gray-100">
+                    <a href="<?= $e(url('/admin/archives/import')) ?>"
+                       class="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                        <svg class="w-4 h-4 mr-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                        </svg>
+                        <?= __("Importa MARCXML") ?>
+                    </a>
+                    <a href="<?= $e(url('/admin/archives/export.xml')) ?>"
+                       class="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                        <svg class="w-4 h-4 mr-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        <?= __("Esporta MARCXML") ?>
+                    </a>
+                    <a href="<?= $e(url('/admin/archives/export.ead3')) ?>"
+                       class="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                        <svg class="w-4 h-4 mr-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        <?= __("Esporta EAD3") ?>
+                    </a>
+                    <hr class="my-1 border-gray-100">
+                    <a href="<?= $e(url('/archives/oai?verb=Identify')) ?>"
+                       class="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                       target="_blank" rel="noopener">
+                        <svg class="w-4 h-4 mr-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                        </svg>
+                        <?= __("OAI-PMH") ?>
+                    </a>
+                </div>
+            </details>
+            <style>
+                #arc-actions-details[open] .arc-chevron { transform: rotate(180deg); }
+                #arc-actions-details summary::-webkit-details-marker { display: none; }
+            </style>
+
+            <?php /* bottone primario: sempre visibile */ ?>
             <a href="<?= $e(url('/admin/archives/new')) ?>"
-               class="btn-primary inline-flex items-center">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               class="btn-primary inline-flex items-center text-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
                 <?= __("Nuovo record archivistico") ?>

@@ -25,6 +25,33 @@ function dbExec(sql) {
 // Nirvana - Nevermind (very common CD, reliable on Discogs)
 const TEST_BARCODE = '0720642442524';
 
+async function mockDiscogsScrape(page) {
+  await page.route('**/api/scrape/isbn?**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('isbn') !== TEST_BARCODE) {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        title: 'Nevermind',
+        authors: ['Nirvana'],
+        publisher: 'DGC',
+        year: '1991',
+        pubDate: '24 settembre 1991',
+        format: 'CD',
+        tipo_media: 'disco',
+        ean: TEST_BARCODE,
+        source: 'discogs',
+        notes: 'Mocked Discogs release metadata for deterministic E2E coverage',
+      }),
+    });
+  });
+}
+
 test.describe.serial('Discogs Import: full scraping flow', () => {
   /** @type {import('@playwright/test').Page} */
   let page;
@@ -112,6 +139,8 @@ test.describe.serial('Discogs Import: full scraping flow', () => {
   });
 
   test('2. Import CD via barcode in book form', async () => {
+    await mockDiscogsScrape(page);
+
     await page.goto(`${BASE}/admin/libri/crea`);
     await page.waitForLoadState('domcontentloaded');
 

@@ -1620,7 +1620,7 @@ ob_start();
                                 <span class="author-item role-<?= htmlspecialchars($author['ruolo'], ENT_QUOTES, 'UTF-8') ?>">
                                     <?= htmlspecialchars(html_entity_decode($author['nome'] ?? '', ENT_QUOTES, 'UTF-8')) ?>
                                     <?php if ($author['ruolo'] !== 'principale'): ?>
-                                        (<?= ucfirst($author['ruolo']) ?>)
+                                        (<?= htmlspecialchars(ucfirst($author['ruolo']), ENT_QUOTES, 'UTF-8') ?>)
                                     <?php endif; ?>
                                 </span>
                             </a>
