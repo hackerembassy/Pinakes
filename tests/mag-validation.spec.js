@@ -38,6 +38,8 @@ const DB_NAME   = process.env.E2E_DB_NAME   || '';
 const DB_SOCKET = process.env.E2E_DB_SOCKET || '';
 const DB_HOST   = process.env.E2E_DB_HOST   || '';
 const DB_PORT   = process.env.E2E_DB_PORT   || '';
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
+const ADMIN_PASS  = process.env.E2E_ADMIN_PASS  || '';
 
 function mysqlArgs(sql, batch = false) {
     const args = [];
@@ -59,6 +61,94 @@ function dbQuery(sql) {
     }).trim();
 }
 
+function getOaiPluginState() {
+    const row = dbQuery(
+        "SELECT p.id, p.is_active, COUNT(ph.id) AS hooks " +
+        "FROM plugins p " +
+        "LEFT JOIN plugin_hooks ph ON ph.plugin_id = p.id " +
+        "AND ph.hook_name = 'app.routes.register' " +
+        "AND ph.callback_method = 'registerRoutes' " +
+        "AND ph.is_active = 1 " +
+        "WHERE p.name = 'oai-pmh-server' " +
+        "GROUP BY p.id, p.is_active " +
+        "LIMIT 1"
+    );
+    if (!row) return { id: 0, active: false, hooks: 0 };
+    const parts = row.split('\t');
+    return {
+        id: parseInt(parts[0]) || 0,
+        active: parts[1] === '1',
+        hooks: parseInt(parts[2]) || 0,
+    };
+}
+
+async function activateOaiPlugin(browser) {
+    if (!ADMIN_EMAIL || !ADMIN_PASS) {
+        return false;
+    }
+
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+        await page.goto(`${BASE}/login`);
+        await page.fill('input[name="email"]', ADMIN_EMAIL);
+        await page.fill('input[name="password"]', ADMIN_PASS);
+        await Promise.all([
+            page.waitForURL(/\/admin\//, { timeout: 15000 }),
+            page.click('button[type="submit"]'),
+        ]);
+        await page.goto(`${BASE}/admin/plugins`);
+
+        const plugin = getOaiPluginState();
+        if (plugin.id === 0) {
+            return false;
+        }
+
+        const pluginApiCall = async (action) => page.evaluate(async ([act, pid]) => {
+            const csrfInput = document.querySelector('input[name="csrf_token"]');
+            const token = csrfInput ? (/** @type {HTMLInputElement} */ (csrfInput)).value : '';
+            const formData = new FormData();
+            formData.append('csrf_token', token);
+            const res = await fetch(
+                `${window.location.origin}${window.BASE_PATH || ''}/admin/plugins/${pid}/${act}`,
+                { method: 'POST', body: formData }
+            );
+            return res.json();
+        }, [action, plugin.id]);
+
+        if (plugin.active && plugin.hooks === 0) {
+            const deactivate = await pluginApiCall('deactivate');
+            if (!deactivate.success) {
+                return false;
+            }
+        }
+
+        const current = getOaiPluginState();
+        if (!current.active || current.hooks === 0) {
+            const activate = await pluginApiCall('activate');
+            return Boolean(activate.success);
+        }
+        return true;
+    } finally {
+        await context.close();
+    }
+}
+
+async function ensureOaiPmhRoute(browser) {
+    let plugin = getOaiPluginState();
+    if (plugin.id === 0) {
+        return;
+    }
+
+    if (!plugin.active || plugin.hooks === 0) {
+        const activated = await activateOaiPlugin(browser);
+        plugin = getOaiPluginState();
+        if (!activated || !plugin.active || plugin.hooks === 0) {
+            throw new Error('OAI-PMH plugin activation did not register the /oai route hook');
+        }
+    }
+}
+
 test.skip(
     !DB_USER || !DB_NAME,
     'Missing E2E env (DB_*)'
@@ -74,7 +164,9 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
     /** @type {string} */
     let bookWithoutFile = '';
 
-    test.beforeAll(async () => {
+    test.beforeAll(async ({ browser }) => {
+        await ensureOaiPmhRoute(browser);
+
         // Basic book for OAI tests
         const row = dbQuery(
             "SELECT id, titolo FROM libri WHERE deleted_at IS NULL ORDER BY id LIMIT 1"
