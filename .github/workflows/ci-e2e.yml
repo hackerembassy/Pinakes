@@ -55,7 +55,7 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y apache2 libapache2-mod-php
-          sudo a2enmod rewrite headers
+          sudo a2enmod rewrite headers env
           php_module="$(find /etc/apache2/mods-available -maxdepth 1 -name 'php*.load' -printf '%f\n' | sed 's/\.load$//' | sort -V | tail -n1)"
           if [ -n "${php_module}" ]; then
             sudo a2enmod "${php_module}"
@@ -79,6 +79,7 @@ jobs:
           <VirtualHost *:8081>
               ServerName localhost
               DocumentRoot ${WORKSPACE}/public
+              SetEnv PINAKES_E2E_BYPASS_RATE_LIMIT 1
               <Directory "${WORKSPACE}/public">
                   Options -Indexes +FollowSymLinks
                   AllowOverride All
