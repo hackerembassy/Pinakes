@@ -1,8 +1,10 @@
 -- Phase 4 cleanup — drop reserved-but-unused place_id column from
--- archive_activities. The column was added in 0.7.9 with the comment
--- "reserved for Phase 4 archive_places FK" but Phase 4 (0.7.10) never
--- added the foreign key and no application code reads or writes the
--- column. See review F015 (rev_01KRRE2QJR3QSTGJ4FZEK7MVDW).
+-- archive_activities. The column was added in migrate_0.7.09.sql; it
+-- was reserved for the Phase 4 archive_places FK that Phase 4 (0.7.10)
+-- never delivered, and no application code reads or writes it. The
+-- original DDL declares the column without an inline reservation
+-- comment (FIX F027: prior wording quoted a comment string not present
+-- verbatim in 0.7.09.sql). See review F015 (rev_01KRRE2QJR3QSTGJ4FZEK7MVDW).
 --
 -- Wrapped in a tab/col exists guard so an upgrade from a release that
 -- pre-dates the archives plugin (≤ v0.7.6) does not error on a table
