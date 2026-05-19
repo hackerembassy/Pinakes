@@ -1889,8 +1889,23 @@ class ArchivesPlugin
                 : '/uploads/archives/documents/';
             if (str_starts_with($currentPath, $allowedPrefix)) {
                 $fsPath = __DIR__ . '/../../../public' . $currentPath;
-                if (is_file($fsPath)) {
-                    @unlink($fsPath);
+                /* FIX F007: realpath containment — defend against symlinks
+                 * or relative segments slipping past the str_starts_with
+                 * gate. Resolve both the allowed root and the candidate
+                 * file; only unlink if the resolved path still lies
+                 * strictly inside the allowed root. */
+                $allowedRealRoot = realpath(__DIR__ . '/../../../public' . rtrim($allowedPrefix, '/'));
+                $resolvedPath = realpath($fsPath);
+                if ($allowedRealRoot === false || $resolvedPath === false
+                    || !str_starts_with($resolvedPath, $allowedRealRoot . DIRECTORY_SEPARATOR)) {
+                    SecureLogger::error('[Archives] removeAssetAction: realpath containment failure /* FIX F007 */', [
+                        'type' => $type,
+                        'currentPath' => $currentPath,
+                        'resolved' => $resolvedPath !== false ? $resolvedPath : '(false)',
+                        'allowedRoot' => $allowedRealRoot !== false ? $allowedRealRoot : '(false)',
+                    ]);
+                } elseif (is_file($resolvedPath)) {
+                    @unlink($resolvedPath);
                 }
             } else {
                 SecureLogger::warning('[Archives] skip unlink — disallowed path prefix', [

@@ -444,10 +444,12 @@ final class RicJsonLdBuilder
         }
 
         // Parent activity in the ISDF function → activity → transaction
-        // hierarchy.
+        // hierarchy. /* FIX F022 */ Use the RiC-O inverse `isOrWasPartOf`
+        // (child → parent), not `hasOrHadPartOf` which is parent → child
+        // and does not exist as a property in the RiC-O ontology.
         $parentId = $this->intOrNull($activity['parent_id'] ?? null);
         if ($parentId !== null && $parentId > 0) {
-            $doc['ric:hasOrHadPartOf'] = ['@id' => $this->activityIri($parentId)];
+            $doc['ric:isOrWasPartOf'] = ['@id' => $this->activityIri($parentId)];
         }
 
         // ric:resultsOrResultedIn — units the activity produced /

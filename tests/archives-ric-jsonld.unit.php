@@ -424,8 +424,9 @@ $check(($act['ric:hasSource'] ?? null) === 'RD 9 ottobre 1861 n. 250',
     'source_ref surfaces as ric:hasSource');
 $check(($act['ric:isOrWasPerformedBy']['@id'] ?? null) === $base . '/archives/agents/3',
     'agent_id emits ric:isOrWasPerformedBy → agent IRI');
-$check(($act['ric:hasOrHadPartOf']['@id'] ?? null) === $base . '/archives/activities/9',
-    'parent_id emits ric:hasOrHadPartOf → parent activity IRI');
+/* FIX F022 */ // child → parent uses ric:isOrWasPartOf (inverse of ric:hasOrHadPart)
+$check(($act['ric:isOrWasPartOf']['@id'] ?? null) === $base . '/archives/activities/9',
+    'parent_id emits ric:isOrWasPartOf → parent activity IRI');
 $check(($act['ric:isAssociatedWithDate']['@type'] ?? null) === 'ric:DateRange',
     'date range emitted as ric:DateRange');
 // Year-only inputs ("1890", "1920") must emit xsd:gYear, not xsd:date —
