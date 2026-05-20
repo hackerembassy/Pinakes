@@ -1467,21 +1467,66 @@ function initializeChoicesJS() {
             createAuthorFromInputWithValue(rawValue);
         };
 
-        // Regression fix for issue #74 (reopened 2026-05-20).
-        //
-        // Choices.js v11 registers its own keydown handler in capture phase
-        // on the outer wrapper BEFORE our code runs, and calls
-        // stopImmediatePropagation() on Enter when there's a highlighted
-        // item — so any wrapper.addEventListener('keydown', …, true) we
-        // register after `new Choices(…)` never sees the event.
-        //
-        // The previous "cleaner" capture-phase approach (introduced by the
-        // CodeRabbit round-11 review) regressed this bug because of the
-        // above. The only reliable interception point is the library's
-        // own keypress dispatcher; monkey-patch _onEnterKey on the
-        // instance. The override is per-instance and does not modify the
-        // Choices.js prototype, so other Choices instances on the page
-        // (publisher, genre, etc.) keep stock behavior.
+        // ┌─────────────────────────────────────────────────────────────────────┐
+        // │  ⚠️  DO NOT REFACTOR — REGRESSION-PRONE CODE — READ BEFORE CHANGING │
+        // │                                                                     │
+        // │  This monkey-patch on `authorsChoice._onEnterKey` looks like a      │
+        // │  textbook "access to private API" smell. It is intentional and     │
+        // │  load-bearing. Please do not "clean it up" by replacing it with    │
+        // │  a public-API event listener — we tried, twice, and it regressed   │
+        // │  issue #74 (https://github.com/fabiodalez-dev/Pinakes/issues/74)   │
+        // │  both times.                                                        │
+        // │                                                                     │
+        // │  ## What the bug is                                                 │
+        // │  User opens /admin/libri/crea, types a new author name (e.g.       │
+        // │  "Norbert Wex") that partially matches an existing one (e.g.      │
+        // │  "Norbert Bauer" is highlighted in the dropdown), and presses     │
+        // │  Enter. The expected behavior is that the typed text becomes the  │
+        // │  new author. The buggy behavior is that Choices.js auto-selects    │
+        // │  the highlighted existing match instead.                            │
+        // │                                                                     │
+        // │  ## Why public-API listeners DO NOT WORK                            │
+        // │  Choices.js v11 registers its OWN capture-phase keydown handler    │
+        // │  on the outer `.choices` wrapper INSIDE `new Choices(...)`, BEFORE │
+        // │  our initialization code runs. On Enter with a highlighted item    │
+        // │  its handler calls `event.stopImmediatePropagation()`. DOM-level   │
+        // │  ordering rules:                                                    │
+        // │    • Two capture-phase listeners on the same element fire in       │
+        // │      ORDER OF REGISTRATION.                                         │
+        // │    • Choices.js registered first → its listener fires first →     │
+        // │      stopImmediatePropagation() prevents ours from ever running.   │
+        // │  So a `wrapper.addEventListener('keydown', …, true)` registered    │
+        // │  after `new Choices(...)` SILENTLY NEVER FIRES on Enter.           │
+        // │                                                                     │
+        // │  The fix that actually works is to intercept inside the library's │
+        // │  own keypress dispatcher by replacing `_onEnterKey` on the         │
+        // │  instance. We do not touch `Choices.prototype._onEnterKey`, so    │
+        // │  other Choices instances on the same page (publisher, genre,      │
+        // │  collana, etc.) keep stock behavior.                                │
+        // │                                                                     │
+        // │  ## History of regressions                                          │
+        // │    • 2026-03-01 v0.4.9.4 — first applied (commit 1cdc6751).        │
+        // │    • 2026-XX     CR round-11 — refactored to capture-phase. ⚠ Bug │
+        // │                  regressed silently; tests passed because nothing │
+        // │                  exercised the "highlighted-mismatch + Enter"      │
+        // │                  path. (commit e976cb1e)                            │
+        // │    • 2026-05-20 v0.7.7 — re-restored after user @HansUwe52         │
+        // │                  reported the regression on issue #74. (commit    │
+        // │                  8482b53d)                                          │
+        // │                                                                     │
+        // │  ## Safety net                                                      │
+        // │  An E2E test in tests/issue-74-author-autocomplete.spec.js         │
+        // │  reproduces exactly this scenario. If you change the logic below   │
+        // │  and that test goes red, restore the monkey-patch.                 │
+        // │                                                                     │
+        // │  ## When this comment may be removed                                │
+        // │  When Choices.js exposes a stable, public API for intercepting     │
+        // │  Enter (e.g. a beforeChoose / shouldAccept hook), migrate to it    │
+        // │  AND remove this comment in the same commit. Until then, this     │
+        // │  is the canonical implementation — refactor at your own risk and  │
+        // │  with a passing #74 E2E run.                                        │
+        // └─────────────────────────────────────────────────────────────────────┘
+        // coderabbit-ignore: do-not-refactor
         if (typeof authorsChoice._onEnterKey === 'function') {
             const originalOnEnterKey = authorsChoice._onEnterKey.bind(authorsChoice);
             authorsChoice._onEnterKey = function (event, hasActiveDropdown) {
