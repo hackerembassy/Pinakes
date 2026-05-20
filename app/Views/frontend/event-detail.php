@@ -211,13 +211,15 @@ $additional_css = "
         object-position: center;
     }
 
-    /* contained (DEFAULT): centred poster, never wider than 420px.
+    /* contained (DEFAULT): left-aligned poster, never wider than 420px.
        Solves the original complaint where a wide image rendered at
        full container width. Aspect ratio of the source file is
-       preserved — no crop, no forced shape, just a sensible cap. */
+       preserved — no crop, no forced shape, just a sensible cap.
+       Left-aligned so the image reads as part of the body flow rather
+       than as a centred hero. */
     .event-cover--contained {
         max-width: 420px;
-        margin-left: auto;
+        margin-left: 0;
         margin-right: auto;
         background: transparent;
         border: none;
@@ -264,7 +266,7 @@ $additional_css = "
     }
     @media (max-width: 767px) {
         .event-cover--thumb {
-            margin: 0 auto 1.5rem auto;
+            margin: 0 0 1.5rem 0;
         }
     }
 

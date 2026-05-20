@@ -4682,8 +4682,8 @@
     "Definisce come viene visualizzata l'immagine di copertina nella pagina di dettaglio dell'evento.": "Controls how the cover image is rendered on the event detail page.",
     "Salva impostazioni eventi": "Save event settings",
     "Impostazioni eventi aggiornate.": "Event settings updated.",
-    "Piccola centrata (max 420px) — consigliato": "Small centred (max 420px) — recommended",
     "Miniatura affiancata al testo (240px)": "Thumbnail next to text (240px)",
     "Banner basso a tutta larghezza (max altezza 220px)": "Low full-width banner (max height 220px)",
-    "Originale a tutta larghezza (grande)": "Original full width (large)"
+    "Originale a tutta larghezza (grande)": "Original full width (large)",
+    "Piccola a sinistra (max 420px) — consigliato": "Small left-aligned (max 420px) — recommended"
 }

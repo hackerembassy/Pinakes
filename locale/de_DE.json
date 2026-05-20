@@ -4682,8 +4682,8 @@
     "Definisce come viene visualizzata l'immagine di copertina nella pagina di dettaglio dell'evento.": "Legt fest, wie das Titelbild auf der Detailseite der Veranstaltung angezeigt wird.",
     "Salva impostazioni eventi": "Veranstaltungseinstellungen speichern",
     "Impostazioni eventi aggiornate.": "Veranstaltungseinstellungen aktualisiert.",
-    "Piccola centrata (max 420px) — consigliato": "Klein zentriert (max. 420px) — empfohlen",
     "Miniatura affiancata al testo (240px)": "Miniaturbild neben dem Text (240px)",
     "Banner basso a tutta larghezza (max altezza 220px)": "Niedriges Banner über die volle Breite (max. Höhe 220px)",
-    "Originale a tutta larghezza (grande)": "Original in voller Breite (groß)"
+    "Originale a tutta larghezza (grande)": "Original in voller Breite (groß)",
+    "Piccola a sinistra (max 420px) — consigliato": "Klein linksbündig (max. 420px) — empfohlen"
 }

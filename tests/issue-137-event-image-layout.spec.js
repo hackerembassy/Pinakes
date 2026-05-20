@@ -193,7 +193,13 @@ test.describe.serial('Issue #137 — admin-configurable event image layout', () 
             await expect(fig).toBeVisible();
             const cardBox = await card.boundingBox();
             const figBox  = await fig.boundingBox();
-            return { cardWidth: cardBox.width, figWidth: figBox.width, figHeight: figBox.height };
+            return {
+                cardX: cardBox.x,
+                cardWidth: cardBox.width,
+                figX: figBox.x,
+                figWidth: figBox.width,
+                figHeight: figBox.height,
+            };
         }
 
         const full      = await measure('full');
@@ -227,11 +233,28 @@ test.describe.serial('Issue #137 — admin-configurable event image layout', () 
             `contained layout: figure must be visibly narrower than the card (got ${contained.figWidth}px vs card ${contained.cardWidth}px)`
         ).toBeLessThan(contained.cardWidth * 0.7);
 
+        // contained: must be LEFT-ALIGNED (figure.x ≈ card.x + padding).
+        // If a future refactor reintroduces margin: auto the figure
+        // would centre and figX would shift toward cardWidth/2 — guard
+        // against that here. We allow up to 100px of inner padding.
+        const containedOffsetFromLeft = contained.figX - contained.cardX;
+        expect(
+            containedOffsetFromLeft,
+            `contained layout: figure must be left-aligned (offset from card.left should be ≤ 100px of padding, got ${containedOffsetFromLeft}px)`
+        ).toBeLessThanOrEqual(100);
+
         // thumb: ~240px wide (grid column), NARROWER than the card
         expect(
             thumb.figWidth,
             `thumb layout: figure must be ≤ 240px wide (got ${thumb.figWidth}px)`
         ).toBeLessThanOrEqual(245);
+
+        // thumb: must be left-aligned too (grid column 1).
+        const thumbOffsetFromLeft = thumb.figX - thumb.cardX;
+        expect(
+            thumbOffsetFromLeft,
+            `thumb layout: figure must occupy the left grid column (offset ≤ 100px, got ${thumbOffsetFromLeft}px)`
+        ).toBeLessThanOrEqual(100);
     });
 
     // ────────────────────────────────────────────────────────────────────

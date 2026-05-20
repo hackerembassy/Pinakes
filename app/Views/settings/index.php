@@ -464,7 +464,7 @@ $activeTab = $activeTab ?? 'general';
               /** @var array{image_layout: string} $eventSettings */
               $eventImageLayout = $eventSettings['image_layout'];
               $eventImageLayoutChoices = [
-                  'contained' => __('Piccola centrata (max 420px) — consigliato'),
+                  'contained' => __('Piccola a sinistra (max 420px) — consigliato'),
                   'thumb'     => __('Miniatura affiancata al testo (240px)'),
                   'banner'    => __('Banner basso a tutta larghezza (max altezza 220px)'),
                   'full'      => __('Originale a tutta larghezza (grande)'),

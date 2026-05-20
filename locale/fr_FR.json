@@ -5008,8 +5008,8 @@
     "Definisce come viene visualizzata l'immagine di copertina nella pagina di dettaglio dell'evento.": "Définit comment l'image de couverture est affichée sur la page de détail de l'événement.",
     "Salva impostazioni eventi": "Enregistrer les paramètres des événements",
     "Impostazioni eventi aggiornate.": "Paramètres des événements mis à jour.",
-    "Piccola centrata (max 420px) — consigliato": "Petite centrée (max 420px) — recommandée",
     "Miniatura affiancata al testo (240px)": "Vignette à côté du texte (240px)",
     "Banner basso a tutta larghezza (max altezza 220px)": "Bannière basse pleine largeur (hauteur max 220px)",
-    "Originale a tutta larghezza (grande)": "Original pleine largeur (grand)"
+    "Originale a tutta larghezza (grande)": "Original pleine largeur (grand)",
+    "Piccola a sinistra (max 420px) — consigliato": "Petite alignée à gauche (max 420px) — recommandée"
 }
