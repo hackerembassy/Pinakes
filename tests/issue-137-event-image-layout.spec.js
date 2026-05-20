@@ -258,6 +258,82 @@ test.describe.serial('Issue #137 — admin-configurable event image layout', () 
     });
 
     // ────────────────────────────────────────────────────────────────────
+    // Replace-while-removing regression (issue #137 follow-up):
+    // when the admin form posts BOTH a new featured_image file AND
+    // ticks "remove_image=1", the new upload must win — not be
+    // discarded along with the old image. Earlier code path used an
+    // if/elseif with remove_image first, silently dropping the
+    // upload.
+    //
+    // Reproduced end-to-end through the admin UI: login → open edit
+    // form → tick "Rimuovi immagine attuale" → also choose a new
+    // file via the hidden file input → submit → verify the DB row
+    // has a brand-new path (not NULL and not the original).
+    // ────────────────────────────────────────────────────────────────────
+    test('admin update: uploading a new image while ticking "remove" keeps the new image', async ({ page }) => {
+        // Bootstrap a "previous" image so the form actually shows the
+        // "Rimuovi immagine attuale" checkbox (it only renders when
+        // featured_image is non-empty).
+        const sqlPre = `/uploads/events/event_test_pre_${RUN_ID}.jpg`;
+        dbExec(`UPDATE events SET featured_image='${sqlEscape(sqlPre)}' WHERE slug='${sqlEscape(EVENT_SLUG)}'`);
+        const eventId = parseInt(
+            dbQuery(`SELECT id FROM events WHERE slug='${sqlEscape(EVENT_SLUG)}'`),
+            10,
+        );
+        expect(eventId, 'seed event must exist').toBeGreaterThan(0);
+
+        // Admin login (the form requires it).
+        await page.goto(`${BASE}/accedi`);
+        await page.fill('input[name="email"]', ADMIN_EMAIL);
+        await page.fill('input[name="password"]', ADMIN_PASS);
+        await Promise.all([
+            page.waitForURL(/\/(admin|profilo)/, { timeout: 15000 }),
+            page.click('button[type="submit"]'),
+        ]);
+
+        // Open the edit form.
+        await page.goto(`${BASE}/admin/cms/events/edit/${eventId}`);
+        await page.waitForLoadState('domcontentloaded');
+
+        // Tick the "Rimuovi immagine attuale" checkbox.
+        const removeCheckbox = page.locator('input[name="remove_image"]');
+        await expect(removeCheckbox).toHaveCount(1);
+        await removeCheckbox.check({ force: true });
+
+        // Attach a new image to the hidden file input — the same
+        // path the Uppy widget normally writes into.
+        await page.setInputFiles('input[name="featured_image"]', {
+            name: 'test-replacement.jpg',
+            mimeType: 'image/jpeg',
+            // 1x1 jpeg, base64-decoded — minimal valid file.
+            buffer: Buffer.from(
+                '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAr/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKpgB//Z',
+                'base64',
+            ),
+        });
+
+        // Submit. The submit button label varies with locale but
+        // there's always a visible primary button inside the form.
+        const submitButton = page.locator('form button[type="submit"]').first();
+        await Promise.all([
+            page.waitForURL(/\/admin\/cms\/events(\?|$)/, { timeout: 15000 }),
+            submitButton.click(),
+        ]);
+
+        // Assert: the DB now points at a NEW upload, not NULL and
+        // not the original sentinel path.
+        const after = dbQuery(`SELECT featured_image FROM events WHERE id=${eventId}`);
+        expect(
+            after,
+            `featured_image MUST contain a new upload, not be cleared. Got: "${after}"`
+        ).toMatch(/^\/uploads\/events\/event_\d{8}_\d{6}_[a-f0-9]+\.(jpg|jpeg|png|webp)$/i);
+        expect(
+            after,
+            `featured_image MUST NOT match the pre-existing sentinel ("${sqlPre}")`
+        ).not.toBe(sqlPre);
+    });
+
+    // ────────────────────────────────────────────────────────────────────
     // Containment regression — guards against the float-overflow bug
     // reported during initial review: when content is short, a floated
     // .event-cover--thumb escapes its parent .event-card and ends up

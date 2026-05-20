@@ -316,20 +316,45 @@ class EventsController
         $twitterDescription = $sanitizeText($data['twitter_description'] ?? '');
         $twitterImage = $sanitizeText($data['twitter_image'] ?? '');
 
-        // Handle image upload or removal
+        // Handle image upload or removal.
+        //
+        // Priority order (matters when the user submits BOTH a new file
+        // AND ticks "remove_image"): the new upload wins. Treating
+        // "remove" as the dominant intent would silently destroy a
+        // freshly uploaded file, which is what users hit before this
+        // branch.
         $featuredImagePath = null;
         $updateImage = false;
 
-        if (isset($data['remove_image']) && $data['remove_image'] == '1') {
-            $updateImage = true;
-            $featuredImagePath = null;
-        } elseif (isset($files['featured_image']) && $files['featured_image']->getError() === UPLOAD_ERR_OK) {
+        if (isset($files['featured_image']) && $files['featured_image']->getError() === UPLOAD_ERR_OK) {
             $uploadResult = $this->handleImageUpload($files['featured_image']);
             if (!$uploadResult['success']) {
                 $errors[] = $uploadResult['message'];
             } else {
                 $updateImage = true;
                 $featuredImagePath = $uploadResult['path'];
+            }
+        } elseif (isset($data['remove_image']) && $data['remove_image'] == '1') {
+            $updateImage = true;
+            $featuredImagePath = null;
+        }
+
+        // Look up the previous featured_image so we can unlink the
+        // orphaned file after the UPDATE succeeds. We do this BEFORE
+        // the error short-circuit below so $oldImagePath is always
+        // populated when $updateImage is true.
+        $oldImagePath = null;
+        if ($updateImage) {
+            $oldStmt = $db->prepare("SELECT featured_image FROM events WHERE id = ?");
+            if ($oldStmt !== false) {
+                $oldStmt->bind_param('i', $id);
+                $oldStmt->execute();
+                $oldResult = $oldStmt->get_result();
+                $oldRow = $oldResult ? $oldResult->fetch_assoc() : null;
+                $oldStmt->close();
+                if (is_array($oldRow) && !empty($oldRow['featured_image'])) {
+                    $oldImagePath = (string) $oldRow['featured_image'];
+                }
             }
         }
 
@@ -377,12 +402,52 @@ class EventsController
 
         if ($stmt->execute()) {
             $_SESSION['success_message'] = __('Evento aggiornato con successo!');
+            // Cleanup orphan file on disk now that the DB row no longer
+            // references it. Skipped when the old path matches the new
+            // one (defensive — should not happen, but unlinking would
+            // delete a still-referenced file).
+            if ($updateImage && $oldImagePath !== null && $oldImagePath !== $featuredImagePath) {
+                $this->deleteUploadedImageFile($oldImagePath);
+            }
         } else {
             $_SESSION['error_message'] = __('Errore durante l\'aggiornamento dell\'evento.');
         }
         $stmt->close();
 
         return $response->withHeader('Location', '/admin/cms/events')->withStatus(302);
+    }
+
+    /**
+     * Best-effort unlink of an orphaned event image under
+     * public/uploads/events/. Path-traversal-safe: the supplied
+     * relative path is rejected unless it points inside the events
+     * upload directory (matches the safety contract of
+     * handleImageUpload()).
+     */
+    private function deleteUploadedImageFile(?string $relativePath): void
+    {
+        if ($relativePath === null || $relativePath === '') {
+            return;
+        }
+        // Must look like a value produced by handleImageUpload().
+        if (strpos($relativePath, '/uploads/events/') !== 0) {
+            return;
+        }
+        $baseDir = realpath(__DIR__ . '/../../public/uploads/events');
+        if ($baseDir === false) {
+            return;
+        }
+        $candidate = __DIR__ . '/../../public' . $relativePath;
+        $realCandidate = realpath($candidate);
+        if ($realCandidate === false) {
+            return;
+        }
+        // Confirm the resolved path is genuinely inside the events
+        // directory — defends against symlink shenanigans.
+        if (strpos($realCandidate, $baseDir . DIRECTORY_SEPARATOR) !== 0) {
+            return;
+        }
+        @unlink($realCandidate);
     }
 
     /**
