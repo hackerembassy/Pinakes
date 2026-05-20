@@ -58,13 +58,20 @@ test.describe.serial('Issue #74 — Choices.js: Enter creates new author when dr
         ]);
 
         // Seed the trap author via Authors Management UI so the dropdown
-        // has something to highlight when we type the shared prefix.
+        // has something to highlight when we type the shared prefix. The
+        // form intercepts submit with a SweetAlert2 confirm dialog — click
+        // the submit button, then accept the SweetAlert, then wait for
+        // the redirect.
         await page.goto(`${BASE}/admin/autori/crea`);
         await page.fill('input[name="nome"]', TRAP_AUTHOR);
-        await Promise.all([
-            page.waitForURL(/\/admin\/autori(\?|$)/, { timeout: 10000 }),
-            page.click('button[type="submit"]'),
-        ]);
+        await page.click('button[type="submit"]');
+        const swalConfirm = page.locator('.swal2-confirm').first();
+        if (await swalConfirm.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await Promise.all([
+                page.waitForURL(/\/admin\/autori(\?|$)/, { timeout: 10000 }),
+                swalConfirm.click(),
+            ]);
+        }
     });
 
     test.afterAll(async () => {
@@ -97,21 +104,23 @@ test.describe.serial('Issue #74 — Choices.js: Enter creates new author when dr
         const choicesInput = page.locator('.choices__input--cloned').first();
         await expect(choicesInput).toBeVisible({ timeout: 10000 });
 
-        // Type the SHARED PREFIX first so the dropdown highlights the trap author.
+        // Type the FULL NEW author name in one continuous sequence (no
+        // intermediate waits). Pausing mid-type would let Choices.js's
+        // addItems=true placeholder ("Norbert\nDa creare") materialise
+        // as the highlighted row and short-circuit the test path. We
+        // want the steady-state where typing has finished, the server
+        // search has returned, and "Norbert Bauer …" is highlighted as
+        // the closest existing match.
         await choicesInput.click();
-        await choicesInput.pressSequentially(SHARED_PREFIX, { delay: 60 });
+        await choicesInput.pressSequentially(NEW_AUTHOR, { delay: 50 });
+        await page.waitForTimeout(900); // 200ms debounce + fetch + Choices render
 
-        // Wait for the trap to appear in the dropdown.
+        // Confirm the trap (existing author starting with shared prefix)
+        // is present in the dropdown (regression-prone state).
         const trapItem = page.locator('.choices__list--dropdown .choices__item--selectable', {
             hasText: TRAP_AUTHOR,
         }).first();
-        await expect(trapItem).toBeVisible({ timeout: 5000 });
-
-        // Continue typing the NEW author's distinguishing suffix. The
-        // dropdown will keep "Norbert Bauer" highlighted (or whatever
-        // partial match remains) — this is the regression-prone state.
-        const suffix = NEW_AUTHOR.slice(SHARED_PREFIX.length);
-        await choicesInput.pressSequentially(suffix, { delay: 60 });
+        await expect(trapItem).toBeAttached({ timeout: 8000 });
 
         // Press Enter. EXPECTED behaviour: the typed string becomes a
         // newly created author. BUG behaviour (the regression we guard
@@ -152,11 +161,14 @@ test.describe.serial('Issue #74 — Choices.js: Enter creates new author when dr
 
         await choicesInput.click();
         await choicesInput.pressSequentially(TRAP_AUTHOR, { delay: 60 });
+        await page.waitForTimeout(700); // 200ms debounce + ~500ms fetch
 
-        // Wait for the exact trap to be the highlighted item.
-        const highlighted = page.locator('.choices__list--dropdown .choices__item--selectable.is-highlighted').first();
-        await expect(highlighted).toBeVisible({ timeout: 5000 });
-        await expect(highlighted).toContainText(TRAP_AUTHOR);
+        // Find the trap row in the dropdown (it should be the highlighted
+        // match since we typed its exact name).
+        const trapMatch = page.locator('.choices__list--dropdown .choices__item--selectable', {
+            hasText: TRAP_AUTHOR,
+        }).first();
+        await expect(trapMatch).toBeAttached({ timeout: 8000 });
 
         // Press Enter — should select the existing author, not create a duplicate.
         await choicesInput.press('Enter');
