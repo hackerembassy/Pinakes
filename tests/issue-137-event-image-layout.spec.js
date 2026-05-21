@@ -22,6 +22,8 @@
 
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 const BASE        = process.env.E2E_BASE_URL    || 'http://localhost:8081';
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
@@ -172,6 +174,33 @@ test.describe.serial('Issue #137 — admin-configurable event image layout', () 
         // Cleanup: delete test event + restore the original
         // event_image_layout (DELETE if it was absent before the suite,
         // else UPDATE back to the captured original value).
+        //
+        // BEFORE the DB DELETE: if the admin-update test (or any future
+        // test) replaced the seed featured_image with a real upload via
+        // handleImageUpload(), the path now points at
+        // /uploads/events/event_*.jpg on disk. Bypassing the controller
+        // delete() means deleteUploadedImageFile() would never run —
+        // unlink the file here explicitly so the suite doesn't leave
+        // orphans behind. The seed value (`/assets/books.jpg`) is a
+        // static asset and is excluded by the /uploads/events/ prefix
+        // guard, so this is safe to call unconditionally.
+        const currentImage = dbQuery(
+            `SELECT featured_image FROM events WHERE slug='${sqlEscape(EVENT_SLUG)}'`
+        );
+        if (currentImage && currentImage.startsWith('/uploads/events/')) {
+            const absPath = path.join(__dirname, '..', 'public', currentImage);
+            try {
+                fs.unlinkSync(absPath);
+            } catch (e) {
+                // ENOENT (already gone) is acceptable — the controller's
+                // own cleanup may have unlinked it on the success path.
+                // Any other error we surface to the test log but do not
+                // fail the teardown — the suite has finished otherwise.
+                if (e && e.code !== 'ENOENT') {
+                    console.warn(`teardown: could not unlink ${absPath}: ${e.message}`);
+                }
+            }
+        }
         dbExec(`DELETE FROM events WHERE slug='${sqlEscape(EVENT_SLUG)}'`);
         if (eventImageLayoutWasAbsent) {
             dbExec(`DELETE FROM system_settings WHERE category='cms' AND setting_key='event_image_layout'`);
