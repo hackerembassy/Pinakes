@@ -124,7 +124,8 @@
                 <form method="POST" action="<?= htmlspecialchars(url('/admin/utenti/' . (int)$user['id'] . '/activate-directly'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1"
                       data-swal-confirm="<?= htmlspecialchars(__('Confermi di voler attivare direttamente questo utente?'), ENT_QUOTES, 'UTF-8') ?>"
                       data-swal-confirm-title="<?= htmlspecialchars(__('Conferma attivazione'), ENT_QUOTES, 'UTF-8') ?>"
-                      data-swal-confirm-button="<?= htmlspecialchars(__('Attiva utente'), ENT_QUOTES, 'UTF-8') ?>">
+                      data-swal-confirm-button="<?= htmlspecialchars(__('Attiva utente'), ENT_QUOTES, 'UTF-8') ?>"
+                      data-swal-confirm-kind="action">
                   <input type="hidden" name="csrf_token" value="<?= \App\Support\Csrf::ensureToken() ?>">
                   <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm inline-flex items-center justify-center gap-2">
                     <i class="fas fa-user-check"></i>

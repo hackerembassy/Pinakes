@@ -281,14 +281,21 @@ window.SwalApp = {
         event.preventDefault();
         const text  = form.dataset.swalConfirm;
         const title = form.dataset.swalConfirmTitle || __swal('Sei sicuro?');
-        const confirmText = form.dataset.swalConfirmButton || __swal('Elimina');
         // Pick a kind-appropriate helper: forms with
         // data-swal-confirm-kind="action" use the neutral (gray)
         // confirm dialog; everything else defaults to confirmDelete
         // (red destructive button). Lets non-destructive flows
         // (activate user, set default language, reset colours, …)
-        // opt out of the red-button look.
-        const kind = form.dataset.swalConfirmKind === 'action'
+        // opt out of the red-button look. The confirmText default
+        // also follows the kind — neutral actions get "Conferma",
+        // destructive ones get "Elimina" — so a form that opts into
+        // `kind="action"` without overriding `data-swal-confirm-button`
+        // doesn't accidentally show a red-themed "Elimina" label on
+        // the gray button.
+        const isAction = form.dataset.swalConfirmKind === 'action';
+        const confirmText = form.dataset.swalConfirmButton
+          || (isAction ? __swal('Conferma') : __swal('Elimina'));
+        const kind = isAction
           ? window.SwalApp.confirm
           : window.SwalApp.confirmDelete;
         kind.call(window.SwalApp, {
