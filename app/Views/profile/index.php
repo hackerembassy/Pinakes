@@ -622,8 +622,18 @@
       });
   }
 
-  window.revokeSession = function(sessionId) {
-    if (!confirm(translations.confirmRevoke)) return;
+  window.revokeSession = async function(sessionId) {
+    const r = await window.SwalApp.confirmDelete({
+      text: translations.confirmRevoke,
+      // Pass the button label only when it's a non-empty string;
+      // `|| undefined` silently discarded an explicit empty translation
+      // and fell back to the helper's default. Treat empty same as
+      // missing so the default kicks in cleanly.
+      confirmText: (typeof translations.confirmRevokeButton === 'string' && translations.confirmRevokeButton.length > 0)
+        ? translations.confirmRevokeButton
+        : undefined
+    });
+    if (!r.isConfirmed) return;
 
     fetch((window.BASE_PATH || '') + '/api/profile/sessions/revoke', {
       method: 'POST',
@@ -638,16 +648,19 @@
       if (data.success) {
         loadSessions();
       } else {
-        alert(data.error || translations.error);
+        window.SwalApp.error(undefined, data.error || translations.error);
       }
     })
     .catch(function() {
-      alert(translations.error);
+      window.SwalApp.error(undefined, translations.error);
     });
   };
 
-  window.revokeAllSessions = function() {
-    if (!confirm(translations.confirmRevokeAll)) return;
+  window.revokeAllSessions = async function() {
+    const r = await window.SwalApp.confirmDelete({
+      text: translations.confirmRevokeAll
+    });
+    if (!r.isConfirmed) return;
 
     fetch((window.BASE_PATH || '') + '/api/profile/sessions/revoke-all', {
       method: 'POST',
@@ -662,11 +675,11 @@
       if (data.success) {
         loadSessions();
       } else {
-        alert(data.error || translations.error);
+        window.SwalApp.error(undefined, data.error || translations.error);
       }
     })
     .catch(function() {
-      alert(translations.error);
+      window.SwalApp.error(undefined, translations.error);
     });
   };
 

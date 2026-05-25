@@ -1,6 +1,7 @@
 <?php
 /** @var \mysqli $db */
 /** @var array $event */
+/** @var string $eventImageLayout One of: full | banner | contained | thumb (default: contained) */
 
 use App\Support\ConfigStore;
 use App\Support\HtmlHelper;
@@ -173,11 +174,103 @@ $additional_css = "
         overflow: hidden;
         margin-bottom: 2rem;
         border: 1px solid #f1f5f9;
+        background: #f8fafc;
     }
 
     .event-cover img {
         width: 100%;
         display: block;
+    }
+
+    /* Layout variants (issue #137): admin-configurable SIZE for the
+       event hero image. The four variants give the librarian
+       progressively smaller / less invasive renderings, so a
+       sproportioned upload (e.g. a 1791×927 book cover) doesn't
+       dominate the event page.
+
+       Effective sizes on desktop:
+         full       → 100% × auto         (legacy: enormous)
+         banner     → 100% × 220px max    (low-profile decorative strip)
+         contained  → 420px × auto, left-aligned (default: small poster)
+         thumb      → 240px wide, side-by-side with body text          */
+
+    /* full: passthrough — for users who actually want a giant image. */
+    .event-cover--full img {
+        height: auto;
+    }
+
+    /* banner: full-width but capped at a low decorative strip so it
+       cannot eat the viewport vertically. */
+    .event-cover--banner {
+        max-height: 220px;
+    }
+    .event-cover--banner img {
+        width: 100%;
+        height: 220px;
+        object-fit: cover;
+        object-position: center;
+    }
+
+    /* contained (DEFAULT): left-aligned poster, never wider than 420px.
+       Solves the original complaint where a wide image rendered at
+       full container width. Aspect ratio of the source file is
+       preserved — no crop, no forced shape, just a sensible cap.
+       Left-aligned so the image reads as part of the body flow rather
+       than as a centred hero. */
+    .event-cover--contained {
+        max-width: 420px;
+        margin-left: 0;
+        margin-right: auto;
+        /* No border/background here: contained is a small left-aligned poster; the 420px-wide image floating next to body text reads better without the grey card frame the other variants use to fill the wider hero slot. Keep this asymmetry intentional. */
+        background: transparent;
+        border: none;
+    }
+    .event-cover--contained img {
+        width: 100%;
+        height: auto;
+        max-height: 320px;
+        object-fit: contain;
+    }
+
+    /* thumb: side-by-side layout — the small modifier already in the
+       previous iteration. Driven by .event-card--thumb-layout on the
+       parent so the figure lives in its own grid cell, geometrically
+       constrained inside the card. Collapses to a stack < 768px. */
+    .event-cover--thumb {
+        margin-bottom: 0;
+        max-width: 240px;
+    }
+    .event-cover--thumb img {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 3 / 4;
+        object-fit: cover;
+    }
+    @media (min-width: 768px) {
+        .event-card--thumb-layout {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: clamp(1.5rem, 3vw, 2.5rem);
+            align-items: start;
+        }
+        .event-card--thumb-layout > .event-cover--thumb {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+            position: sticky;
+            top: 7rem;
+            margin: 0;
+            max-height: calc(100vh - 9rem);
+            overflow: hidden;
+        }
+        .event-card--thumb-layout > .event-body,
+        .event-card--thumb-layout > .event-back {
+            grid-column: 2;
+        }
+    }
+    @media (max-width: 767px) {
+        .event-cover--thumb {
+            margin: 0 0 1.5rem 0;
+        }
     }
 
     .event-body {
@@ -355,11 +448,25 @@ ob_start();
     </div>
 </section>
 
+<?php
+    // $eventImageLayout is set by the controller and re-validated there
+    // against the allow-list; we re-narrow here as defense in depth so
+    // a future controller refactor cannot leak an unknown value into
+    // the DOM. Computed before the markup so the parent .event-card
+    // can opt into the side-by-side grid via .event-card--thumb-layout.
+    $coverAllowed   = ['full', 'banner', 'contained', 'thumb'];
+    $coverLayout    = in_array($eventImageLayout, $coverAllowed, true) ? $eventImageLayout : 'contained';
+    $hasCoverImage  = !empty($event['featured_image']);
+    $cardClasses    = ['event-card'];
+    if ($hasCoverImage && $coverLayout === 'thumb') {
+        $cardClasses[] = 'event-card--thumb-layout';
+    }
+?>
 <section class="event-section">
     <div class="container">
-        <article class="event-card">
-            <?php if (!empty($event['featured_image'])): ?>
-                <figure class="event-cover">
+        <article class="<?= HtmlHelper::e(implode(' ', $cardClasses)) ?>">
+            <?php if ($hasCoverImage): ?>
+                <figure class="event-cover event-cover--<?= HtmlHelper::e($coverLayout) ?>" data-event-cover-layout="<?= HtmlHelper::e($coverLayout) ?>">
                     <img src="<?= HtmlHelper::e(url($event['featured_image'])) ?>" alt="<?= HtmlHelper::e($event['title']) ?>">
                 </figure>
             <?php endif; ?>
