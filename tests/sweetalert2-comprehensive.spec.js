@@ -537,12 +537,26 @@ test.describe('[REFACTORED] per-view attribute assertions', () => {
         expect((confirmText || '').toLowerCase()).toContain('elimin'); // covers Elimina/Eliminate
     });
 
-    // Resolve the first entity that's actually DELETABLE (no books / no
-    // sub-genres) via the admin JSON API, so the scheda renders the
-    // delete-form path rather than the "non eliminabile" placeholder.
-    // Returns null when every row has at least one associated book —
-    // legitimate on a seeded install; tests skip cleanly in that case.
-    async function firstDeletableId(apiPath, hasDepKey) {
+    // Resolve the first entity that's actually DELETABLE via the admin
+    // JSON API, so the scheda renders the delete-form path rather than
+    // the "non eliminabile" placeholder. The view gates the form on
+    // *every* dependency reaching zero — accept an array of dep keys
+    // and require ALL of them to be 0 / null / missing on the picked
+    // row. Single-string input is preserved for the simple cases
+    // (autori, editori) where the only blocker is books.
+    //
+    // Returns null when every row has at least one outstanding
+    // dependency — legitimate on a seeded install; tests skip cleanly
+    // in that case.
+    //
+    // Why all-dep-keys-zero (not any-dep-key-zero): the previous
+    // single-key check let through a genre with `children_count=0` but
+    // `libri_count > 0`. The view renders the form only when BOTH gates
+    // pass, so the picked row would still render the lock button and
+    // the toBeAttached assertion fails. The view is the source of
+    // truth here — every dep listed must clear.
+    async function firstDeletableId(apiPath, depKeys) {
+        const keys = Array.isArray(depKeys) ? depKeys : [depKeys];
         const resp = await page.request.get(`${BASE}${apiPath}`);
         if (!resp.ok()) return null;
         const ct = resp.headers()['content-type'] || '';
@@ -554,11 +568,11 @@ test.describe('[REFACTORED] per-view attribute assertions', () => {
                        : Array.isArray(body.items) ? body.items
                        : null;
             if (!rows || rows.length === 0) return null;
-            // Find the first row whose dep-count is 0 (or missing).
-            const row = rows.find(r => {
-                const dep = r[hasDepKey];
+            // Find the first row where EVERY listed dep is 0/null/missing.
+            const row = rows.find(r => keys.every(k => {
+                const dep = r[k];
                 return dep == null || Number(dep) === 0;
-            });
+            }));
             if (!row) return null;
             const id = row.id ?? row.ID ?? row.pk;
             return id != null ? String(id) : null;
@@ -591,10 +605,15 @@ test.describe('[REFACTORED] per-view attribute assertions', () => {
 
     // E7: generi/dettaglio_genere — delete-genre form is wired
     test('E7: generi/dettaglio_genere delete-genre form carries data-swal-confirm', async () => {
-        // Genres have BOTH children_count and libri_count gates — accept
-        // first row where neither is > 0. Fall back to children_count
-        // alone (the index API doesn't always return libri_count).
-        const id = await firstDeletableId('/api/generi', 'children_count');
+        // The view gates the delete form on TWO conditions (per
+        // GeneriController + dettaglio_genere.php): no sub-genres
+        // (`children_count == 0`) AND no books referencing this genre
+        // (`libri_count == 0`). Either dep being non-zero swaps the
+        // form out for a lock button, so both must reach zero on the
+        // picked row. The /api/generi index returns both fields when
+        // the row has them; firstDeletableId treats missing fields as
+        // zero (same conservative rule the view applies).
+        const id = await firstDeletableId('/api/generi', ['children_count', 'libri_count']);
         test.skip(!id, 'No deletable genre on this install (every genre has sub-genres or books)');
         await page.goto(`${BASE}/admin/generi/${id}`);
         await page.waitForLoadState('domcontentloaded');
