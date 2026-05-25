@@ -537,15 +537,41 @@ test.describe('[REFACTORED] per-view attribute assertions', () => {
         expect((confirmText || '').toLowerCase()).toContain('elimin'); // covers Elimina/Eliminate
     });
 
+    // Resolve the first entity that's actually DELETABLE (no books / no
+    // sub-genres) via the admin JSON API, so the scheda renders the
+    // delete-form path rather than the "non eliminabile" placeholder.
+    // Returns null when every row has at least one associated book —
+    // legitimate on a seeded install; tests skip cleanly in that case.
+    async function firstDeletableId(apiPath, hasDepKey) {
+        const resp = await page.request.get(`${BASE}${apiPath}`);
+        if (!resp.ok()) return null;
+        const ct = resp.headers()['content-type'] || '';
+        if (!ct.includes('json')) return null;
+        try {
+            const body = await resp.json();
+            const rows = Array.isArray(body) ? body
+                       : Array.isArray(body.data) ? body.data
+                       : Array.isArray(body.items) ? body.items
+                       : null;
+            if (!rows || rows.length === 0) return null;
+            // Find the first row whose dep-count is 0 (or missing).
+            const row = rows.find(r => {
+                const dep = r[hasDepKey];
+                return dep == null || Number(dep) === 0;
+            });
+            if (!row) return null;
+            const id = row.id ?? row.ID ?? row.pk;
+            return id != null ? String(id) : null;
+        } catch { return null; }
+    }
+
     // E5: autori/scheda_autore — delete-author form is wired
     test('E5: autori/scheda_autore delete-author form carries data-swal-confirm', async () => {
-        await page.goto(`${BASE}/admin/autori`);
-        await page.waitForLoadState('domcontentloaded');
-        const authorLink = page.locator('a[href*="/autori/"]').first();
-        const count = await authorLink.count();
-        test.skip(count === 0, 'No authors seeded — create one to exercise this path');
-        const href = await authorLink.getAttribute('href');
-        await page.goto(href.startsWith('http') ? href : `${BASE}${href}`);
+        // libri_count > 0 → scheda renders the "non eliminabile" lock
+        // button instead of the delete form. Pick a deletable author.
+        const id = await firstDeletableId('/api/autori', 'libri_count');
+        test.skip(!id, 'No deletable author on this install (every author has at least one associated book)');
+        await page.goto(`${BASE}/admin/autori/${id}`);
         await page.waitForLoadState('domcontentloaded');
         const form = page.locator('form[data-swal-confirm]').first();
         await expect(form).toBeAttached();
@@ -555,13 +581,9 @@ test.describe('[REFACTORED] per-view attribute assertions', () => {
 
     // E6: editori/scheda_editore — delete-publisher form is wired
     test('E6: editori/scheda_editore delete-publisher form carries data-swal-confirm', async () => {
-        await page.goto(`${BASE}/admin/editori`);
-        await page.waitForLoadState('domcontentloaded');
-        const editorLink = page.locator('a[href*="/editori/"]').first();
-        const count = await editorLink.count();
-        test.skip(count === 0, 'No publishers seeded');
-        const href = await editorLink.getAttribute('href');
-        await page.goto(href.startsWith('http') ? href : `${BASE}${href}`);
+        const id = await firstDeletableId('/api/editori', 'libri_count');
+        test.skip(!id, 'No deletable publisher on this install');
+        await page.goto(`${BASE}/admin/editori/${id}`);
         await page.waitForLoadState('domcontentloaded');
         const form = page.locator('form[data-swal-confirm]').first();
         await expect(form).toBeAttached();
@@ -569,13 +591,12 @@ test.describe('[REFACTORED] per-view attribute assertions', () => {
 
     // E7: generi/dettaglio_genere — delete-genre form is wired
     test('E7: generi/dettaglio_genere delete-genre form carries data-swal-confirm', async () => {
-        await page.goto(`${BASE}/admin/generi`);
-        await page.waitForLoadState('domcontentloaded');
-        const genreLink = page.locator('a[href*="/generi/"]').first();
-        const count = await genreLink.count();
-        test.skip(count === 0, 'No genres seeded');
-        const href = await genreLink.getAttribute('href');
-        await page.goto(href.startsWith('http') ? href : `${BASE}${href}`);
+        // Genres have BOTH children_count and libri_count gates — accept
+        // first row where neither is > 0. Fall back to children_count
+        // alone (the index API doesn't always return libri_count).
+        const id = await firstDeletableId('/api/generi', 'children_count');
+        test.skip(!id, 'No deletable genre on this install (every genre has sub-genres or books)');
+        await page.goto(`${BASE}/admin/generi/${id}`);
         await page.waitForLoadState('domcontentloaded');
         const form = page.locator('form[data-swal-confirm]').first();
         await expect(form).toBeAttached();
