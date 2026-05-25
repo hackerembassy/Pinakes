@@ -864,7 +864,11 @@ final class RicJsonLdBuilder
         if ($gn  !== '' && preg_match('/^\d+$/', $gn)  === 1) {
             $sameAs[] = ['@id' => 'https://www.geonames.org/' . $gn];
         }
-        if ($wd  !== '' && preg_match('/^Q\d+$/i', $wd) === 1) {
+        // Wikidata entity IRIs require an uppercase `Q` prefix — the
+        // canonical resolver rejects `q123` even though the regex `/i`
+        // flag would have accepted it. Reject lowercase so the public
+        // owl:sameAs never carries an invalid IRI.
+        if ($wd  !== '' && preg_match('/^Q\d+$/', $wd) === 1) {
             $sameAs[] = ['@id' => 'https://www.wikidata.org/entity/' . $wd];
         }
         if ($tgn !== '' && preg_match('/^\d+$/', $tgn) === 1) {

@@ -14,11 +14,11 @@ $row          = $row          ?? [];
 $relations    = $relations    ?? [];
 $parent_label = $parent_label ?? null;
 $id           = (int) ($row['id'] ?? 0);
-// Resolve the CSRF token ONCE per render. ensureToken() can rotate the
-// token if the session hasn't seen one yet — calling it from multiple
-// form inputs on the same page risks handing out forms with tokens
-// already invalidated by a sibling call. Cache it locally so every
-// form on this view ships the same value.
+// Resolve the CSRF token ONCE per render. Csrf::ensureToken() only
+// regenerates on a ~2h timeout, so sibling calls in the same request
+// return the same value — caching is a cleanliness + single-source-of-
+// truth choice (avoids re-touching $_SESSION on each inline call),
+// not a race fix.
 $csrfToken    = \App\Support\Csrf::ensureToken();
 
 /**

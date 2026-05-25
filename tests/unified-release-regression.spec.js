@@ -50,11 +50,14 @@ async function tryLoginAsAdmin(page) {
     try {
         // Strict admin-only match: /admin/* (with slash or end-of-path).
         // The previous /\/(admin|profilo)/ pattern accepted /profilo
-        // too, which is the redirect target for SUCCESSFULLY logged-in
-        // non-admin users — meaning the suite's E-block tests would
-        // run on a non-admin session, hit 302/403 on /admin/*, and
-        // fail in confusing ways. Now non-admin credentials cleanly
-        // time out here and the caller falls back to `test.skip()`.
+        // too — but AuthController redirects successfully-logged-in
+        // non-admin users to /user/dashboard (not /profilo), so the
+        // permissive regex would also have timed out for non-admins.
+        // The real risk fix-target is the broader "match any reachable
+        // post-login URL": with the new strict pattern, ANY non-admin
+        // landing page (/user/dashboard, /profilo, etc.) cleanly times
+        // out here and the caller falls back to test.skip() instead
+        // of running the E-block on the wrong session.
         await page.waitForURL(/\/admin(?:\/|$)/, { timeout: 10000 });
         return true;
     } catch {

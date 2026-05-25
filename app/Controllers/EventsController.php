@@ -276,9 +276,11 @@ class EventsController
         // Guard: verify the event row exists BEFORE processing the
         // upload. Otherwise handleImageUpload() saves the file to disk
         // first, the UPDATE …WHERE id=$id affects 0 rows (because the
-        // id is bogus or already soft-deleted), and the orphan-cleanup
-        // callsites only fire when $stmt->execute() returned false —
-        // 0-affected-rows with a successful execute is the silent gap.
+        // id is bogus — the events table is hard-delete only, no
+        // deleted_at column, so a previously-deleted id simply
+        // doesn't exist), and the orphan-cleanup callsites only fire
+        // when $stmt->execute() returned false — 0-affected-rows with
+        // a successful execute is the silent gap.
         //
         // Failure modes treated as "event not found" (defensive fail-
         // closed): id <= 0, $db->prepare() returns false, the SELECT

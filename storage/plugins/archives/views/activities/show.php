@@ -16,11 +16,12 @@ $linkedUnits = $linkedUnits ?? [];
 $relations   = $relations   ?? [];
 $id          = (int) ($row['id'] ?? 0);
 $title       = (string) ($row['title'] ?? '');
-// Resolve the CSRF token ONCE per render. ensureToken() can rotate the
-// token if the session hasn't seen one yet — calling it from multiple
-// `<input value="...">` sites can hand out forms with tokens that are
-// already invalidated by a sibling form's call on the same page, and
-// those forms silently 419 on submit.
+// Resolve the CSRF token ONCE per render. Csrf::ensureToken() only
+// regenerates on a ~2h timeout (Csrf.php line 24), so sibling calls
+// in the same request return the same token — caching is a cleanliness
+// + single-source-of-truth choice, not a race fix. Keeps every form
+// on this view shipping a consistent value and avoids re-touching
+// $_SESSION on each inline call.
 $csrfToken   = \App\Support\Csrf::ensureToken();
 $type        = (string) ($row['activity_type'] ?? '');
 // PHPDoc declares $agent_label/$parent_label as string|null — isset+!=='' is

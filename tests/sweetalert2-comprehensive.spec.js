@@ -100,9 +100,16 @@ async function tryLoginAsAdmin(page) {
     await page.fill('input[name="email"]', ADMIN_EMAIL);
     await page.fill('input[name="password"]', ADMIN_PASS);
     await page.click('button[type="submit"]');
-    // Wait briefly for either /admin/* /profilo or the error reload.
+    // Strict admin-only match: /admin/* (with slash or end-of-path).
+    // Previously /\/(admin|profilo)/ also matched /profilo and
+    // /user/dashboard wouldn't have stopped the wait either — meaning
+    // non-admin credentials returned `true` and Block E tests would
+    // run on a non-admin session, failing on 302/403 from /admin/*
+    // routes in confusing ways. Non-admin login now cleanly times
+    // out here so callers can test.skip(). Mirrors the F14 fix in
+    // unified-release-regression.spec.js.
     try {
-        await page.waitForURL(/\/(admin|profilo)/, { timeout: 10000 });
+        await page.waitForURL(/\/admin(?:\/|$)/, { timeout: 10000 });
         return true;
     } catch {
         return false;
