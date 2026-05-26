@@ -186,9 +186,16 @@ class PluginManager
                 continue;
             }
 
-            // Optional plugins (e.g. network-backed scrapers) start inactive
-            $isOptional = !empty($pluginMeta['metadata']['optional']);
-            $isActiveValue = $isOptional ? 0 : 1;
+            // ALL bundled plugins start inactive on a fresh install — the
+            // admin opts in per plugin via /admin/plugins. Previously some
+            // plugins (those without metadata.optional) defaulted to active,
+            // which surprised operators on first boot (e.g. archives adding
+            // sidebar entries, NCIP exposing a public endpoint). Security-
+            // first default: nothing runs unless explicitly enabled. The
+            // metadata.optional flag is still read elsewhere to surface the
+            // "optional" hint in the admin UI; here it no longer drives the
+            // is_active default.
+            $isActiveValue = 0;
 
             // Insert into database
             $stmt = $this->db->prepare("
@@ -243,8 +250,7 @@ class PluginManager
             if ($stmt->execute()) {
                 $pluginId = $this->db->insert_id;
                 $registered++;
-                $activeLabel = $isOptional ? 'inactive (optional)' : 'active';
-                SecureLogger::info("[PluginManager] Auto-registered bundled plugin: $pluginName (ID: $pluginId, $activeLabel)");
+                SecureLogger::info("[PluginManager] Auto-registered bundled plugin: $pluginName (ID: $pluginId, inactive — admin must opt in via /admin/plugins)");
 
                 // Build a single instance so setPluginId + onInstall +
                 // onActivate share state — runPluginMethod() would create
@@ -266,14 +272,12 @@ class PluginManager
                             SecureLogger::warning("[PluginManager] Note: onInstall failed for $pluginName: " . $e->getMessage());
                         }
                     }
-                    // Register hooks only for active (non-optional) plugins
-                    if (!$isOptional && method_exists($instance, 'onActivate')) {
-                        try {
-                            $instance->onActivate();
-                        } catch (\Throwable $e) {
-                            SecureLogger::warning("[PluginManager] Note: onActivate failed for $pluginName: " . $e->getMessage());
-                        }
-                    }
+                    // onActivate() is INTENTIONALLY NOT called here. Bundled
+                    // plugins land at is_active=0 on a fresh install; the
+                    // admin opts in via /admin/plugins, at which point
+                    // activatePlugin() will invoke onActivate(). Calling it
+                    // here would register routes/hooks for a plugin the
+                    // operator hasn't yet enabled.
                 } catch (\Throwable $e) {
                     SecureLogger::warning("[PluginManager] Note: could not instantiate $pluginName for lifecycle hooks: " . $e->getMessage());
                 }
