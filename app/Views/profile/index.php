@@ -334,10 +334,12 @@
           // but escape on output so a future contributor adding a
           // free-form message — or a translation that includes markup
           // — can't break HTML context here. We're inside the
-          // !empty($_GET['error']) branch, so $_GET['error'] is
-          // guaranteed present; just cast to string in case it
-          // arrived as an array (PHP coerces to "Array" + warning).
-          $errorKey = (string) $_GET['error'];
+          // !empty($_GET['error']) branch; reject non-scalar input
+          // (e.g. ?error[]=) before stringifying — direct (string) cast
+          // on an array still raises "Array to string conversion" in
+          // PHP 8.x.
+          $errorRaw = $_GET['error'];
+          $errorKey = is_scalar($errorRaw) ? (string) $errorRaw : '';
           echo htmlspecialchars(
               $errors[$errorKey] ?? __('Si è verificato un errore.'),
               ENT_QUOTES,

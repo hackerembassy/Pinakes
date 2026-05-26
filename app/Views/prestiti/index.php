@@ -55,10 +55,16 @@ function getStatusBadge($status) {
     <?php
     // Resolve the PDF id to a clean integer ONCE so both the
     // success-banner link and the inline <script> auto-download below
-    // share the same value. Casting to int also silences the semgrep
-    // `taint-unsafe-echo-tag` pattern-match (the inline echo no longer
-    // references $_GET[...] directly).
-    $pdfIdForDownload = (int)($_GET['pdf'] ?? 0);
+    // share the same value. filter_input with FILTER_VALIDATE_INT
+    // rejects arrays (?pdf[]= would otherwise (int)-coerce to 1 and
+    // leak another user's loan PDF), non-numeric strings, and floats.
+    // Returns the default (0) for invalid scalars but false when the
+    // raw input is an array — the outer (int) collapses false → 0.
+    // filter_input is a sanitizer semgrep's taint-unsafe-echo-tag rule
+    // recognizes natively.
+    $pdfIdForDownload = (int) filter_input(INPUT_GET, 'pdf', FILTER_VALIDATE_INT, [
+        'options' => ['default' => 0, 'min_range' => 1],
+    ]);
     ?>
     <?php if(isset($_GET['created']) && $_GET['created'] == '1'): ?>
       <div class="mb-6 p-4 bg-green-50 text-green-800 rounded-lg border border-green-200 slide-in-up" role="alert">
@@ -78,10 +84,11 @@ function getStatusBadge($status) {
     <script>
     // Auto-trigger PDF download after loan creation
     (function() {
-      // $pdfIdForDownload is an `int` cast — JSON_HEX_TAG is paranoid
-      // defense for the same reason htmlspecialchars guards string
-      // contexts: protects against `</script>` if a future refactor
-      // ever lets a non-numeric value through.
+      // $pdfIdForDownload is filter_input-validated as int above —
+      // JSON_HEX_TAG is paranoid defense for the same reason
+      // htmlspecialchars guards string contexts: protects against
+      // `</script>` if a future refactor ever lets a non-numeric
+      // value through.
       var pdfId = <?= json_encode($pdfIdForDownload, JSON_HEX_TAG) ?>;
       if (pdfId > 0) {
         var iframe = document.createElement('iframe');

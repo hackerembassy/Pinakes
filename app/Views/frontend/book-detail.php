@@ -1759,10 +1759,12 @@ ob_start();
                               // a future contributor adding a free-form message to the map
                               // (or a translation containing markup) can't break HTML
                               // context here. We're inside the !empty($_GET['reserve_error'])
-                              // branch, so the key is guaranteed present; just cast to
-                              // string in case it arrived as an array (PHP coerces to
-                              // "Array" + warning).
-                              $reserveErrorKey = (string) $_GET['reserve_error'];
+                              // branch; reject non-scalar input (e.g. ?reserve_error[]=)
+                              // before stringifying — direct (string) cast on an array
+                              // still raises an "Array to string conversion" warning in
+                              // PHP 8.x.
+                              $reserveErrorRaw = $_GET['reserve_error'];
+                              $reserveErrorKey = is_scalar($reserveErrorRaw) ? (string) $reserveErrorRaw : '';
                               echo htmlspecialchars(
                                   $reserveErrorMessages[$reserveErrorKey] ?? __('Errore nella prenotazione.'),
                                   ENT_QUOTES,

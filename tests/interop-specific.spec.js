@@ -201,8 +201,13 @@ test.describe.serial('Interop specific — 15 persistent tests (v0.7.4)', () => 
         // If the row has no viaf_id, the helper omits the field entirely
         // (i.e. undefined) — both branches are legitimate, neither is a bug.
         if (workNode['owl:sameAs'] !== undefined) {
+            // JSON-LD owl:sameAs can be a plain string URI, an object
+            // {"@id": "..."}, or an array of either. Normalize to a
+            // string before asserting so the test catches a real
+            // regression, not a JSON-LD shape variation.
             const sameAs = workNode['owl:sameAs'];
-            const id = Array.isArray(sameAs) ? sameAs[0]['@id'] : sameAs['@id'];
+            const first = Array.isArray(sameAs) ? sameAs[0] : sameAs;
+            const id = typeof first === 'string' ? first : first?.['@id'];
             expect(id, 'Work-level owl:sameAs must point at a VIAF URI').toMatch(/^https:\/\/viaf\.org\/viaf\//);
         }
     });
