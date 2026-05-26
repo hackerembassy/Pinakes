@@ -248,6 +248,62 @@ jobs:
             --config=tests/playwright.config.js \
             --workers=1
 
+      # ── Orphan-spec backfill: tests that were authored against a fresh
+      #    install but never wired into the CI workflow. Adding them as
+      #    `continue-on-error: true` so we get the signal from a clean
+      #    fixture without gating the merge on tests that may have flake-
+      #    or design-level issues unrelated to the merging PR. Once the
+      #    individual specs prove stable (see #144 follow-up triage), drop
+      #    the continue-on-error and promote to a numbered step. ──────────
+      - name: "[orphan/1] book-form-comprehensive.spec.js"
+        continue-on-error: true
+        run: |
+          npx playwright test tests/book-form-comprehensive.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+      - name: "[orphan/2] code-quality.spec.js"
+        continue-on-error: true
+        run: |
+          npx playwright test tests/code-quality.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+      - name: "[orphan/3] genre-merge-rearrange.spec.js"
+        continue-on-error: true
+        run: |
+          npx playwright test tests/genre-merge-rearrange.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+      - name: "[orphan/4] loan-reservation.spec.js"
+        continue-on-error: true
+        run: |
+          npx playwright test tests/loan-reservation.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+      - name: "[orphan/5] multisource-scraping.spec.js"
+        continue-on-error: true
+        run: |
+          npx playwright test tests/multisource-scraping.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+      - name: "[orphan/6] security-hardening.spec.js"
+        continue-on-error: true
+        run: |
+          npx playwright test tests/security-hardening.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+      - name: "[orphan/7] viaf-authority.spec.js"
+        continue-on-error: true
+        run: |
+          npx playwright test tests/viaf-authority.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+      - name: "[orphan/8] interop-specific.spec.js"
+        continue-on-error: true
+        run: |
+          npx playwright test tests/interop-specific.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+
       # ── Artifacts on failure ─────────────────────────────────────────────────
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
