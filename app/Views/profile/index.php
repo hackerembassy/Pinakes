@@ -333,9 +333,11 @@
           // controlled) and unknown keys fall back to a static literal,
           // but escape on output so a future contributor adding a
           // free-form message — or a translation that includes markup
-          // — can't break HTML context here. Cast key to string to
-          // silence PHP warnings if $_GET['error'] arrives as an array.
-          $errorKey = (string)($_GET['error'] ?? '');
+          // — can't break HTML context here. We're inside the
+          // !empty($_GET['error']) branch, so $_GET['error'] is
+          // guaranteed present; just cast to string in case it
+          // arrived as an array (PHP coerces to "Array" + warning).
+          $errorKey = (string) $_GET['error'];
           echo htmlspecialchars(
               $errors[$errorKey] ?? __('Si è verificato un errore.'),
               ENT_QUOTES,

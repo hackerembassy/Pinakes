@@ -1758,9 +1758,11 @@ ob_start();
                               // back to a static literal — but escape on output anyway so
                               // a future contributor adding a free-form message to the map
                               // (or a translation containing markup) can't break HTML
-                              // context here. Cast key to string to silence PHP warnings
-                              // if $_GET['reserve_error'] arrives as an array.
-                              $reserveErrorKey = (string)($_GET['reserve_error'] ?? '');
+                              // context here. We're inside the !empty($_GET['reserve_error'])
+                              // branch, so the key is guaranteed present; just cast to
+                              // string in case it arrived as an array (PHP coerces to
+                              // "Array" + warning).
+                              $reserveErrorKey = (string) $_GET['reserve_error'];
                               echo htmlspecialchars(
                                   $reserveErrorMessages[$reserveErrorKey] ?? __('Errore nella prenotazione.'),
                                   ENT_QUOTES,
