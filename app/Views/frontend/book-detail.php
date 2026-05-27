@@ -1786,13 +1786,13 @@ ob_start();
                         <?php if (!empty($book['descrizione'])): ?>
                             <?php if ($isMusic): ?>
                                 <?php $musicDescription = (string) $book['descrizione']; ?>
-                                <div class="prose prose-sm">
+                                <div class="prose prose-sm max-w-none">
                                     <?= str_contains($musicDescription, '<li')
                                         ? \App\Support\HtmlHelper::sanitizeHtml($musicDescription)
                                         : \App\Support\MediaLabels::formatTracklist($musicDescription) ?>
                                 </div>
                             <?php else: ?>
-                                <div class="prose prose-sm"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($book['descrizione'], false)) ?></div>
+                                <div class="prose prose-sm max-w-none"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($book['descrizione'], false)) ?></div>
                             <?php endif; ?>
                         <?php else: ?>
                             <p class="text-muted"><?= __("Nessuna descrizione disponibile per questo libro.") ?></p>
@@ -2029,7 +2029,7 @@ ob_start();
                                     <?php elseif (in_array($fieldName, ['value'])): ?>
                                         € <?= number_format((float)$field['value'], 2) ?>
                                     <?php elseif (in_array($fieldName, ['review', 'comment'])): ?>
-                                        <div class="prose prose-sm"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($field['value'], false)) ?></div>
+                                        <div class="prose prose-sm max-w-none"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($field['value'], false)) ?></div>
                                     <?php else: ?>
                                         <?= htmlspecialchars($field['value'], ENT_QUOTES, 'UTF-8') ?>
                                     <?php endif; ?>
@@ -2063,7 +2063,7 @@ ob_start();
                                     <?php elseif (in_array($fieldName, ['value'])): ?>
                                         € <?= number_format((float)$field['value'], 2) ?>
                                     <?php elseif (in_array($fieldName, ['review', 'comment'])): ?>
-                                        <div class="prose prose-sm"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($field['value'], false)) ?></div>
+                                        <div class="prose prose-sm max-w-none"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($field['value'], false)) ?></div>
                                     <?php else: ?>
                                         <?= htmlspecialchars($field['value'], ENT_QUOTES, 'UTF-8') ?>
                                     <?php endif; ?>
