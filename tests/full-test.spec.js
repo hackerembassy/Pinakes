@@ -3079,14 +3079,54 @@ test.describe.serial('Phase 21: Language Switch', () => {
 
   test.beforeEach(() => { test.skip(!appReady, 'App not ready — Phase 1 did not complete'); });
 
+  // Submit a set-default-language form and confirm via either the
+  // SwalApp modal (current behaviour after the popup unification in
+  // PR #141) or the legacy native `window.confirm()` dialog (older
+  // installs / pre-merge branches). The Swal path wins when both are
+  // present because attachSwalConfirm intercepts the submit event
+  // before any native confirm could surface.
+  async function submitSetDefaultAndConfirm(localeCode) {
+    let nativeDialogFired = false;
+    const dialogHandler = (dialog) => { nativeDialogFired = true; dialog.accept(); };
+    page.once('dialog', dialogHandler);
+
+    await page.locator(`form[action*="/${localeCode}/set-default"] button[type="submit"]`).click();
+
+    // Wait for the SwalApp modal to land — if it does, click its confirm
+    // button to release the form. If only a native dialog fires, the
+    // handler above already accepted it. The 5 s window is the same
+    // budget we give other Swal-driven steps in this suite (e.g. genre
+    // delete) — 1.5 s flakes on a loaded CI runner where the modal
+    // takes >1 s to attach + paint.
+    const swalConfirm = page.locator('.swal2-confirm');
+    try {
+      await swalConfirm.waitFor({ state: 'visible', timeout: 5000 });
+      await swalConfirm.click();
+    } catch {
+      // No Swal modal — the native dialog handler above must have run
+      // (or the form was submitted directly without any confirmation).
+    }
+
+    // Wait for the redirect BEFORE removing the dialog handler — on
+    // some browsers the navigation completes asynchronously and an
+    // in-flight `beforeunload` / re-fire of the native confirm can
+    // land after waitForURL returns. The try/finally guarantees the
+    // listener is detached even on a waitForURL timeout, so a
+    // failing test doesn't leak the handler into the next test and
+    // accidentally intercept ITS dialogs.
+    try {
+      await page.waitForURL(/admin\/languages/, { timeout: 10000 });
+    } finally {
+      page.removeListener('dialog', dialogHandler);
+    }
+    return { nativeDialogFired };
+  }
+
   test('21.1 Switch to French (fr_FR) as default language', async () => {
     await page.goto(`${BASE}/admin/languages`);
     await page.waitForLoadState('domcontentloaded');
 
-    // The set-default button is inside a form with a browser confirm() dialog
-    page.once('dialog', dialog => dialog.accept());
-    await page.locator('form[action*="/fr_FR/set-default"] button[type="submit"]').click();
-    await page.waitForURL(/admin\/languages/, { timeout: 10000 });
+    await submitSetDefaultAndConfirm('fr_FR');
 
     const dbCode = dbQuery("SELECT code FROM languages WHERE is_default = 1 LIMIT 1");
     expect(dbCode).toBe('fr_FR');
@@ -3122,9 +3162,7 @@ test.describe.serial('Phase 21: Language Switch', () => {
     await page.goto(`${BASE}/admin/languages`);
     await page.waitForLoadState('domcontentloaded');
 
-    page.once('dialog', dialog => dialog.accept());
-    await page.locator('form[action*="/en_US/set-default"] button[type="submit"]').click();
-    await page.waitForURL(/admin\/languages/, { timeout: 10000 });
+    await submitSetDefaultAndConfirm('en_US');
 
     let dbCode = dbQuery("SELECT code FROM languages WHERE is_default = 1 LIMIT 1");
     expect(dbCode).toBe('en_US');
@@ -3132,9 +3170,7 @@ test.describe.serial('Phase 21: Language Switch', () => {
     await expect(page.locator('body')).toContainText('Languages');
 
     // ── German ───────────────────────────────────────────────────────────
-    page.once('dialog', dialog => dialog.accept());
-    await page.locator('form[action*="/de_DE/set-default"] button[type="submit"]').click();
-    await page.waitForURL(/admin\/languages/, { timeout: 10000 });
+    await submitSetDefaultAndConfirm('de_DE');
 
     dbCode = dbQuery("SELECT code FROM languages WHERE is_default = 1 LIMIT 1");
     expect(dbCode).toBe('de_DE');
@@ -3146,9 +3182,7 @@ test.describe.serial('Phase 21: Language Switch', () => {
     await page.goto(`${BASE}/admin/languages`);
     await page.waitForLoadState('domcontentloaded');
 
-    page.once('dialog', dialog => dialog.accept());
-    await page.locator('form[action*="/it_IT/set-default"] button[type="submit"]').click();
-    await page.waitForURL(/admin\/languages/, { timeout: 10000 });
+    await submitSetDefaultAndConfirm('it_IT');
 
     const dbCode = dbQuery("SELECT code FROM languages WHERE is_default = 1 LIMIT 1");
     expect(dbCode).toBe('it_IT');

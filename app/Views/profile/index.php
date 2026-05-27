@@ -329,7 +329,22 @@
             'server' => __('Errore del server. Riprova più tardi.'),
             'password_weak' => __('La password deve contenere maiuscole, minuscole e numeri.')
           ];
-          echo $errors[$_GET['error']] ?? __('Si è verificato un errore.');
+          // Defense-in-depth: map values are __() translations (app-
+          // controlled) and unknown keys fall back to a static literal,
+          // but escape on output so a future contributor adding a
+          // free-form message — or a translation that includes markup
+          // — can't break HTML context here. We're inside the
+          // !empty($_GET['error']) branch; reject non-scalar input
+          // (e.g. ?error[]=) before stringifying — direct (string) cast
+          // on an array still raises "Array to string conversion" in
+          // PHP 8.x.
+          $errorRaw = $_GET['error'];
+          $errorKey = is_scalar($errorRaw) ? (string) $errorRaw : '';
+          echo htmlspecialchars(
+              $errors[$errorKey] ?? __('Si è verificato un errore.'),
+              ENT_QUOTES,
+              'UTF-8'
+          );
         ?>
       </span>
     </div>
@@ -622,8 +637,18 @@
       });
   }
 
-  window.revokeSession = function(sessionId) {
-    if (!confirm(translations.confirmRevoke)) return;
+  window.revokeSession = async function(sessionId) {
+    const r = await window.SwalApp.confirmDelete({
+      text: translations.confirmRevoke,
+      // Pass the button label only when it's a non-empty string;
+      // `|| undefined` silently discarded an explicit empty translation
+      // and fell back to the helper's default. Treat empty same as
+      // missing so the default kicks in cleanly.
+      confirmText: (typeof translations.confirmRevokeButton === 'string' && translations.confirmRevokeButton.length > 0)
+        ? translations.confirmRevokeButton
+        : undefined
+    });
+    if (!r.isConfirmed) return;
 
     fetch((window.BASE_PATH || '') + '/api/profile/sessions/revoke', {
       method: 'POST',
@@ -638,16 +663,19 @@
       if (data.success) {
         loadSessions();
       } else {
-        alert(data.error || translations.error);
+        window.SwalApp.error(undefined, data.error || translations.error);
       }
     })
     .catch(function() {
-      alert(translations.error);
+      window.SwalApp.error(undefined, translations.error);
     });
   };
 
-  window.revokeAllSessions = function() {
-    if (!confirm(translations.confirmRevokeAll)) return;
+  window.revokeAllSessions = async function() {
+    const r = await window.SwalApp.confirmDelete({
+      text: translations.confirmRevokeAll
+    });
+    if (!r.isConfirmed) return;
 
     fetch((window.BASE_PATH || '') + '/api/profile/sessions/revoke-all', {
       method: 'POST',
@@ -662,11 +690,11 @@
       if (data.success) {
         loadSessions();
       } else {
-        alert(data.error || translations.error);
+        window.SwalApp.error(undefined, data.error || translations.error);
       }
     })
     .catch(function() {
-      alert(translations.error);
+      window.SwalApp.error(undefined, translations.error);
     });
   };
 

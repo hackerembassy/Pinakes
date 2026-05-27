@@ -1753,7 +1753,23 @@ ob_start();
                                   'past_date' => __('La data non può essere nel passato.'),
                                   'not_available' => __('Nessuna copia disponibile per il periodo richiesto.')
                               ];
-                              echo $reserveErrorMessages[$_GET['reserve_error']] ?? __('Errore nella prenotazione.');
+                              // Defense-in-depth: the values are __() translations from
+                              // the i18n catalog (app-controlled), and unknown keys fall
+                              // back to a static literal — but escape on output anyway so
+                              // a future contributor adding a free-form message to the map
+                              // (or a translation containing markup) can't break HTML
+                              // context here. We're inside the !empty($_GET['reserve_error'])
+                              // branch; reject non-scalar input (e.g. ?reserve_error[]=)
+                              // before stringifying — direct (string) cast on an array
+                              // still raises an "Array to string conversion" warning in
+                              // PHP 8.x.
+                              $reserveErrorRaw = $_GET['reserve_error'];
+                              $reserveErrorKey = is_scalar($reserveErrorRaw) ? (string) $reserveErrorRaw : '';
+                              echo htmlspecialchars(
+                                  $reserveErrorMessages[$reserveErrorKey] ?? __('Errore nella prenotazione.'),
+                                  ENT_QUOTES,
+                                  'UTF-8'
+                              );
                             ?>
                             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="<?= __('Chiudi') ?>"></button>
                         </div>
@@ -1770,13 +1786,13 @@ ob_start();
                         <?php if (!empty($book['descrizione'])): ?>
                             <?php if ($isMusic): ?>
                                 <?php $musicDescription = (string) $book['descrizione']; ?>
-                                <div class="prose prose-sm">
+                                <div class="prose prose-sm max-w-none">
                                     <?= str_contains($musicDescription, '<li')
                                         ? \App\Support\HtmlHelper::sanitizeHtml($musicDescription)
                                         : \App\Support\MediaLabels::formatTracklist($musicDescription) ?>
                                 </div>
                             <?php else: ?>
-                                <div class="prose prose-sm"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($book['descrizione'], false)) ?></div>
+                                <div class="prose prose-sm max-w-none"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($book['descrizione'], false)) ?></div>
                             <?php endif; ?>
                         <?php else: ?>
                             <p class="text-muted"><?= __("Nessuna descrizione disponibile per questo libro.") ?></p>
@@ -2013,7 +2029,7 @@ ob_start();
                                     <?php elseif (in_array($fieldName, ['value'])): ?>
                                         € <?= number_format((float)$field['value'], 2) ?>
                                     <?php elseif (in_array($fieldName, ['review', 'comment'])): ?>
-                                        <div class="prose prose-sm"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($field['value'], false)) ?></div>
+                                        <div class="prose prose-sm max-w-none"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($field['value'], false)) ?></div>
                                     <?php else: ?>
                                         <?= htmlspecialchars($field['value'], ENT_QUOTES, 'UTF-8') ?>
                                     <?php endif; ?>
@@ -2047,7 +2063,7 @@ ob_start();
                                     <?php elseif (in_array($fieldName, ['value'])): ?>
                                         € <?= number_format((float)$field['value'], 2) ?>
                                     <?php elseif (in_array($fieldName, ['review', 'comment'])): ?>
-                                        <div class="prose prose-sm"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($field['value'], false)) ?></div>
+                                        <div class="prose prose-sm max-w-none"><?= \App\Support\HtmlHelper::sanitizeHtml(nl2br($field['value'], false)) ?></div>
                                     <?php else: ?>
                                         <?= htmlspecialchars($field['value'], ENT_QUOTES, 'UTF-8') ?>
                                     <?php endif; ?>
@@ -2442,7 +2458,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const data = await res.json();
       setFavUI(!!data.favorite);
     } catch (e) {
-      alert(<?= json_encode(__("Errore nell'aggiornare i preferiti."), JSON_HEX_TAG) ?>);
+      window.SwalApp.error(undefined, <?= json_encode(__("Errore nell'aggiornare i preferiti."), JSON_HEX_TAG) ?>);
     }
   });
 });
@@ -2479,27 +2495,14 @@ document.addEventListener('DOMContentLoaded', function() {
     requestBtn.addEventListener('click', async function(){
       // Check if user is logged in
       if (!isLogged) {
-        if (window.Swal) {
-          Swal.fire({
-            icon: 'warning',
-            title: __('Accesso Richiesto'),
-            html: '<p class="mb-3">' + __('Per richiedere un prestito devi effettuare il login.') + '</p>',
-            confirmButtonText: __('Vai al Login'),
-            cancelButtonText: __('Annulla'),
-            showCancelButton: true,
-            customClass: {
-              confirmButton: 'btn btn-dark',
-              cancelButton: 'btn btn-outline-dark'
-            }
-          }).then((result) => {
-            if (result.isConfirmed) {
-              window.location.href = <?= json_encode($loginRoute, JSON_HEX_TAG) ?> + '?redirect=' + encodeURIComponent(window.location.pathname);
-            }
-          });
-        } else {
-          if (confirm(__('Per richiedere un prestito devi effettuare il login. Vuoi andare alla pagina di login?'))) {
-            window.location.href = <?= json_encode($loginRoute, JSON_HEX_TAG) ?> + '?redirect=' + encodeURIComponent(window.location.pathname);
-          }
+        const result = await window.SwalApp.confirm({
+          title: __('Accesso Richiesto'),
+          text:  __('Per richiedere un prestito devi effettuare il login. Vuoi andare alla pagina di login?'),
+          icon:  'warning',
+          confirmText: __('Vai al Login')
+        });
+        if (result.isConfirmed) {
+          window.location.href = <?= json_encode($loginRoute, JSON_HEX_TAG) ?> + '?redirect=' + encodeURIComponent(window.location.pathname);
         }
         return;
       }
@@ -2755,12 +2758,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const result = await res.json();
             if (res.ok && result.success) {
               await updateReservationsBadge();
-              alert(<?= json_encode(__("Prenotazione effettuata per "), JSON_HEX_TAG) ?> + date);
+              window.SwalApp.success(undefined, <?= json_encode(__("Prenotazione effettuata per "), JSON_HEX_TAG) ?> + date);
             } else {
-              alert(<?= json_encode(__("Errore: "), JSON_HEX_TAG) ?> + (result.message || <?= json_encode(__("Impossibile creare la prenotazione"), JSON_HEX_TAG) ?>));
+              window.SwalApp.error(undefined, (result.message || <?= json_encode(__("Impossibile creare la prenotazione"), JSON_HEX_TAG) ?>));
             }
           } catch(_) {
-            alert(<?= json_encode(__("Errore nella prenotazione"), JSON_HEX_TAG) ?>);
+            window.SwalApp.error(undefined, <?= json_encode(__("Errore nella prenotazione"), JSON_HEX_TAG) ?>);
           }
         }
       }

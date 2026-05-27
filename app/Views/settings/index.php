@@ -459,6 +459,55 @@ $activeTab = $activeTab ?? 'general';
                   <?= __("Gestisci Eventi") ?>
                 </a>
               </div>
+
+              <?php
+              /** @var array{image_layout?: string} $eventSettings */
+              $eventImageLayoutChoices = [
+                  'contained' => __('Piccola a sinistra (max 420px) — consigliato'),
+                  'thumb'     => __('Miniatura affiancata al testo (240px)'),
+                  'banner'    => __('Banner basso a tutta larghezza (max altezza 220px)'),
+                  'full'      => __('Originale a tutta larghezza (grande)'),
+              ];
+              // Null-safe read: a fresh install or a settings table that
+              // hasn't been seeded with the row yet would otherwise raise
+              // "Undefined array key 'image_layout'". Coalesce to the
+              // default preset, then validate against the allow-list so
+              // a stale/typo'd setting also falls back gracefully.
+              $eventImageLayout = (string)($eventSettings['image_layout'] ?? 'contained');
+              if (!isset($eventImageLayoutChoices[$eventImageLayout])) {
+                  $eventImageLayout = 'contained';
+              }
+              ?>
+              <div class="mt-5 pt-5 border-t border-gray-200">
+                <form action="<?= htmlspecialchars(url('/admin/settings/events'), ENT_QUOTES, 'UTF-8') ?>" method="post" class="space-y-3">
+                  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+                  <div>
+                    <label for="event_image_layout" class="block text-sm font-semibold text-gray-900 mb-1">
+                      <?= __("Layout immagine evento") ?>
+                    </label>
+                    <p class="text-xs text-gray-500 mb-2"><?= __("Definisce come viene visualizzata l'immagine di copertina nella pagina di dettaglio dell'evento.") ?></p>
+                    <select
+                      id="event_image_layout"
+                      name="event_image_layout"
+                      class="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    >
+                      <?php foreach ($eventImageLayoutChoices as $value => $label): ?>
+                        <option
+                          value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>"
+                          <?= $eventImageLayout === $value ? 'selected' : '' ?>
+                        ><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-700 transition-colors w-full justify-center"
+                  >
+                    <i class="fas fa-save"></i>
+                    <?= __("Salva impostazioni eventi") ?>
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
 
@@ -952,15 +1001,10 @@ $activeTab = $activeTab ?? 'general';
         });
 
         uppyLogo.on('restriction-failed', (file, error) => {
-          if (typeof Swal !== 'undefined') {
-            Swal.fire({
-              icon: 'error',
-              title: <?= json_encode(__("Errore Upload"), JSON_HEX_TAG) ?>,
-              text: error.message
-            });
-          } else {
-            alert(<?= json_encode(__("Errore: "), JSON_HEX_TAG) ?> + error.message);
-          }
+          window.SwalApp.error(
+            <?= json_encode(__("Errore Upload"), JSON_HEX_TAG) ?>,
+            error.message
+          );
         });
       } catch (error) {
         console.error('Error initializing Uppy for logo:', error);

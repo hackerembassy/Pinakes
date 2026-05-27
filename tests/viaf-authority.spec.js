@@ -30,13 +30,24 @@ const BASE        = process.env.E2E_BASE_URL    || 'http://localhost:8081';
 const DB_USER     = process.env.E2E_DB_USER     || '';
 const DB_PASS     = process.env.E2E_DB_PASS     || '';
 const DB_NAME     = process.env.E2E_DB_NAME     || '';
+const DB_HOST     = process.env.E2E_DB_HOST     || '';
+const DB_PORT     = process.env.E2E_DB_PORT     || '';
 const DB_SOCKET   = process.env.E2E_DB_SOCKET   || '';
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
 const ADMIN_PASS  = process.env.E2E_ADMIN_PASS  || '';
 
+// Connection precedence: TCP (-h/-P) → Unix socket (-S) → defaults.
+// CI runs MySQL in a Docker container reachable only via TCP; this
+// helper used to support only DB_SOCKET, which produced silent
+// connection failures and downstream "no row" assertion errors.
 function mysqlArgs(sql, batch = false) {
     const args = [];
-    if (DB_SOCKET) args.push('-S', DB_SOCKET);
+    if (DB_HOST) {
+        args.push('-h', DB_HOST);
+        if (DB_PORT) args.push('-P', DB_PORT);
+    } else if (DB_SOCKET) {
+        args.push('-S', DB_SOCKET);
+    }
     args.push('-u', DB_USER, DB_NAME);
     if (batch) args.push('-N', '-B');
     if (sql !== '') args.push('-e', sql);

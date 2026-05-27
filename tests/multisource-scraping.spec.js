@@ -8,6 +8,8 @@ const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '';
 const DB_USER = process.env.E2E_DB_USER || '';
 const DB_PASS = process.env.E2E_DB_PASS || '';
 const DB_NAME = process.env.E2E_DB_NAME || '';
+const DB_HOST = process.env.E2E_DB_HOST || '';
+const DB_PORT = process.env.E2E_DB_PORT || '';
 const DB_SOCKET = process.env.E2E_DB_SOCKET || '';
 const RUN_ID = Date.now().toString();
 const RUN_TAG = `E2E_MULTI_${RUN_ID}`;
@@ -30,8 +32,17 @@ const IMPORTED_DISC_1_EAN = `888${RUN_ID.slice(-10)}`;
 const IMPORTED_DISC_2_EAN = `777${RUN_ID.slice(-10)}`;
 
 function mysqlArgs(sql) {
-  const args = ['-u', DB_USER, `-p${DB_PASS}`, DB_NAME, '-N', '-B', '-e', sql];
-  if (DB_SOCKET) args.splice(3, 0, '-S', DB_SOCKET);
+  // Connection precedence: TCP (-h/-P) → Unix socket (-S) → defaults.
+  // Password via MYSQL_PWD env (no argv leak, no interactive prompt
+  // on empty DB_PASS). Mirrors the pattern in archives-* specs.
+  const args = [];
+  if (DB_HOST) {
+    args.push('-h', DB_HOST);
+    if (DB_PORT) args.push('-P', DB_PORT);
+  } else if (DB_SOCKET) {
+    args.push('-S', DB_SOCKET);
+  }
+  args.push('-u', DB_USER, DB_NAME, '-N', '-B', '-e', sql);
   return args;
 }
 
@@ -39,6 +50,7 @@ function dbQuery(sql) {
   return execFileSync('mysql', mysqlArgs(sql), {
     encoding: 'utf-8',
     timeout: 10000,
+    env: { ...process.env, MYSQL_PWD: DB_PASS },
   }).trim();
 }
 
@@ -116,6 +128,8 @@ test.describe.serial('Multi-source scraping and creation flows', () => {
   let manualDiscId = 0;
   let importedDisc1Id = 0;
   let importedDisc2Id = 0;
+  /** @type {Record<string, number>} */
+  let previousPluginStates = {};
 
   test.beforeAll(async ({ browser }) => {
     test.skip(
@@ -127,15 +141,38 @@ test.describe.serial('Multi-source scraping and creation flows', () => {
     page = await context.newPage();
     await loginAsAdmin(page);
 
-    // Discogs is a bundled-but-OPTIONAL plugin (registered with is_active=0
-    // on fresh install, no auto-activation). Activate it explicitly so test
-    // #1 (hook-order assertion) and the Discogs barcode flows below don't
-    // rely on cross-file test ordering (Playwright's alphabetical default
-    // would happen to run discogs-import.spec.js first, which was the only
-    // reason it was passing — not an intentional contract).
+    // Discogs, open-library and z39-server are all bundled-but-OPTIONAL
+    // plugins registered with is_active=0 on fresh install. Test #1
+    // asserts the hook-order across all three, so activate all three
+    // here — previously the test silently relied on cross-file test
+    // ordering (discogs-import.spec.js, open-library/z39-server activated
+    // by other suites), which only worked because Playwright's
+    // alphabetical default happened to schedule them first. Activating
+    // explicitly is the contract.
+    //
+    // Capture each plugin's prior is_active BEFORE the UPDATE so afterAll
+    // can restore the original state — without this teardown, subsequent
+    // suites inherit our forced-active plugins and a regression in their
+    // own "fresh-install activation" logic would be silently masked.
     try {
-      execFileSync('mysql', mysqlArgs("UPDATE plugins SET is_active = 1 WHERE name = 'discogs'"), {
+      const rows = execFileSync('mysql', mysqlArgs(
+        "SELECT name, is_active FROM plugins WHERE name IN ('discogs','open-library','z39-server')",
+        true,
+      ), {
         encoding: 'utf-8', timeout: 10000,
+        env: { ...process.env, MYSQL_PWD: DB_PASS },
+      });
+      previousPluginStates = Object.fromEntries(
+        rows.trim().split('\n').filter(Boolean).map(line => {
+          const [name, active] = line.split('\t');
+          return [name, Number(active)];
+        })
+      );
+      execFileSync('mysql', mysqlArgs(
+        "UPDATE plugins SET is_active = 1 WHERE name IN ('discogs','open-library','z39-server')"
+      ), {
+        encoding: 'utf-8', timeout: 10000,
+        env: { ...process.env, MYSQL_PWD: DB_PASS },
       });
     } catch { /* best-effort — if row doesn't exist yet, test 1 will fail loud */ }
   });
@@ -154,7 +191,7 @@ test.describe.serial('Multi-source scraping and creation flows', () => {
         execFileSync('mysql', mysqlArgs(
           `UPDATE libri SET deleted_at = NOW(), ean = NULL, isbn13 = NULL, ` +
           `isbn10 = NULL WHERE id IN (${idList}) AND deleted_at IS NULL`
-        ), { encoding: 'utf-8', timeout: 10000 });
+        ), { encoding: 'utf-8', timeout: 10000, env: { ...process.env, MYSQL_PWD: DB_PASS } });
       } catch (err) {
         errors.push(`ids cleanup: ${err.message}`);
       }
@@ -164,9 +201,22 @@ test.describe.serial('Multi-source scraping and creation flows', () => {
       execFileSync('mysql', mysqlArgs(
         `UPDATE libri SET deleted_at = NOW(), ean = NULL, isbn13 = NULL, ` +
         `isbn10 = NULL WHERE titolo LIKE '${RUN_TAG}%' AND deleted_at IS NULL`
-      ), { encoding: 'utf-8', timeout: 10000 });
+      ), { encoding: 'utf-8', timeout: 10000, env: { ...process.env, MYSQL_PWD: DB_PASS } });
     } catch (err) {
       errors.push(`RUN_TAG cleanup: ${err.message}`);
+    }
+    // Restore each plugin's is_active to its pre-suite value so subsequent
+    // suites see the environment they expect. Without this, a regression
+    // in another suite's "fresh-install activation" assumption would be
+    // silently masked by our forced-active plugins.
+    for (const [name, prevActive] of Object.entries(previousPluginStates)) {
+      try {
+        execFileSync('mysql', mysqlArgs(
+          `UPDATE plugins SET is_active = ${prevActive} WHERE name = '${name}'`
+        ), { encoding: 'utf-8', timeout: 10000, env: { ...process.env, MYSQL_PWD: DB_PASS } });
+      } catch (err) {
+        errors.push(`plugin restore ${name}: ${err.message}`);
+      }
     }
     if (errors.length > 0) {
       // Surface so CI notices teardown failures instead of swallowing

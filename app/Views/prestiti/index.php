@@ -52,13 +52,27 @@ function getStatusBadge($status) {
       </ol>
     </nav>
     <!-- Success Messages -->
+    <?php
+    // Resolve the PDF id to a clean integer ONCE so both the
+    // success-banner link and the inline <script> auto-download below
+    // share the same value. filter_input with FILTER_VALIDATE_INT
+    // rejects arrays (?pdf[]= would otherwise (int)-coerce to 1 and
+    // leak another user's loan PDF), non-numeric strings, and floats.
+    // Returns the default (0) for invalid scalars but false when the
+    // raw input is an array — the outer (int) collapses false → 0.
+    // filter_input is a sanitizer semgrep's taint-unsafe-echo-tag rule
+    // recognizes natively.
+    $pdfIdForDownload = (int) filter_input(INPUT_GET, 'pdf', FILTER_VALIDATE_INT, [
+        'options' => ['default' => 0, 'min_range' => 1],
+    ]);
+    ?>
     <?php if(isset($_GET['created']) && $_GET['created'] == '1'): ?>
       <div class="mb-6 p-4 bg-green-50 text-green-800 rounded-lg border border-green-200 slide-in-up" role="alert">
         <div class="flex items-center gap-2">
           <i class="fas fa-check-circle"></i>
           <span><?= __("Prestito creato con successo!") ?></span>
-          <?php if(isset($_GET['pdf'])): ?>
-            <a href="<?= htmlspecialchars(url('/admin/prestiti/' . (int)$_GET['pdf'] . '/pdf'), ENT_QUOTES, 'UTF-8') ?>" class="ml-auto inline-flex items-center px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg transition-colors">
+          <?php if($pdfIdForDownload > 0): ?>
+            <a href="<?= htmlspecialchars(url('/admin/prestiti/' . $pdfIdForDownload . '/pdf'), ENT_QUOTES, 'UTF-8') ?>" class="ml-auto inline-flex items-center px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg transition-colors">
               <i class="fas fa-file-pdf mr-1"></i><?= __("Scarica PDF") ?>
             </a>
           <?php endif; ?>
@@ -66,11 +80,16 @@ function getStatusBadge($status) {
       </div>
     <?php endif; ?>
 
-    <?php if(isset($_GET['pdf'])): ?>
+    <?php if($pdfIdForDownload > 0): ?>
     <script>
     // Auto-trigger PDF download after loan creation
     (function() {
-      var pdfId = <?= json_encode((int)$_GET['pdf']) ?>;
+      // $pdfIdForDownload is filter_input-validated as int above —
+      // JSON_HEX_TAG is paranoid defense for the same reason
+      // htmlspecialchars guards string contexts: protects against
+      // `</script>` if a future refactor ever lets a non-numeric
+      // value through.
+      var pdfId = <?= json_encode($pdfIdForDownload, JSON_HEX_TAG) ?>;
       if (pdfId > 0) {
         var iframe = document.createElement('iframe');
         iframe.style.display = 'none';
