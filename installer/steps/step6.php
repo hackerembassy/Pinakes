@@ -77,15 +77,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Default values
 $appName = $_SESSION['app_settings']['name'] ?? 'Pinakes';
 $driver = $_POST['email_driver'] ?? 'mail';
-// Extract domain without port for email generation
+// Extract domain without port for email generation.
+// IMPORTANT: the resulting default from-email is fed through filter_var(FILTER_VALIDATE_EMAIL)
+// at submit time. That filter requires the host part to look like a real domain with a TLD —
+// bare hostnames such as `localhost`, IP literals (127.0.0.1) and intranet names (`pinakes-vm`)
+// all pass FILTER_VALIDATE_DOMAIN but fail FILTER_VALIDATE_EMAIL once we prepend `no-reply@`.
+// If we leave the default as `no-reply@localhost`, the user submits the form, server-side
+// validation fails silently, and the page reloads on step 6 with no obvious cause — the
+// install gets stuck for every user on a local-only setup. The safer rule is "only adopt
+// the live host when it yields a syntactically valid email", otherwise fall back to
+// example.com (RFC 2606 reserved, always valid for placeholder emails).
 $host = trim($_SERVER['HTTP_HOST'] ?? '');
 $domain = 'example.com';
 if ($host !== '') {
     $candidate = preg_replace('/:\d+$/', '', $host); // Remove port if present
-    if (
-        filter_var($candidate, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) ||
-        filter_var($candidate, FILTER_VALIDATE_IP)
-    ) {
+    if (filter_var("no-reply@{$candidate}", FILTER_VALIDATE_EMAIL)) {
         $domain = $candidate;
     }
 }
