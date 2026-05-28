@@ -1048,6 +1048,11 @@ class LibriController
                 }
             }
 
+            // Multi-publisher resolution (issue #143): existing ids + new names
+            // → ordered, deduplicated id list; libri.editore_id stays the primary.
+            $fields['editori_ids'] = $this->resolvePublisherIds($db, $data, $fields['editore_id'] ?? null);
+            $fields['editore_id'] = $fields['editori_ids'][0] ?? ($fields['editore_id'] ?? null);
+
             // Handle genere auto-creation from manual entry
             if ((int) $fields['genere_id'] === 0 && !empty($data['genere_search'])) {
                 $genereRepo = new \App\Models\GenereRepository($db);
@@ -1622,6 +1627,11 @@ class LibriController
                     }
                 }
             }
+
+            // Multi-publisher resolution (issue #143): existing ids + new names
+            // → ordered, deduplicated id list; libri.editore_id stays the primary.
+            $fields['editori_ids'] = $this->resolvePublisherIds($db, $data, $fields['editore_id'] ?? null);
+            $fields['editore_id'] = $fields['editori_ids'][0] ?? ($fields['editore_id'] ?? null);
 
             // Handle genere auto-creation from manual entry
             if ((int) $fields['genere_id'] === 0 && !empty($data['genere_search'])) {
@@ -2975,6 +2985,9 @@ class LibriController
                 l.*,
                 GROUP_CONCAT(DISTINCT a.nome ORDER BY la.ordine_credito SEPARATOR ';') as autori_nomi,
                 e.nome as editore_nome,
+                (SELECT GROUP_CONCAT(e2.nome ORDER BY le.ordine, e2.nome SEPARATOR ';')
+                   FROM libri_editori le JOIN editori e2 ON e2.id = le.editore_id
+                  WHERE le.libro_id = l.id) as editori_nomi,
                 g.nome as genere_nome
             FROM libri l
             LEFT JOIN libri_autori la ON l.id = la.libro_id
@@ -3082,7 +3095,7 @@ class LibriController
                     $libro['sottotitolo'] ?? '',
                     $descrizione,
                     $libro['autori_nomi'] ?? '',
-                    $libro['editore_nome'] ?? '',
+                    ($libro['editori_nomi'] ?? '') !== '' ? $libro['editori_nomi'] : ($libro['editore_nome'] ?? ''),
                     $anno,
                     $libro['lingua'] ?? '',
                     $libro['edizione'] ?? '',
@@ -3488,6 +3501,47 @@ class LibriController
         if ($affectedRows > 0) {
             error_log("[LibriController] Updated author bio for ID $authorId from scraping");
         }
+    }
+
+    /**
+     * Resolve the multi-publisher selection (issue #143) into an ordered,
+     * deduplicated list of publisher ids. Combines existing ids (editori_ids[])
+     * with newly typed names (editori_new[], find-or-create), and falls back to
+     * the single primary publisher already resolved from the legacy
+     * editore_search field or from scraping.
+     *
+     * @param array<string,mixed> $data
+     * @return list<int>
+     */
+    private function resolvePublisherIds(\mysqli $db, array $data, ?int $primaryEditoreId): array
+    {
+        $ids = [];
+        foreach ((array) ($data['editori_ids'] ?? []) as $rawId) {
+            $id = (int) $rawId;
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+
+        if (!empty($data['editori_new'])) {
+            $pubRepo = new \App\Models\PublisherRepository($db);
+            foreach ((array) $data['editori_new'] as $nome) {
+                $nome = $this->sanitizePublisherName(trim((string) $nome));
+                if ($nome === '') {
+                    continue;
+                }
+                $found = $pubRepo->findByName($nome);
+                $ids[] = $found ?? $pubRepo->create(['nome' => $nome, 'sito_web' => '']);
+            }
+        }
+
+        // Back-compat: no multi-select used, but a single publisher was resolved
+        // (legacy editore_search field or scraping) → keep it as the sole publisher.
+        if ($ids === [] && $primaryEditoreId !== null && $primaryEditoreId > 0) {
+            $ids[] = $primaryEditoreId;
+        }
+
+        return array_values(array_unique(array_map('intval', $ids)));
     }
 
     /**

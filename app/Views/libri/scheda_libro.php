@@ -152,7 +152,15 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
           <div class="text-base text-gray-600">
             <i class="fas fa-building text-gray-400 mr-2"></i>
             <span class="font-medium"><?= \App\Support\MediaLabels::label('editore', $libro['formato'] ?? null, $libro['tipo_media'] ?? null) ?>:</span>
-            <?php echo App\Support\HtmlHelper::e($libro['editore_nome'] ?? __('Non specificato')); ?>
+            <?php
+            // Multi-publisher (issue #143): list all publishers, fallback to the primary.
+            $schedaPublishers = $libro['editori'] ?? [];
+            if ($schedaPublishers !== []) {
+                echo implode(', ', array_map(static fn($p) => App\Support\HtmlHelper::e($p['nome'] ?? ''), $schedaPublishers));
+            } else {
+                echo App\Support\HtmlHelper::e($libro['editore_nome'] ?? __('Non specificato'));
+            }
+            ?>
           </div>
           <div class="text-base text-gray-600">
             <i class="fas fa-users text-gray-400 mr-2"></i>

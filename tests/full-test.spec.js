@@ -569,26 +569,21 @@ test.describe.serial('Phase 3: Manual Book Creation', () => {
       );
     }
 
-    // Publisher — enhanced autocomplete field (input may be disabled by JS)
+    // Publisher — Choices.js multi-select (issue #143). Anchor on
+    // #editori_select and walk up to its Choices wrapper (same pattern as the
+    // author field above).
     const publisherName = `Publisher ${RUN_ID}`;
-    const publisherField = page.locator('#editore_search');
-    if (await publisherField.isVisible({ timeout: 2000 }).catch(() => false)) {
-      // Enable the input, set value, and trigger the autocomplete
-      await page.evaluate((name) => {
-        const input = document.getElementById('editore_search');
-        if (input) {
-          input.disabled = false;
-          input.value = name;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-        // Also set the hidden field
-        const hidden = document.getElementById('editore_search_value');
-        if (hidden) hidden.value = name;
-      }, publisherName);
-      await page.waitForTimeout(500);
-      // Press Enter to confirm
-      await publisherField.press('Enter');
-      await page.waitForTimeout(500);
+    const publisherWrapper = page.locator('#editori_select')
+      .locator('xpath=ancestor::*[contains(@class,"choices")]').first();
+    const publisherInput = publisherWrapper.locator('.choices__input--cloned');
+    if (await publisherInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await publisherInput.click();
+      await publisherInput.fill(publisherName);
+      await publisherInput.press('Enter');
+      await page.waitForFunction(
+        () => document.querySelectorAll('#editori_hidden input[name="editori_new[]"], #editori_hidden input[name="editori_ids[]"]').length > 0,
+        { timeout: 5000 },
+      );
     }
 
     // Genre cascade (3 levels)

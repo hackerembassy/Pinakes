@@ -690,6 +690,25 @@ class FrontendController
             $authors[] = $author;
         }
 
+        // Publishers (issue #143): full ordered list for multi-publisher books.
+        // Falls back to the single primary publisher for pre-#143 data.
+        $book['editori'] = [];
+        $stmtPub = $db->prepare(
+            'SELECT e.id, e.nome FROM libri_editori le JOIN editori e ON le.editore_id = e.id WHERE le.libro_id = ? ORDER BY le.ordine, e.nome'
+        );
+        if ($stmtPub) {
+            $stmtPub->bind_param('i', $book_id);
+            $stmtPub->execute();
+            $resPub = $stmtPub->get_result();
+            while ($pub = $resPub->fetch_assoc()) {
+                $book['editori'][] = $pub;
+            }
+            $stmtPub->close();
+        }
+        if ($book['editori'] === [] && !empty($book['editore'])) {
+            $book['editori'][] = ['id' => (int) ($book['editore_id'] ?? 0), 'nome' => (string) $book['editore']];
+        }
+
         // Get approved reviews and statistics
         $recensioniRepo = new RecensioniRepository($db);
         $reviews = $recensioniRepo->getApprovedReviewsForBook($book_id);
@@ -756,7 +775,7 @@ class FrontendController
         $content = ob_get_clean();
 
         // FAIR Signposting (RFC 9264) — machine-discoverable link relations
-        $bookArr  = is_array($book) ? $book : [];
+        $bookArr  = $book;
         $tipoRes  = \App\Support\MediaLabels::resolveTipoMedia(
             isset($bookArr['formato'])    && is_string($bookArr['formato'])    ? $bookArr['formato']    : null,
             isset($bookArr['tipo_media']) && is_string($bookArr['tipo_media']) ? $bookArr['tipo_media'] : null

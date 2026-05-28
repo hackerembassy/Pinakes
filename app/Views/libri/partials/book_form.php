@@ -21,6 +21,18 @@ $initialAuthors = array_map(static function ($author) {
     ];
 }, $book['autori'] ?? []);
 
+// Multi-publisher (issue #143): mirror the authors initial-selection shape.
+// Falls back to the single primary publisher for books saved before #143.
+$initialPublishers = array_map(static function ($publisher) {
+    return [
+        'id' => (int)($publisher['id'] ?? 0),
+        'label' => $publisher['nome'] ?? ''
+    ];
+}, $book['editori'] ?? []);
+if ($initialPublishers === [] && !empty($book['editore_id']) && !empty($book['editore_nome'])) {
+    $initialPublishers[] = ['id' => (int)$book['editore_id'], 'label' => (string)$book['editore_nome']];
+}
+
 $initialMensolaId = (int)($book['mensola_id'] ?? 0);
 $initialPosizioneProgressiva = (int)($book['posizione_progressiva'] ?? 0);
 $initialCollocazione = $book['collocazione'] ?? '';
@@ -62,9 +74,11 @@ $initialData = [
 ];
 
 $initialData['autori'] = $initialAuthors;
+$initialData['editori'] = $initialPublishers;
 $initialData['current_cover'] = $currentCover;
 
 $initialAuthorsJson = htmlspecialchars(json_encode($initialAuthors, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
+$initialPublishersJson = htmlspecialchars(json_encode($initialPublishers, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
 $initialDataJsonRaw = json_encode($initialData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 $modeAttr = htmlspecialchars($mode, ENT_QUOTES, 'UTF-8');
 $actionAttr = htmlspecialchars($action, ENT_QUOTES, 'UTF-8');
@@ -251,27 +265,14 @@ $selectedSeriesType = \App\Support\SeriesLabels::canonical($book['tipo_collana']
             <!-- Percorso selezionato -->
           </div>
 
-          <!-- Publisher with Enhanced Search -->
+          <!-- Publishers with Choices.js (multi-value, issue #143) -->
           <div>
-            <label for="editore_field" class="form-label"><?= __("Editore") ?></label>
-            <div class="relative">
-              <div id="editore_field" class="choices choices--multiple">
-                <div class="choices__inner form-input pr-10 flex flex-wrap items-center gap-2">
-                  <div id="editore_chip_list" class="choices__list choices__list--multiple flex flex-wrap items-center gap-2"></div>
-                  <input id="editore_search" name="editore_search_display" type="text"
-                         placeholder="<?= __('Cerca editore esistente o inserisci nuovo...') ?>"
-                         class="choices__input choices__input--cloned flex-1 bg-transparent focus:outline-none border-none outline-none"
-                         style="min-width: 140px; flex: 1 1 140px;"
-                         autocomplete="off"
-                         value="<?php echo HtmlHelper::e($book['editore_nome'] ?? ''); ?>" />
-                </div>
-              </div>
-              <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-              <input type="hidden" name="editore_id" id="editore_id" value="<?php echo (int)($book['editore_id'] ?? 0); ?>" />
-              <input type="hidden" name="editore_search" id="editore_search_value" value="<?php echo HtmlHelper::e($book['editore_nome'] ?? ''); ?>" />
-              <ul id="editore_suggest" class="absolute z-20 bg-white border border-gray-200 rounded-lg mt-1 w-full hidden shadow-lg p-0"></ul>
-              <p class="text-xs text-gray-500 mt-1" id="editore_hint"></p>
-            </div>
+            <label for="editori_select" class="form-label"><?= __("Editore") ?></label>
+            <select id="editori_select" name="editori_select[]" multiple placeholder="<?= __('Cerca editori esistenti o aggiungine di nuovi...') ?>" data-initial-publishers="<?php echo $initialPublishersJson; ?>">
+              <!-- Options populated dynamically -->
+            </select>
+            <div id="editori_hidden"></div>
+            <p class="text-xs text-gray-500 mt-1"><?= __("Puoi selezionare più editori o aggiungerne di nuovi digitando il nome") ?></p>
           </div>
 
           <!-- Authors with Choices.js -->
@@ -1115,8 +1116,7 @@ const isbnImportMessages = {
 // Global variables
 let authorsChoice = null;
 let uppy = null;
-let editoreChipList = null;
-let editoreHiddenInput = null;
+let publishersChoice = null;
 
 // Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -1124,8 +1124,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize all components
     initializeUppy();
     initializeChoicesJS();
+    initializePublishersChoices();
     initializeSweetAlert();
-    initializeAutocomplete();
     initializeGeneriDropdowns();
     initializeFormValidation();
     initializeIsbnImport();
@@ -2114,186 +2114,211 @@ function initializeSweetAlert() {
 }
 
 // Initialize Enhanced Autocomplete for Publishers
-function initializeAutocomplete() {
+// Initialize Publishers multi-select (Choices.js) — issue #143.
+// Mirrors the authors data contract (editori_ids[] / editori_new[]) using the
+// stock Choices.js behaviour shared by the genre/collana selects. A
+// compatibility shim keeps the scraping + alternatives flows working.
+function initializePublishersChoices() {
+    try {
+        const element = document.getElementById('editori_select');
+        if (!element || typeof Choices === 'undefined') return;
 
-    const editoreInput = document.getElementById('editore_search');
-    const editoreIdInput = document.getElementById('editore_id');
-    const editoreHint = document.getElementById('editore_hint');
-    editoreChipList = document.getElementById('editore_chip_list');
-    editoreHiddenInput = document.getElementById('editore_search_value');
+        const preselected = Array.isArray(INITIAL_BOOK.editori) ? INITIAL_BOOK.editori : [];
 
-    if (!editoreInput || !editoreChipList) {
-        console.error('Autocomplete elements not found for editore field');
-        return;
-    }
-
-    if (editoreHiddenInput && !editoreHiddenInput.value && editoreInput.value) {
-        editoreHiddenInput.value = editoreInput.value.trim();
-    }
-
-    const clearEditoreChip = (preserveValue = false) => {
-        if (editoreChipList) {
-            Array.from(editoreChipList.querySelectorAll('.editore-chip')).forEach((chip) => chip.remove());
-        }
-        if (editoreInput) {
-            const currentValue = editoreInput.value;
-            editoreInput.disabled = false;
-            editoreInput.style.display = 'block';
-            if (!preserveValue) {
-                editoreInput.value = '';
-            } else {
-                editoreInput.value = currentValue;
-            }
-            editoreInput.placeholder = bookFormMessages.publisherPlaceholder;
-            editoreInput.focus();
-        }
-    };
-
-    const renderEditoreChip = (label, options = {}) => {
-        const displayLabel = (label || '').trim();
-        let isNew = false;
-        let publisherId = null;
-
-        if (typeof options === 'boolean') {
-            isNew = options;
-        } else if (options && typeof options === 'object') {
-            isNew = Boolean(options.isNew);
-            publisherId = options.publisherId != null ? String(options.publisherId) : null;
-        }
-
-        clearEditoreChip();
-
-        if (!displayLabel) {
-            if (editoreHint) editoreHint.textContent = '';
-            if (editoreHiddenInput) editoreHiddenInput.value = editoreInput.value.trim();
-            if (editoreIdInput) editoreIdInput.value = '0';
-            return;
-        }
-
-        if (editoreHiddenInput) {
-            editoreHiddenInput.value = displayLabel;
-        }
-        if (editoreIdInput) {
-            if (isNew) {
-                editoreIdInput.value = '0';
-            } else if (publisherId !== null) {
-                editoreIdInput.value = publisherId;
-            }
-        }
-
-        const chip = document.createElement('div');
-        chip.className = 'choices__item choices__item--selectable editore-chip inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm';
-        chip.dataset.label = displayLabel;
-        chip.dataset.isNew = isNew ? '1' : '0';
-
-        if (isNew) {
-            chip.classList.add('bg-primary-600', 'text-white', 'border-primary-500');
-            if (editoreHint) {
-                editoreHint.textContent = `${<?= json_encode(__("Nuovo editore:"), JSON_HEX_TAG) ?>} ${displayLabel}`;
-            }
-        } else {
-            chip.classList.add('bg-slate-900', 'text-slate-100', 'border-slate-700');
-            if (editoreHint) {
-                const suffix = publisherId ? ` (ID: ${publisherId})` : '';
-                editoreHint.textContent = `${<?= json_encode(__("Editore selezionato:"), JSON_HEX_TAG) ?>} ${displayLabel}${suffix}`;
-            }
-        }
-
-        const labelContainer = document.createElement('div');
-        labelContainer.className = 'flex items-center gap-2';
-
-        const labelSpan = document.createElement('span');
-        labelSpan.className = 'font-medium';
-        labelSpan.textContent = displayLabel;
-        labelContainer.appendChild(labelSpan);
-
-        const badge = document.createElement('span');
-        badge.className = `text-xs px-2 py-0.5 rounded-full ${isNew ? 'bg-primary-700 text-primary-100' : 'bg-slate-700 text-slate-200'}`;
-        badge.textContent = isNew ? <?= json_encode(__("Da creare"), JSON_HEX_TAG) ?> : <?= json_encode(__("Esistente"), JSON_HEX_TAG) ?>;
-        labelContainer.appendChild(badge);
-
-        chip.appendChild(labelContainer);
-
-        const removeButton = document.createElement('button');
-        removeButton.type = 'button';
-        removeButton.className = 'ml-2 text-white hover:text-red-300 text-lg font-bold leading-none w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-600 transition-colors';
-        removeButton.setAttribute('aria-label', __("Rimuovi editore"));
-        removeButton.innerHTML = '<i class="fas fa-times text-xs"></i>';
-        removeButton.addEventListener('click', () => {
-            chip.remove();
-            if (editoreIdInput) editoreIdInput.value = '0';
-            if (editoreHiddenInput) editoreHiddenInput.value = '';
-            if (editoreHint) editoreHint.textContent = '';
-            // Don't call clearEditoreChip as it would clear the input
-            // Just reset the state
-            if (editoreInput) {
-                editoreInput.disabled = false;
-                editoreInput.value = '';
-                editoreInput.placeholder = bookFormMessages.publisherPlaceholder;
-                editoreInput.focus();
-            }
+        publishersChoice = new Choices(element, {
+            searchEnabled: true,
+            removeItemButton: true,
+            addItems: true,
+            duplicateItemsAllowed: false,
+            placeholder: true,
+            placeholderValue: <?= json_encode(__("Cerca editori esistenti o aggiungine di nuovi..."), JSON_HEX_TAG) ?>,
+            noChoicesText: <?= json_encode(__("Nessun editore trovato, premi Invio per aggiungerne uno nuovo"), JSON_HEX_TAG) ?>,
+            itemSelectText: <?= json_encode(__("Clicca per selezionare"), JSON_HEX_TAG) ?>,
+            addItemText: (value) => `${<?= json_encode(__('Aggiungi'), JSON_HEX_TAG) ?>} <b>"${value}"</b> ${<?= json_encode(__('come nuovo editore'), JSON_HEX_TAG) ?>}`,
+            shouldSort: false,
+            searchResultLimit: -1,
+            searchFloor: 1,
+            classNames: { containerInner: 'choices__inner' }
         });
-        chip.appendChild(removeButton);
 
-        editoreChipList.appendChild(chip);
-        editoreInput.value = '';
-        editoreInput.disabled = true;
-        editoreInput.placeholder = '';
-    };
+        loadPublishersData(preselected);
 
-    setupEnhancedAutocomplete('editore_search', 'editore_suggest', window.BASE_PATH + '/api/search/editori?q=',
-        (item) => {
-            renderEditoreChip(item.label, {isNew: false, publisherId: item.id });
-            if (window.Toast) {
-                window.Toast.fire({
-                    icon: 'success',
-                    title: bookFormMessages.publisherSelected.replace('%s', item.label)
-                });
+        let pubSearchTimeout = null;
+        publishersChoice.passedElement.element.addEventListener('search', function(event) {
+            const query = (event.detail && event.detail.value) ? event.detail.value.trim() : '';
+            clearTimeout(pubSearchTimeout);
+            if (query.length < 2) return;
+            pubSearchTimeout = setTimeout(async () => {
+                try {
+                    const resp = await fetch(`${window.BASE_PATH}/api/search/editori?q=${encodeURIComponent(query)}`);
+                    if (!resp.ok) return;
+                    const serverResults = await resp.json();
+                    const selectedValues = new Set((publishersChoice.getValue(true) || []).map(v => String(v)));
+                    const newChoices = (serverResults || [])
+                        .filter(p => !selectedValues.has(String(p.id)))
+                        .map(p => ({ value: String(p.id), label: p.label, selected: false, customProperties: { isNew: false } }));
+                    if (newChoices.length > 0) {
+                        publishersChoice.setChoices(newChoices, 'value', 'label', false);
+                    }
+                } catch (e) {
+                    console.error('Server-side publisher search failed:', e);
+                }
+            }, 300);
+        });
+
+        const pubWrapper = element.closest('.choices');
+        const pubInternalInput = pubWrapper ? pubWrapper.querySelector('.choices__input--cloned') : null;
+
+        // Create a NEW publisher from typed text. A <select multiple> Choices.js
+        // does not natively add free-text options, so (like the authors field)
+        // we assign a temporary `new_*` value; addPublisherHiddenInput() then
+        // records it under editori_new[] for the controller to find-or-create.
+        const createPublisherFromInputWithValue = (rawValue) => {
+            const name = (rawValue || '').trim();
+            if (!name || !publishersChoice) return;
+            const already = Array.from(document.querySelectorAll('#editori_hidden [data-label]'))
+                .some(i => (i.dataset.label || '').toLowerCase() === name.toLowerCase());
+            if (already) {
+                if (pubInternalInput) pubInternalInput.value = '';
+                publishersChoice.hideDropdown();
+                return;
             }
-        },
-        (query) => {
-            if (editoreHint) {
-                editoreHint.textContent = `${<?= json_encode(__("Nessun editore trovato per"), JSON_HEX_TAG) ?>} "${query}" — ${<?= json_encode(__("premi Invio per crearne uno nuovo."), JSON_HEX_TAG) ?>}`;
+            const tempId = 'new_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+            addPublisherChoice(tempId, name, true);
+            if (pubInternalInput) pubInternalInput.value = '';
+            publishersChoice.hideDropdown();
+            if (typeof publishersChoice.clearInput === 'function') publishersChoice.clearInput();
+        };
+
+        // Mirror the authors _onEnterKey instance patch (see the big comment in
+        // initializeChoicesJS): needed so Enter creates a new publisher on a
+        // <select multiple>, while still selecting an exact-match existing one.
+        if (typeof publishersChoice._onEnterKey === 'function') {
+            const originalPubEnter = publishersChoice._onEnterKey.bind(publishersChoice);
+            publishersChoice._onEnterKey = function (event, hasActiveDropdown) {
+                if (!pubInternalInput) return originalPubEnter(event, hasActiveDropdown);
+                const inputValue = pubInternalInput.value.trim();
+                if (!inputValue) return originalPubEnter(event, hasActiveDropdown);
+                const dd = pubWrapper ? pubWrapper.querySelector('.choices__list--dropdown') : null;
+                const highlighted = dd ? dd.querySelector('.choices__item--selectable.is-highlighted') : null;
+                if (!highlighted) {
+                    event.preventDefault();
+                    createPublisherFromInputWithValue(inputValue);
+                    return;
+                }
+                const nameEl = highlighted.querySelector('.choices__item-text') || highlighted.childNodes[0];
+                const highlightedText = (nameEl ? nameEl.textContent : highlighted.textContent).trim().toLowerCase();
+                if (highlightedText === inputValue.toLowerCase()) {
+                    return originalPubEnter(event, hasActiveDropdown);
+                }
+                event.preventDefault();
+                createPublisherFromInputWithValue(inputValue);
+            };
+        }
+
+        element.addEventListener('addItem', function(event) {
+            addPublisherHiddenInput(event.detail.value, event.detail.label || event.detail.value);
+        });
+        element.addEventListener('removeItem', function(event) {
+            removePublisherHiddenInput(event.detail.value);
+        });
+
+        // Compatibility shim: scraping (applyScrapedData) and the alternatives
+        // panel (applyAlternativePublisher) call window.__renderEditorePreview.
+        window.__renderEditorePreview = function(label, opts) {
+            opts = opts || {};
+            if (opts.publisherId != null && String(opts.publisherId) !== '' && String(opts.publisherId) !== '0') {
+                addPublisherChoice(String(opts.publisherId), label, false);
+            } else {
+                addPublisherChoice(label, label, true);
             }
-        },
-        (rawValue) => {
-            const value = (rawValue || '').trim();
-            if (!value) return;
-            renderEditoreChip(value, {isNew: true });
-            if (window.Toast) {
-                window.Toast.fire({
-                    icon: 'info',
-                    title: bookFormMessages.publisherReady.replace('%s', value)
-                });
-            }
-        }
-    );
-
-    editoreInput.addEventListener('input', () => {
-        if (editoreInput.disabled) {
-            editoreInput.value = '';
-            return;
-        }
-
-        const hasChip = editoreChipList && editoreChipList.querySelector('.editore-chip');
-        if (hasChip) {
-            editoreInput.value = '';
-            return;
-        }
-
-        if (editoreIdInput) editoreIdInput.value = '0';
-        if (editoreHiddenInput) editoreHiddenInput.value = editoreInput.value.trim();
-        if (editoreHint) editoreHint.textContent = '';
-        // Don't clear the chip since we're typing new input
-    });
-
-    if ((INITIAL_BOOK.editore_id || 0) > 0 && INITIAL_BOOK.editore_nome) {
-        renderEditoreChip(INITIAL_BOOK.editore_nome, {isNew: false, publisherId: INITIAL_BOOK.editore_id });
-    } else if (editoreHiddenInput && editoreHiddenInput.value) {
-        renderEditoreChip(editoreHiddenInput.value, {isNew: true });
+        };
+    } catch (e) {
+        console.error('initializePublishersChoices error', e);
     }
+}
 
-    window.__renderEditorePreview = renderEditoreChip;
+// Load existing publishers into the Choices control and mark preselected ones.
+async function loadPublishersData(preselected = []) {
+    try {
+        const response = await fetch(window.BASE_PATH + '/api/search/editori', { credentials: 'same-origin' });
+        if (!response.ok) throw new Error('Network error');
+        const publishers = await response.json();
+        if (!publishersChoice) return;
+
+        const preMap = new Map();
+        preselected.forEach(p => { if (p && p.id) preMap.set(String(p.id), p.label || p.nome || ''); });
+
+        const baseChoices = (publishers || []).map(p => ({
+            value: String(p.id),
+            label: p.label,
+            selected: false,
+            customProperties: { isNew: false }
+        }));
+
+        // Non-destructive append (replaceChoices=false): a user may have already
+        // added a publisher in the brief window before this async load resolves,
+        // and replaceChoices=true would wipe it.
+        const r = publishersChoice.setChoices(baseChoices, 'value', 'label', false);
+        if (r && typeof r.then === 'function') await r;
+
+        // Select the preselected publishers via addPublisherChoice, which
+        // guarantees the choice exists before selecting it — the API list may
+        // not include a just-created publisher, in which case setChoiceByValue
+        // alone would render no chip. addItem then records editori_ids[].
+        preMap.forEach((label, id) => {
+            addPublisherChoice(String(id), label, false);
+        });
+    } catch (e) {
+        console.error('Error loading publishers:', e);
+    }
+}
+
+// Add a publisher to the Choices control: existing id (isNew=false) or a
+// newly typed name (isNew=true → value is the label itself).
+function addPublisherChoice(value, label, isNew = false) {
+    if (!publishersChoice) return;
+    const stringValue = String(value);
+    const selectEl = document.getElementById('editori_select');
+    if (!selectEl) return;
+    const exists = Array.from(selectEl.options).some(opt => opt.value === stringValue);
+    if (!exists) {
+        publishersChoice.setChoices(
+            [{ value: stringValue, label: label || stringValue, selected: false, customProperties: { isNew } }],
+            'value', 'label', false
+        );
+    }
+    publishersChoice.setChoiceByValue(stringValue);
+}
+
+// Maintain the hidden inputs the controller reads: editori_ids[] for existing
+// (numeric) publishers, editori_new[] for newly typed names.
+function addPublisherHiddenInput(value, label) {
+    const container = document.getElementById('editori_hidden');
+    if (!container) return;
+    const choiceValue = String(value ?? '');
+    const normalizedLabel = (label ?? '').trim();
+    const existing = Array.from(container.querySelectorAll('[data-choice-value]'))
+        .some(i => i.dataset.choiceValue === choiceValue);
+    if (existing) return;
+
+    const isExisting = /^\d+$/.test(choiceValue);
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = isExisting ? 'editori_ids[]' : 'editori_new[]';
+    input.value = isExisting ? choiceValue : (normalizedLabel || choiceValue);
+    input.dataset.choiceValue = choiceValue;
+    input.dataset.label = normalizedLabel || choiceValue;
+    container.appendChild(input);
+}
+
+function removePublisherHiddenInput(value) {
+    const container = document.getElementById('editori_hidden');
+    if (!container) return;
+    const choiceValue = String(value ?? '');
+    Array.from(container.querySelectorAll('[data-choice-value]')).forEach(i => {
+        if (i.dataset.choiceValue === choiceValue) i.remove();
+    });
 }
 
 // Inizializza menu a tendina Genere/Sottogenere con filtro
@@ -3549,36 +3574,26 @@ function initializeIsbnImport() {
                 }
             }
             
-            // Handle publisher
+            // Handle publisher (multi-publisher aware, issue #143)
             if (data.publisher) {
                 document.getElementById('scraped_publisher').value = data.publisher;
 
                 try {
                     const publishers = await fetchJSON(`${window.BASE_PATH}/api/search/editori?q=${encodeURIComponent(data.publisher)}`);
                     if (publishers && publishers.length > 0) {
-                        document.getElementById('editore_id').value = publishers[0].id;
-                        document.getElementById('editore_search').value = publishers[0].label || data.publisher;
-                        document.getElementById('editore_hint').textContent = `Editore trovato: ${publishers[0].label}`;
                         if (window.__renderEditorePreview) {
                             window.__renderEditorePreview(publishers[0].label || data.publisher, {
                                 isNew: false,
                                 publisherId: publishers[0].id
                             });
                         }
-                    } else {
-                        document.getElementById('editore_id').value = 0;
-                        document.getElementById('editore_search').value = data.publisher;
-                        document.getElementById('editore_hint').textContent = `Nuovo editore: ${data.publisher}`;
-                        if (window.__renderEditorePreview) {
-                            window.__renderEditorePreview(data.publisher, {isNew: true });
-                        }
+                    } else if (window.__renderEditorePreview) {
+                        window.__renderEditorePreview(data.publisher, { isNew: true });
                     }
                 } catch (error) {
                     console.error('Error searching publishers:', error);
-                    document.getElementById('editore_id').value = 0;
-                    document.getElementById('editore_search').value = data.publisher;
                     if (window.__renderEditorePreview) {
-                        window.__renderEditorePreview(data.publisher, {isNew: true });
+                        window.__renderEditorePreview(data.publisher, { isNew: true });
                     }
                 }
             }

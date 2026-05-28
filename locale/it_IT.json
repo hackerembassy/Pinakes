@@ -5091,5 +5091,9 @@
   "Attiva utente": "Attiva utente",
   "Elimina tutto": "Elimina tutto",
   "Conferma?": "Confermi?",
-  "Inserisci un valore": "Inserisci un valore"
+  "Inserisci un valore": "Inserisci un valore",
+  "Cerca editori esistenti o aggiungine di nuovi...": "Cerca editori esistenti o aggiungine di nuovi...",
+  "Nessun editore trovato, premi Invio per aggiungerne uno nuovo": "Nessun editore trovato, premi Invio per aggiungerne uno nuovo",
+  "come nuovo editore": "come nuovo editore",
+  "Puoi selezionare più editori o aggiungerne di nuovi digitando il nome": "Puoi selezionare più editori o aggiungerne di nuovi digitando il nome"
 }

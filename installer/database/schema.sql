@@ -503,6 +503,22 @@ CREATE TABLE `libri_autori` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
+-- Multi-publisher junction (issue #143). A book may have more than one
+-- publisher; libri.editore_id is retained as the PRIMARY publisher (ordine=0)
+-- for backward compatibility with single-publisher consumers.
+CREATE TABLE `libri_editori` (
+  `libro_id` int NOT NULL,
+  `editore_id` int NOT NULL,
+  `ordine` int DEFAULT NULL,
+  PRIMARY KEY (`libro_id`,`editore_id`),
+  KEY `libro_id` (`libro_id`),
+  KEY `editore_id` (`editore_id`),
+  CONSTRAINT `libri_editori_ibfk_1` FOREIGN KEY (`libro_id`) REFERENCES `libri` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `libri_editori_ibfk_2` FOREIGN KEY (`editore_id`) REFERENCES `editori` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `libri_donati` (
   `id` int NOT NULL AUTO_INCREMENT,
   `donazione_id` int NOT NULL,

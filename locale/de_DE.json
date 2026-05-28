@@ -5091,5 +5091,9 @@
   "Attiva utente": "Benutzer aktivieren",
   "Elimina tutto": "Alles löschen",
   "Conferma?": "Bestätigen?",
-  "Inserisci un valore": "Wert eingeben"
+  "Inserisci un valore": "Wert eingeben",
+  "Cerca editori esistenti o aggiungine di nuovi...": "Vorhandene Verlage suchen oder neue hinzufügen...",
+  "Nessun editore trovato, premi Invio per aggiungerne uno nuovo": "Kein Verlag gefunden, mit Enter einen neuen hinzufügen",
+  "come nuovo editore": "als neuen Verlag",
+  "Puoi selezionare più editori o aggiungerne di nuovi digitando il nome": "Sie können mehrere Verlage auswählen oder durch Eingabe des Namens neue hinzufügen"
 }

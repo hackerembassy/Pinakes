@@ -135,6 +135,30 @@ class BookRepository
             $row['autori'][] = $a;
         }
 
+        // publishers list (issue #143). editore_id / editore_nome are kept as
+        // the primary publisher; this is the full ordered set.
+        $row['editori'] = [];
+        if ($this->hasColumnInTable('libri_editori', 'editore_id')) {
+            $hasOrdine = $this->hasColumnInTable('libri_editori', 'ordine');
+            $pubOrder = $hasOrdine ? 'ORDER BY le.ordine, e.nome' : 'ORDER BY e.nome';
+            $stmtPub = $this->db->prepare("SELECT e.id, e.nome FROM libri_editori le JOIN editori e ON le.editore_id=e.id WHERE le.libro_id=? $pubOrder");
+            if ($stmtPub) {
+                $stmtPub->bind_param('i', $id);
+                $stmtPub->execute();
+                $pubRes = $stmtPub->get_result();
+                while ($p = $pubRes->fetch_assoc()) {
+                    $row['editori'][] = $p;
+                }
+                $stmtPub->close();
+            }
+        }
+        // Fallback for installs before the libri_editori backfill: surface the
+        // single primary publisher as a one-element list so views can always
+        // iterate $row['editori'].
+        if ($row['editori'] === [] && !empty($row['editore_id']) && !empty($row['editore_nome'])) {
+            $row['editori'][] = ['id' => (int) $row['editore_id'], 'nome' => (string) $row['editore_nome']];
+        }
+
         $row['serie_appartenenze'] = $seriesRepo->getBookMemberships($id);
         // PERF-2 (review): reuse the memberships array we just fetched
         // instead of letting getOtherSeriesText fire the same query again.
@@ -568,6 +592,7 @@ class BookRepository
 
         $bookId = (int) $this->db->insert_id;
         $this->syncAuthors($bookId, $data['autori_ids'] ?? []);
+        $this->syncPublishers($bookId, $data['editori_ids'] ?? []);
         return $bookId;
     }
 
@@ -906,6 +931,7 @@ class BookRepository
         }
 
         $this->syncAuthors($id, $data['autori_ids'] ?? []);
+        $this->syncPublishers($id, $data['editori_ids'] ?? []);
         return $ok;
     }
 
@@ -957,6 +983,47 @@ class BookRepository
                 $stmt->execute();
             }
         }
+    }
+
+    /**
+     * Replace the publisher set for a book (issue #143).
+     *
+     * Mirrors {@see syncAuthors()}: deletes the libri_editori rows then inserts
+     * the given publisher ids in order. New publishers must already be resolved
+     * to numeric ids by the controller. The caller keeps libri.editore_id in
+     * sync with the first (primary) publisher.
+     *
+     * @param array<int, int|string> $publisherIds Ordered, deduplicated by caller
+     */
+    private function syncPublishers(int $bookId, array $publisherIds): void
+    {
+        $stmt = $this->db->prepare('DELETE FROM libri_editori WHERE libro_id = ?');
+        if ($stmt) {
+            $stmt->bind_param('i', $bookId);
+            $stmt->execute();
+            $stmt->close();
+        } else {
+            error_log("Critical error: Unable to prepare statement for deleting book publishers for book_id: $bookId");
+            throw new \Exception("Database error: unable to delete book publishers");
+        }
+        if (!$publisherIds) {
+            return;
+        }
+
+        $stmt = $this->db->prepare('INSERT IGNORE INTO libri_editori (libro_id, editore_id, ordine) VALUES (?, ?, ?)');
+        if (!$stmt) {
+            return;
+        }
+        $ordine = 0;
+        foreach ($publisherIds as $publisherData) {
+            $publisherId = is_numeric($publisherData) ? (int) $publisherData : 0;
+            if ($publisherId > 0) {
+                $stmt->bind_param('iii', $bookId, $publisherId, $ordine);
+                $stmt->execute();
+                $ordine++;
+            }
+        }
+        $stmt->close();
     }
 
     private function processAuthorId($authorData): int
@@ -1315,6 +1382,7 @@ class BookRepository
             'autori',
             'libri_autori',
             'editori',
+            'libri_editori',
             'generi',
             'utenti',
             'prestiti',

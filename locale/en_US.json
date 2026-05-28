@@ -5091,5 +5091,9 @@
   "Attiva utente": "Activate user",
   "Elimina tutto": "Delete everything",
   "Conferma?": "Confirm?",
-  "Inserisci un valore": "Enter a value"
+  "Inserisci un valore": "Enter a value",
+  "Cerca editori esistenti o aggiungine di nuovi...": "Search existing publishers or add new ones...",
+  "Nessun editore trovato, premi Invio per aggiungerne uno nuovo": "No publisher found, press Enter to add a new one",
+  "come nuovo editore": "as a new publisher",
+  "Puoi selezionare più editori o aggiungerne di nuovi digitando il nome": "You can select multiple publishers or add new ones by typing the name"
 }

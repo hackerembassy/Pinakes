@@ -1615,12 +1615,20 @@ ob_start();
             </div>
             <div class="col-lg-8">
                 <div class="hero-text">
-                    <?php if (!empty($book['editore'])): ?>
+                    <?php
+                    // Multi-publisher (issue #143): link every publisher, fallback to primary.
+                    $heroPublishers = $book['editori'] ?? [];
+                    if ($heroPublishers === [] && !empty($book['editore'])) {
+                        $heroPublishers = [['nome' => $book['editore']]];
+                    }
+                    ?>
+                    <?php if ($heroPublishers !== []): ?>
                         <p class="mb-2 opacity-75">
                             <i class="fas fa-building me-2"></i>
-                            <a href="<?= htmlspecialchars(route_path('publisher') . '/' . urlencode(html_entity_decode($book['editore'], ENT_QUOTES, 'UTF-8')), ENT_QUOTES, 'UTF-8') ?>" class="text-decoration-none text-dark">
-                                <?= htmlspecialchars(html_entity_decode($book['editore'], ENT_QUOTES, 'UTF-8')) ?>
-                            </a>
+                            <?php foreach ($heroPublishers as $hpI => $hp):
+                                $hpName = html_entity_decode((string) ($hp['nome'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                if ($hpName === '') { continue; }
+                            ?><?= $hpI > 0 ? ', ' : '' ?><a href="<?= htmlspecialchars(route_path('publisher') . '/' . urlencode($hpName), ENT_QUOTES, 'UTF-8') ?>" class="text-decoration-none text-dark"><?= htmlspecialchars($hpName) ?></a><?php endforeach; ?>
                         </p>
                     <?php endif; ?>
 
@@ -2186,10 +2194,17 @@ ob_start();
                         <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i><?= __("Informazioni Libro") ?></h6>
                     </div>
                     <div class="card-body">
-                        <?php if (!empty($book['editore'])): ?>
+                        <?php
+                        $metaPublishers = $book['editori'] ?? [];
+                        if ($metaPublishers === [] && !empty($book['editore'])) {
+                            $metaPublishers = [['nome' => $book['editore']]];
+                        }
+                        $metaPublisherNames = array_filter(array_map(static fn($p) => trim((string) ($p['nome'] ?? '')), $metaPublishers));
+                        ?>
+                        <?php if ($metaPublisherNames !== []): ?>
                         <div class="meta-item">
                             <div class="meta-label"><?= \App\Support\MediaLabels::label('editore', $book['formato'] ?? null, $book['tipo_media'] ?? null) ?></div>
-                            <div class="meta-value"><?= htmlspecialchars($book['editore'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="meta-value"><?= htmlspecialchars(implode(', ', $metaPublisherNames), ENT_QUOTES, 'UTF-8') ?></div>
                         </div>
                         <?php endif; ?>
 

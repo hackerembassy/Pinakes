@@ -5091,5 +5091,9 @@
   "Attiva utente": "Activer l'utilisateur",
   "Elimina tutto": "Tout supprimer",
   "Conferma?": "Confirmer ?",
-  "Inserisci un valore": "Saisissez une valeur"
+  "Inserisci un valore": "Saisissez une valeur",
+  "Cerca editori esistenti o aggiungine di nuovi...": "Rechercher des éditeurs existants ou en ajouter de nouveaux...",
+  "Nessun editore trovato, premi Invio per aggiungerne uno nuovo": "Aucun éditeur trouvé, appuyez sur Entrée pour en ajouter un nouveau",
+  "come nuovo editore": "comme nouvel éditeur",
+  "Puoi selezionare più editori o aggiungerne di nuovi digitando il nome": "Vous pouvez sélectionner plusieurs éditeurs ou en ajouter de nouveaux en saisissant le nom"
 }
