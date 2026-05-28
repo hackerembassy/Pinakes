@@ -13,6 +13,7 @@ final class BundledPlugins
         'dewey-editor',
         'digital-library',
         'discogs',
+        'frbr-lrm',
         'goodlib',
         'musicbrainz',
         'ncip-server',
