@@ -1028,16 +1028,16 @@ class BookRepository
         if ($publisherIds) {
             $insert = $this->db->prepare('INSERT IGNORE INTO libri_editori (libro_id, editore_id, ordine) VALUES (?, ?, ?)');
             if ($insert === false) {
-                error_log("Critical error: Unable to prepare statement for inserting book publishers for book_id: $bookId");
-                throw new \Exception("Database error: unable to insert book publishers");
+                \App\Support\SecureLogger::error('[BookRepository] prepare failed inserting book publishers', ['book_id' => $bookId]);
+                throw new \RuntimeException("Database error: unable to insert book publishers");
             }
         }
 
         $del = $this->db->prepare('DELETE FROM libri_editori WHERE libro_id = ?');
         if ($del === false) {
             if ($insert !== null) { $insert->close(); }
-            error_log("Critical error: Unable to prepare statement for deleting book publishers for book_id: $bookId");
-            throw new \Exception("Database error: unable to delete book publishers");
+            \App\Support\SecureLogger::error('[BookRepository] prepare failed deleting book publishers', ['book_id' => $bookId]);
+            throw new \RuntimeException("Database error: unable to delete book publishers");
         }
         $del->bind_param('i', $bookId);
         $del->execute();

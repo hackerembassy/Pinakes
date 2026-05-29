@@ -3085,7 +3085,10 @@ class LibriController
             ];
         }
 
-        $writer = Csv::writerToStream($stream, $delimiter);
+        // formulaPrefix "'" neutralizes CSV injection: user-controlled fields
+        // (titolo, autori, editore, parole_chiave…) starting with = + - @ are
+        // prefixed so spreadsheet clients don't evaluate them as formulas.
+        $writer = Csv::writerToStream($stream, $delimiter, "'");
         $writer->insertOne($headers);
 
         $rowCount = 0;

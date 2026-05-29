@@ -619,11 +619,21 @@ class SbnClient
         $isbns = [];
         foreach ($numeri as $num) {
             $numStr = (string) $num;
-            if (str_contains(strtoupper($numStr), '[ISBN]')) {
-                $isbn = preg_replace('/[^0-9X]/i', '', $numStr);
-                if ($isbn !== null && $isbn !== '') {
-                    $isbns[] = strtoupper($isbn);
-                }
+            if (!str_contains(strtoupper($numStr), '[ISBN]')) {
+                continue;
+            }
+            // SBN 'numeri' entries can carry trailing annotations after the
+            // ISBN (e.g. "[ISBN]  978-88-04-67166-4 : br. : EUR 12,00").
+            // Strip the [ISBN] marker, keep only the first ' : '-delimited
+            // segment, then strip separators — so price/binding digits never
+            // get concatenated onto the ISBN and defeat the strict match.
+            $after = preg_replace('/^.*\[ISBN\]\s*/i', '', $numStr) ?? $numStr;
+            $candidate = preg_split('/\s*:\s*/', $after)[0] ?? $after;
+            $isbn = strtoupper((string) preg_replace('/[^0-9X]/i', '', $candidate));
+            // Only accept well-formed ISBN-10/13 lengths; a concatenated price
+            // would exceed 13 and is rejected (safe no-op fallback upstream).
+            if (strlen($isbn) === 10 || strlen($isbn) === 13) {
+                $isbns[] = $isbn;
             }
         }
         return $isbns;

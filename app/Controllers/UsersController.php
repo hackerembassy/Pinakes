@@ -854,7 +854,9 @@ class UsersController
         $stream = fopen('php://temp', 'r+');
         fwrite($stream, "\xEF\xBB\xBF"); // UTF-8 BOM
 
-        $writer = Csv::writerToStream($stream, ';');
+        // formulaPrefix "'" neutralizes CSV injection on user-controlled fields
+        // (nome, email, note) that start with = + - @.
+        $writer = Csv::writerToStream($stream, ';', "'");
         $writer->insertOne($headers);
 
         foreach ($utenti as $utente) {
