@@ -966,39 +966,29 @@ class DiscogsPlugin
         self::$lastRequestTime = microtime(true);
 
         $headers = [
-            'Accept: application/vnd.discogs.v2.discogs+json',
+            'Accept' => 'application/vnd.discogs.v2.discogs+json',
         ];
 
         if ($token !== null && $token !== '') {
-            $headers[] = 'Authorization: Discogs token=' . $token;
+            $headers['Authorization'] = 'Discogs token=' . $token;
         }
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL            => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT        => self::TIMEOUT,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_MAXREDIRS      => 5,
-            CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
-            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
-            CURLOPT_USERAGENT      => self::USER_AGENT,
-            CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_SSL_VERIFYPEER => true,
+        $res = \App\Support\HttpClient::get($url, $headers, [
+            'timeout'         => self::TIMEOUT,
+            'connect_timeout' => 5,
+            'max_redirects'   => 5,
+            'user_agent'      => self::USER_AGENT,
         ]);
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($curlError !== '') {
-            \App\Support\SecureLogger::warning('[Discogs] cURL error: ' . $curlError);
+        if (!$res['ok']) {
+            \App\Support\SecureLogger::warning('[Discogs] HTTP request failed: ' . $url);
             return null;
         }
 
-        if ($httpCode !== 200 || !is_string($response) || $response === '') {
+        $httpCode = $res['status'];
+        $response = $res['body'];
+
+        if ($httpCode !== 200 || $response === '') {
             $this->logApiFailure('Discogs', (int) $httpCode, $url);
             return null;
         }
@@ -1434,30 +1424,22 @@ class DiscogsPlugin
     {
         // Cover Art Archive — no rate limit, but may 404
         $url = 'https://coverartarchive.org/release/' . urlencode($mbid);
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL            => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT        => 10,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_MAXREDIRS      => 5,
-            CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
-            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
-            CURLOPT_USERAGENT      => self::USER_AGENT,
-            CURLOPT_SSL_VERIFYPEER => true,
+        $res = \App\Support\HttpClient::get($url, [], [
+            'timeout'         => 10,
+            'connect_timeout' => 5,
+            'max_redirects'   => 5,
+            'user_agent'      => self::USER_AGENT,
         ]);
-        $resp = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErr = curl_error($ch);
-        curl_close($ch);
 
-        if ($curlErr !== '') {
-            \App\Support\SecureLogger::warning('[CoverArt] cURL error: ' . $curlErr);
+        if (!$res['ok']) {
+            \App\Support\SecureLogger::warning('[CoverArt] HTTP request failed: ' . $url);
             return null;
         }
 
-        if ($code !== 200 || !is_string($resp)) {
+        $code = $res['status'];
+        $resp = $res['body'];
+
+        if ($code !== 200) {
             $this->logApiFailure('CoverArt', (int) $code, $url);
             return null;
         }
@@ -1503,31 +1485,24 @@ class DiscogsPlugin
         }
         self::$lastMbRequestTime = microtime(true);
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL            => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT        => self::TIMEOUT,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_MAXREDIRS      => 5,
-            CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
-            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
-            CURLOPT_USERAGENT      => self::USER_AGENT,
-            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
-            CURLOPT_SSL_VERIFYPEER => true,
+        $res = \App\Support\HttpClient::get($url, [
+            'Accept' => 'application/json',
+        ], [
+            'timeout'         => self::TIMEOUT,
+            'connect_timeout' => 5,
+            'max_redirects'   => 5,
+            'user_agent'      => self::USER_AGENT,
         ]);
-        $resp = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErr = curl_error($ch);
-        curl_close($ch);
 
-        if ($curlErr !== '') {
-            \App\Support\SecureLogger::warning('[MusicBrainz] cURL error: ' . $curlErr);
+        if (!$res['ok']) {
+            \App\Support\SecureLogger::warning('[MusicBrainz] HTTP request failed: ' . $url);
             return null;
         }
 
-        if ($code !== 200 || !is_string($resp)) {
+        $code = $res['status'];
+        $resp = $res['body'];
+
+        if ($code !== 200) {
             $this->logApiFailure('MusicBrainz', (int) $code, $url);
             return null;
         }
@@ -1572,29 +1547,22 @@ class DiscogsPlugin
         }
         self::$lastDeezerRequestTime = microtime(true);
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL            => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 10,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_MAXREDIRS      => 5,
-            CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
-            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
-            CURLOPT_USERAGENT      => self::USER_AGENT,
-            CURLOPT_SSL_VERIFYPEER => true,
+        $res = \App\Support\HttpClient::get($url, [], [
+            'timeout'         => 10,
+            'connect_timeout' => 5,
+            'max_redirects'   => 5,
+            'user_agent'      => self::USER_AGENT,
         ]);
-        $resp = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErr = curl_error($ch);
-        curl_close($ch);
 
-        if ($curlErr !== '') {
-            \App\Support\SecureLogger::warning('[Deezer] cURL error: ' . $curlErr);
+        if (!$res['ok']) {
+            \App\Support\SecureLogger::warning('[Deezer] HTTP request failed: ' . $url);
             return $data;
         }
 
-        if ($code !== 200 || !is_string($resp)) {
+        $code = $res['status'];
+        $resp = $res['body'];
+
+        if ($code !== 200) {
             $this->logApiFailure('Deezer', (int) $code, $url);
             return $data;
         }

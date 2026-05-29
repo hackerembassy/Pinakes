@@ -534,27 +534,18 @@ class OpenLibraryPlugin
     private function fetchGoodreadsCoverUrl(string $apiUrl): ?string
     {
         try {
-            $ch = curl_init();
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $apiUrl,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_TIMEOUT => 10,
-                CURLOPT_USERAGENT => self::USER_AGENT,
-                CURLOPT_HTTPHEADER => ['Accept: application/json'],
-                CURLOPT_SSL_VERIFYPEER => true,
-            ]);
-
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
+            $res = \App\Support\HttpClient::get(
+                $apiUrl,
+                ['Accept' => 'application/json'],
+                ['timeout' => 10, 'user_agent' => self::USER_AGENT]
+            );
 
             // Gracefully handle non-200 responses
-            if ($httpCode !== 200 || empty($response)) {
+            if (!$res['ok'] || $res['status'] !== 200 || empty($res['body'])) {
                 return null;
             }
 
-            $data = json_decode($response, true);
+            $data = json_decode($res['body'], true);
 
             // Extract URL from response
             if (!empty($data['url']) && filter_var($data['url'], FILTER_VALIDATE_URL)) {
@@ -677,26 +668,17 @@ class OpenLibraryPlugin
      */
     private function makeApiRequest(string $url): ?array
     {
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT => self::TIMEOUT,
-            CURLOPT_USERAGENT => self::USER_AGENT,
-            CURLOPT_HTTPHEADER => ['Accept: application/json'],
-            CURLOPT_SSL_VERIFYPEER => true,
-        ]);
+        $res = \App\Support\HttpClient::get(
+            $url,
+            ['Accept' => 'application/json'],
+            ['timeout' => self::TIMEOUT, 'user_agent' => self::USER_AGENT]
+        );
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || !$response) {
+        if (!$res['ok'] || $res['status'] !== 200 || !$res['body']) {
             return null;
         }
 
-        $data = json_decode($response, true);
+        $data = json_decode($res['body'], true);
         return $data ?: null;
     }
 
@@ -1059,24 +1041,17 @@ class OpenLibraryPlugin
             urlencode($language)
         );
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 10,
-            CURLOPT_USERAGENT => self::USER_AGENT,
-            CURLOPT_SSL_VERIFYPEER => true,
-        ]);
+        $res = \App\Support\HttpClient::get(
+            $url,
+            [],
+            ['timeout' => 10, 'user_agent' => self::USER_AGENT]
+        );
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || empty($response)) {
+        if (!$res['ok'] || $res['status'] !== 200 || empty($res['body'])) {
             return null;
         }
 
-        $data = json_decode($response, true);
+        $data = json_decode($res['body'], true);
 
         if (empty($data['items'][0]['volumeInfo'])) {
             return null;

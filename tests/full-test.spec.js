@@ -2560,9 +2560,13 @@ test.describe.serial('Phase 18: Issue Regressions', () => {
     );
     expect(selectedResp.ok()).toBeTruthy();
     const selectedCsv = await selectedResp.text();
-    const selectedLines = selectedCsv.trim().split('\n');
-    // Header + exactly 2 data rows
-    expect(selectedLines.length).toBe(3);
+    // Count data records by their leading numeric id column. CSV fields are
+    // RFC 4180 quoted, so a description containing newlines (e.g. an HTML <ol>
+    // tracklist normalized to multiple lines) legitimately spans several
+    // physical lines within one record — physical line count is NOT record
+    // count. Each record begins with "<id>;" at the start of a line.
+    const dataRecords = selectedCsv.trim().split('\n').filter((l) => /^\d+;/.test(l));
+    expect(dataRecords.length).toBe(2);
   });
 
   test('18.7 #67: Genre filter by subgenre returns results', async () => {
