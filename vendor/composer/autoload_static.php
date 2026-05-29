@@ -26,6 +26,7 @@ class ComposerStaticInite58358eec498b7b6927cfe671382554c
             'Symfony\\Polyfill\\Php80\\' => 23,
             'Symfony\\Polyfill\\Mbstring\\' => 26,
             'Symfony\\Polyfill\\Ctype\\' => 23,
+            'Symfony\\Component\\HtmlSanitizer\\' => 32,
             'Slim\\Psr7\\' => 10,
             'Slim\\Csrf\\' => 10,
             'Slim\\' => 5,
@@ -46,9 +47,11 @@ class ComposerStaticInite58358eec498b7b6927cfe671382554c
         'M' => 
         array (
             'Monolog\\' => 8,
+            'Masterminds\\' => 12,
         ),
         'L' => 
         array (
+            'League\\Uri\\' => 11,
             'Laravel\\SerializableClosure\\' => 28,
         ),
         'I' => 
@@ -96,6 +99,10 @@ class ComposerStaticInite58358eec498b7b6927cfe671382554c
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-ctype',
         ),
+        'Symfony\\Component\\HtmlSanitizer\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/symfony/html-sanitizer',
+        ),
         'Slim\\Psr7\\' => 
         array (
             0 => __DIR__ . '/..' . '/slim/psr7/src',
@@ -141,6 +148,15 @@ class ComposerStaticInite58358eec498b7b6927cfe671382554c
         'Monolog\\' => 
         array (
             0 => __DIR__ . '/..' . '/monolog/monolog/src/Monolog',
+        ),
+        'Masterminds\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/masterminds/html5/src',
+        ),
+        'League\\Uri\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/league/uri',
+            1 => __DIR__ . '/..' . '/league/uri-interfaces',
         ),
         'Laravel\\SerializableClosure\\' => 
         array (
