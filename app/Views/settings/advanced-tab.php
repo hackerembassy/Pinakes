@@ -313,24 +313,42 @@ use App\Support\HtmlHelper;
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Session duration Setting -->
+    <?php $sessionLifetime = (int) ($advancedSettings['session_lifetime'] ?? 180); ?>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="space-y-4">
+        <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
+          <i class="fas fa-clock text-gray-500"></i>
+          <?= __("Durata sessione") ?>
+        </h2>
+        <p class="text-sm text-gray-600"><?= __("Quanto tempo un utente resta connesso prima che la sessione scada per inattività.") ?></p>
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div class="flex items-start gap-2">
+            <i class="fas fa-info-circle text-blue-600 mt-0.5"></i>
+            <div class="text-xs text-blue-800">
+              <strong><?= __("Quando aumentarla:") ?></strong>
+              <p class="mt-1"><?= __("Aumenta questo valore se durante catalogazioni lunghe (ad esempio digitando un indice esteso nelle note) ricevi l'errore «sessione scaduta» al salvataggio e perdi i dati inseriti. Il valore predefinito è 3 ore.") ?></p>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="bg-white border border-gray-200 rounded-2xl p-5 space-y-4">
         <div>
-          <label for="session_lifetime" class="block text-sm font-medium text-gray-700 mb-2">
-            <i class="fas fa-clock text-gray-500 mr-1"></i>
-            <?= __("Durata sessione") ?>
-          </label>
-          <?php $sessionLifetime = (int) ($advancedSettings['session_lifetime'] ?? 180); ?>
+          <label for="session_lifetime" class="block text-sm font-medium text-gray-700 mb-2"><?= __("Durata sessione") ?></label>
           <select id="session_lifetime"
                   name="session_lifetime"
-                  class="block w-64 rounded-xl border-gray-300 focus:border-gray-500 focus:ring-gray-500 text-sm py-3 px-4">
+                  class="block w-full rounded-xl border-gray-300 focus:border-gray-500 focus:ring-gray-500 text-sm py-3 px-4">
             <?php foreach ([30 => __("30 minuti"), 60 => __("1 ora"), 120 => __("2 ore"), 180 => __("3 ore"), 360 => __("6 ore"), 720 => __("12 ore"), 1440 => __("24 ore")] as $minutes => $label): ?>
             <option value="<?= $minutes ?>" <?= $sessionLifetime === $minutes ? 'selected' : '' ?>><?= HtmlHelper::e($label) ?></option>
             <?php endforeach; ?>
           </select>
-          <p class="text-xs text-gray-500 mt-3">
-            <i class="fas fa-info-circle mr-1"></i>
-            <?= __("Tempo di inattività prima che la sessione scada. Aumentalo se durante catalogazioni lunghe ricevi l'errore «sessione scaduta» al salvataggio. Predefinito: 3 ore.") ?>
-          </p>
+        </div>
+        <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
+          <div class="text-xs text-gray-700">
+            <strong><?= __("Predefinito:") ?></strong> <?= __("3 ore") ?>
+          </div>
         </div>
       </div>
     </div>
