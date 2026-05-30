@@ -180,6 +180,74 @@ class BibframeLinkedDataPlugin
         ) use ($plugin): ResponseInterface {
             return $plugin->handleItemRequest($request, $response, $args);
         });
+
+        // ── RDA Registry (rdaregistry.info) JSON-LD — issue #135 ──
+        // Convenience URLs; the same RDA output is also reachable on
+        // /api/bibframe/book/{id} via Accept: …;profile="https://rdaregistry.info".
+        $app->get('/libri/{id:[0-9]+}.rda.json', function (
+            ServerRequestInterface $request,
+            ResponseInterface $response,
+            array $args
+        ) use ($plugin): ResponseInterface {
+            return $plugin->rdaManifestationAction($request, $response, $args);
+        });
+        $app->get('/opere/{id:[0-9]+}.rda.json', function (
+            ServerRequestInterface $request,
+            ResponseInterface $response,
+            array $args
+        ) use ($plugin): ResponseInterface {
+            return $plugin->rdaWorkAction($request, $response, $args);
+        });
+        $app->get('/espressioni/{id:[0-9]+}.rda.json', function (
+            ServerRequestInterface $request,
+            ResponseInterface $response,
+            array $args
+        ) use ($plugin): ResponseInterface {
+            return $plugin->rdaExpressionAction($request, $response, $args);
+        });
+    }
+
+    /**
+     * True when the client asked for the RDA Registry profile via the Accept
+     * header, e.g. `application/ld+json; profile="https://rdaregistry.info"`.
+     */
+    private function wantsRdaProfile(string $accept): bool
+    {
+        return str_contains(strtolower($accept), 'rdaregistry.info');
+    }
+
+    /** @param array<string, mixed>|null $doc */
+    private function rdaJsonResponse(ResponseInterface $response, ?array $doc): ResponseInterface
+    {
+        if ($doc === null) {
+            return $this->notFound($response);
+        }
+        $response->getBody()->write((string) json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        return $response
+            ->withHeader('Content-Type', 'application/ld+json; charset=utf-8')
+            ->withHeader('Vary', 'Accept');
+    }
+
+    public function rdaManifestationAction(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $book = $this->fetchBook((int) ($args['id'] ?? 0));
+        if ($book === null) {
+            return $this->notFound($response);
+        }
+        require_once __DIR__ . '/RdaRegistryBuilder.php';
+        return $this->rdaJsonResponse($response, (new RdaRegistryBuilder($this->db))->buildManifestation($book));
+    }
+
+    public function rdaWorkAction(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        require_once __DIR__ . '/RdaRegistryBuilder.php';
+        return $this->rdaJsonResponse($response, (new RdaRegistryBuilder($this->db))->buildWork((int) ($args['id'] ?? 0)));
+    }
+
+    public function rdaExpressionAction(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        require_once __DIR__ . '/RdaRegistryBuilder.php';
+        return $this->rdaJsonResponse($response, (new RdaRegistryBuilder($this->db))->buildExpression((int) ($args['id'] ?? 0)));
     }
 
     // ── Handlers ──────────────────────────────────────────────────────────────
@@ -192,6 +260,12 @@ class BibframeLinkedDataPlugin
         $book = $this->fetchBook((int) ($args['id'] ?? 0));
         if ($book === null) {
             return $this->notFound($response);
+        }
+        // Content negotiation (#135): RDA Registry profile → RDA JSON-LD,
+        // otherwise the default BIBFRAME 2.0 graph (unchanged behaviour).
+        if ($this->wantsRdaProfile($request->getHeaderLine('Accept'))) {
+            require_once __DIR__ . '/RdaRegistryBuilder.php';
+            return $this->rdaJsonResponse($response, (new RdaRegistryBuilder($this->db))->buildManifestation($book));
         }
         $graph    = $this->buildGraph($book);
         return $this->serializeResponse($request, $response, $graph);
@@ -319,10 +393,10 @@ class BibframeLinkedDataPlugin
      */
     private function buildGraph(array $book): array
     {
-        $bookId  = (int) $book['id'];
-        $authors = $this->fetchAuthors($bookId);
-        $pub     = !empty($book['editore_id']) ? $this->fetchPublisher((int) $book['editore_id']) : null;
-        $genre   = !empty($book['genere_id'])  ? $this->fetchGenre((int) $book['genere_id'])     : null;
+        $bookId     = (int) $book['id'];
+        $authors    = $this->fetchAuthors($bookId);
+        $publishers = $this->fetchPublishersForBook($bookId, !empty($book['editore_id']) ? (int) $book['editore_id'] : null);
+        $genre      = !empty($book['genere_id'])  ? $this->fetchGenre((int) $book['genere_id'])     : null;
 
         $title    = (string) ($book['titolo'] ?? '');
         $subtitle = (string) ($book['sottotitolo'] ?? '');
@@ -455,16 +529,26 @@ class BibframeLinkedDataPlugin
             $instance['bf:identifiedBy'] = count($identifiers) === 1 ? $identifiers[0] : $identifiers;
         }
 
-        // Provision activity (publication)
-        $pubNode = ['@type' => 'bf:Publication'];
-        if ($year !== '') {
-            $pubNode['bf:date'] = ['@value' => $year, '@type' => 'xsd:gYear'];
+        // Provision activity (publication). BIBFRAME allows multiple
+        // bf:provisionActivity nodes — emit one bf:Publication per publisher
+        // (each carrying the publication agent, plus the date when known),
+        // mirroring how authors map to multiple bf:contribution nodes.
+        $provisionNodes = [];
+        foreach ($publishers as $pub) {
+            if (empty($pub['nome'])) { continue; }
+            $node = ['@type' => 'bf:Publication'];
+            if ($year !== '') {
+                $node['bf:date'] = ['@value' => $year, '@type' => 'xsd:gYear'];
+            }
+            $node['bf:agent'] = ['@type' => 'bf:Agent', 'rdfs:label' => (string) $pub['nome']];
+            $provisionNodes[] = $node;
         }
-        if ($pub !== null && !empty($pub['nome'])) {
-            $pubNode['bf:agent'] = ['@type' => 'bf:Agent', 'rdfs:label' => (string) $pub['nome']];
+        if ($provisionNodes === [] && $year !== '') {
+            // No publisher, but the publication year is known.
+            $provisionNodes[] = ['@type' => 'bf:Publication', 'bf:date' => ['@value' => $year, '@type' => 'xsd:gYear']];
         }
-        if (count($pubNode) > 1) {
-            $instance['bf:provisionActivity'] = $pubNode;
+        if ($provisionNodes !== []) {
+            $instance['bf:provisionActivity'] = count($provisionNodes) === 1 ? $provisionNodes[0] : $provisionNodes;
         }
 
         // Extent (pages)
@@ -842,6 +926,40 @@ class BibframeLinkedDataPlugin
         $row    = ($result instanceof \mysqli_result) ? $result->fetch_assoc() : null;
         $stmt->close();
         return is_array($row) ? $row : null;
+    }
+
+    /**
+     * All publishers for a book (issue #143), ordered. Falls back to the single
+     * primary publisher (editore_id) when the libri_editori junction is empty or
+     * absent (installs predating the multi-publisher migration).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function fetchPublishersForBook(int $bookId, ?int $primaryEditoreId): array
+    {
+        $out = [];
+        $stmt = $this->db->prepare(
+            'SELECT e.id, e.nome
+               FROM libri_editori le
+               JOIN editori e ON e.id = le.editore_id
+              WHERE le.libro_id = ?
+              ORDER BY le.ordine, e.nome'
+        );
+        if ($stmt !== false) {
+            $stmt->bind_param('i', $bookId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result instanceof \mysqli_result) {
+                while ($r = $result->fetch_assoc()) { $out[] = $r; }
+                $result->free();
+            }
+            $stmt->close();
+        }
+        if ($out === [] && $primaryEditoreId !== null && $primaryEditoreId > 0) {
+            $single = $this->fetchPublisher($primaryEditoreId);
+            if ($single !== null) { $out[] = $single; }
+        }
+        return $out;
     }
 
     /**

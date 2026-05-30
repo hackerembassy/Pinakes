@@ -569,26 +569,21 @@ test.describe.serial('Phase 3: Manual Book Creation', () => {
       );
     }
 
-    // Publisher — enhanced autocomplete field (input may be disabled by JS)
+    // Publisher — Choices.js multi-select (issue #143). Anchor on
+    // #editori_select and walk up to its Choices wrapper (same pattern as the
+    // author field above).
     const publisherName = `Publisher ${RUN_ID}`;
-    const publisherField = page.locator('#editore_search');
-    if (await publisherField.isVisible({ timeout: 2000 }).catch(() => false)) {
-      // Enable the input, set value, and trigger the autocomplete
-      await page.evaluate((name) => {
-        const input = document.getElementById('editore_search');
-        if (input) {
-          input.disabled = false;
-          input.value = name;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-        // Also set the hidden field
-        const hidden = document.getElementById('editore_search_value');
-        if (hidden) hidden.value = name;
-      }, publisherName);
-      await page.waitForTimeout(500);
-      // Press Enter to confirm
-      await publisherField.press('Enter');
-      await page.waitForTimeout(500);
+    const publisherWrapper = page.locator('#editori_select')
+      .locator('xpath=ancestor::*[contains(@class,"choices")]').first();
+    const publisherInput = publisherWrapper.locator('.choices__input--cloned');
+    if (await publisherInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await publisherInput.click();
+      await publisherInput.fill(publisherName);
+      await publisherInput.press('Enter');
+      await page.waitForFunction(
+        () => document.querySelectorAll('#editori_hidden input[name="editori_new[]"], #editori_hidden input[name="editori_ids[]"]').length > 0,
+        { timeout: 5000 },
+      );
     }
 
     // Genre cascade (3 levels)
@@ -1359,6 +1354,13 @@ test.describe.serial('Phase 8: Publisher Management', () => {
     // and posts to /api/editori/merge.
     await page.goto(`${BASE}/admin/editori`);
     await page.waitForLoadState('domcontentloaded');
+
+    // The editori list is a server-paginated DataTable. With many publishers
+    // in the DB the two test rows may fall onto page 2+, so filter by the
+    // shared RUN_ID (present in both PubA_/PubB_ names) to bring both rows onto
+    // the first page before selecting their checkboxes.
+    await page.fill('#search_nome', RUN_ID);
+    await page.waitForTimeout(700); // debounced ajax.reload()
 
     await page.waitForSelector(`.row-select[data-id="${sourceId}"]`, { timeout: 10000 });
     await page.waitForSelector(`.row-select[data-id="${targetId}"]`, { timeout: 5000 });
@@ -2565,9 +2567,13 @@ test.describe.serial('Phase 18: Issue Regressions', () => {
     );
     expect(selectedResp.ok()).toBeTruthy();
     const selectedCsv = await selectedResp.text();
-    const selectedLines = selectedCsv.trim().split('\n');
-    // Header + exactly 2 data rows
-    expect(selectedLines.length).toBe(3);
+    // Count data records by their leading numeric id column. CSV fields are
+    // RFC 4180 quoted, so a description containing newlines (e.g. an HTML <ol>
+    // tracklist normalized to multiple lines) legitimately spans several
+    // physical lines within one record — physical line count is NOT record
+    // count. Each record begins with "<id>;" at the start of a line.
+    const dataRecords = selectedCsv.trim().split('\n').filter((l) => /^\d+;/.test(l));
+    expect(dataRecords.length).toBe(2);
   });
 
   test('18.7 #67: Genre filter by subgenre returns results', async () => {

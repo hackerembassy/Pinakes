@@ -57,15 +57,14 @@ test.describe.serial('book_form.php — regression guards', () => {
     });
 
     // ────────────────────────────────────────────────────────────────────
-    // Guard #1 — Publisher autocomplete: the publisher field is a custom
-    // suggest widget (NOT Choices.js — different bug class than #74). The
-    // critical contract is that typing a query + clicking a suggestion
-    // populates BOTH the hidden `editore_id` AND the visible label, with
-    // the id correctly set to the database row's id (not the previous
-    // value or zero). A regression here would silently associate books
-    // with the wrong publisher.
+    // Guard #1 — Publisher multi-select (Choices.js, issue #143). Since v0.7.15
+    // the publisher field is a Choices.js multi-select (mirroring authors). The
+    // critical contract is that picking an EXISTING publisher from the dropdown
+    // records it as an existing id (`editori_ids[]`) with the correct database
+    // row id — NOT as a newly-typed publisher (`editori_new[]`), which would
+    // silently create a duplicate publisher row on save.
     // ────────────────────────────────────────────────────────────────────
-    test('Guard #1: Publisher custom autocomplete — selecting a suggestion populates editore_id correctly', async () => {
+    test('Guard #1: Publisher Choices.js — picking an existing publisher records editori_ids[] with the right id', async () => {
         const trapPublisher = `MondadoriTest${RUN_ID}`;
 
         // Seed via the publishers UI
@@ -84,40 +83,39 @@ test.describe.serial('book_form.php — regression guards', () => {
         await page.goto(`${BASE}/admin/libri/crea`);
         await page.waitForLoadState('domcontentloaded');
 
-        // Publisher widget: `#editore_search` input + `#editore_suggest` <ul>
-        // + `#editore_id` hidden input. Type the trap name, wait for the
-        // suggest list to populate, click the entry, then assert that the
-        // hidden id is non-zero (= a real publisher was selected, no race).
-        const publisherInput = page.locator('#editore_search');
+        // Publisher Choices.js field: type the trap name, wait for the
+        // server-search dropdown to populate, then CLICK the existing option
+        // (not Enter, which would create a new publisher).
+        const publisherWrapper = page.locator('#editori_select')
+            .locator('xpath=ancestor::*[contains(@class,"choices")]').first();
+        const publisherInput = publisherWrapper.locator('.choices__input--cloned');
         await expect(publisherInput).toBeVisible({ timeout: 10000 });
 
-        // Assert hidden id starts at 0 (no publisher selected initially)
-        const initialId = await page.locator('#editore_id').inputValue();
-        expect(initialId, `Initial editore_id must be 0/empty, got "${initialId}"`).toMatch(/^0?$/);
+        // No publisher selected initially.
+        await expect(page.locator('#editori_hidden input')).toHaveCount(0);
 
         await publisherInput.click();
         await publisherInput.fill(trapPublisher);
         await page.waitForTimeout(700); // debounce + API
 
-        // The suggestion list should now contain the trap. Click it.
-        const suggestion = page.locator('#editore_suggest li', { hasText: trapPublisher }).first();
-        await expect(suggestion).toBeAttached({ timeout: 8000 });
-        await suggestion.click();
+        const option = publisherWrapper
+            .locator('.choices__list--dropdown .choices__item', { hasText: trapPublisher })
+            .first();
+        await expect(option).toBeVisible({ timeout: 8000 });
+        await option.click();
         await page.waitForTimeout(300);
 
-        // After click, the hidden id must be set to a positive integer.
-        const finalId = await page.locator('#editore_id').inputValue();
+        // Must be recorded as an EXISTING publisher with a positive integer id.
+        const idInput = page.locator('#editori_hidden input[name="editori_ids[]"]').first();
+        await expect(idInput).toBeAttached({ timeout: 5000 });
+        const idVal = await idInput.inputValue();
         expect(
-            parseInt(finalId, 10),
-            `Selecting a publisher suggestion MUST populate #editore_id with a positive integer (got "${finalId}")`
+            parseInt(idVal, 10),
+            `Picking an existing publisher MUST record editori_ids[] with a positive id (got "${idVal}")`
         ).toBeGreaterThan(0);
 
-        // The visible input should display the publisher name.
-        const visibleValue = await publisherInput.inputValue();
-        expect(
-            visibleValue,
-            `Visible publisher input should display the selected name`
-        ).toContain(trapPublisher);
+        // And it must NOT have been added as a new publisher.
+        await expect(page.locator('#editori_hidden input[name="editori_new[]"]')).toHaveCount(0);
     });
 
     // ────────────────────────────────────────────────────────────────────

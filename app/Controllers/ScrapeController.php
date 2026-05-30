@@ -6,6 +6,7 @@ namespace App\Controllers;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Support\DeweyAutoPopulator;
+use App\Support\HttpClient;
 use App\Support\IsbnFormatter;
 use App\Support\SecureLogger;
 
@@ -639,28 +640,20 @@ class ScrapeController
      */
     private function safeHttpGet(string $url, int $timeout = 10): ?string
     {
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 3,
-            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS | CURLPROTO_HTTP,
-            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS | CURLPROTO_HTTP,
-            CURLOPT_CONNECTTIMEOUT => max(1, $timeout),
-            CURLOPT_TIMEOUT => max(2, $timeout + 2),
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; BibliotecaBot/1.0)'
+        // Routed through the shared HttpClient (Guzzle): same timeouts, SSL
+        // verification, User-Agent and http/https-only redirect policy as the
+        // previous curl call. Returns null on transport failure or HTTP >= 400.
+        $res = HttpClient::get($url, [], [
+            'connect_timeout' => max(1, $timeout),
+            'timeout' => max(2, $timeout + 2),
+            'max_redirects' => 3,
         ]);
-        $result = curl_exec($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        if ($result === false || $httpCode >= 400) {
-            curl_close($ch);
+
+        if (!$res['ok'] || $res['status'] >= 400) {
             return null;
         }
-        curl_close($ch);
-        return $result;
+
+        return $res['body'];
     }
 
     /**
