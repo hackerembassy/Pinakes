@@ -5164,5 +5164,14 @@
   "Wikidata ID": "Wikidata ID",
   "Impossibile preparare il file LibraryThing": "Unable to prepare the LibraryThing file",
   "Errore di sistema durante l'importazione": "System error during import",
-  "es. Q12345": "e.g. Q12345"
+  "es. Q12345": "e.g. Q12345",
+  "Durata sessione": "Session duration",
+  "30 minuti": "30 minutes",
+  "1 ora": "1 hour",
+  "2 ore": "2 hours",
+  "3 ore": "3 hours",
+  "6 ore": "6 hours",
+  "12 ore": "12 hours",
+  "24 ore": "24 hours",
+  "Tempo di inattività prima che la sessione scada. Aumentalo se durante catalogazioni lunghe ricevi l'errore «sessione scaduta» al salvataggio. Predefinito: 3 ore.": "Inactivity time before the session expires. Increase it if you get a “session expired” error when saving after long cataloguing sessions. Default: 3 hours."
 }

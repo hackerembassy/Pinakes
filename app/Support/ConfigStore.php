@@ -93,6 +93,7 @@ final class ConfigStore
                 'custom_js_marketing' => '',
                 'custom_header_css' => '',
                 'days_before_expiry_warning' => 3,
+                'session_lifetime' => 180, // minutes of inactivity before the session expires (default 3h)
                 'sitemap_last_generated_at' => '',
                 'sitemap_last_generated_total' => 0,
             ],
@@ -531,7 +532,7 @@ final class ConfigStore
                 self::$dbSettingsCache['advanced'] = [];
                 foreach ($raw['advanced'] as $key => $value) {
                     // Handle numeric value for days_before_expiry_warning
-                    if ($key === 'days_before_expiry_warning' || $key === 'sitemap_last_generated_total') {
+                    if ($key === 'days_before_expiry_warning' || $key === 'sitemap_last_generated_total' || $key === 'session_lifetime') {
                         self::$dbSettingsCache['advanced'][$key] = (int) $value;
                     } elseif ($key === 'api_enabled') {
                         // Handle boolean flag for api_enabled

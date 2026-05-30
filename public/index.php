@@ -185,7 +185,14 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     ini_set('session.use_only_cookies', '1');
     ini_set('session.use_strict_mode', '1'); // Previene session fixation
     ini_set('session.cookie_lifetime', '0'); // Session cookies only
-    ini_set('session.gc_maxlifetime', '10800'); // Timeout sessione: 3 ore (per import lunghi)
+    // Session inactivity timeout — admin-configurable (Settings > Advanced, issue #142).
+    // Stored in minutes; default 180 (3h). Clamped to [5 min, 24h] so a bad value
+    // can never disable the timeout entirely or make it uselessly short. Read from
+    // ConfigStore (self-contained DB read with a safe default if the DB isn't ready
+    // yet, e.g. during install).
+    $sessionLifetimeMin = (int) \App\Support\ConfigStore::get('advanced.session_lifetime', 180);
+    $sessionLifetimeMin = max(5, min(1440, $sessionLifetimeMin));
+    ini_set('session.gc_maxlifetime', (string) ($sessionLifetimeMin * 60));
     ini_set('session.gc_probability', '1');
     ini_set('session.gc_divisor', '100');
 

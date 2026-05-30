@@ -573,6 +573,7 @@ class SettingsController
                 $repository->get('advanced', 'custom_header_css', $config['custom_header_css'] ?? '')
             ),
             'days_before_expiry_warning' => (int) $repository->get('advanced', 'days_before_expiry_warning', (string) ($config['days_before_expiry_warning'] ?? 3)),
+            'session_lifetime' => (int) $repository->get('advanced', 'session_lifetime', (string) ($config['session_lifetime'] ?? 180)),
             'force_https' => $repository->get('advanced', 'force_https', $config['force_https'] ?? '0'),
             'enable_hsts' => $repository->get('advanced', 'enable_hsts', $config['enable_hsts'] ?? '0'),
             'sitemap_last_generated_at' => $repository->get('advanced', 'sitemap_last_generated_at', $config['sitemap_last_generated_at'] ?? ''),
@@ -592,19 +593,30 @@ class SettingsController
 
         $daysBeforeWarning = max(1, min(30, (int) ($data['days_before_expiry_warning'] ?? 3)));
 
+        // Session inactivity timeout (issue #142), stored in minutes. Snap to the
+        // allowed presets exposed in the UI; fall back to 180 (3h) on anything else
+        // so a tampered POST can't set an absurd value. index.php re-clamps to
+        // [5, 1440] before applying it to session.gc_maxlifetime.
+        $allowedSessionLifetimes = [30, 60, 120, 180, 360, 720, 1440];
+        $sessionLifetime = (int) ($data['session_lifetime'] ?? 180);
+        if (!in_array($sessionLifetime, $allowedSessionLifetimes, true)) {
+            $sessionLifetime = 180;
+        }
+
         $settings = [
             'custom_js_essential' => ContentSanitizer::normalizeExternalAssets(trim((string) ($data['custom_js_essential'] ?? ''))),
             'custom_js_analytics' => ContentSanitizer::normalizeExternalAssets(trim((string) ($data['custom_js_analytics'] ?? ''))),
             'custom_js_marketing' => ContentSanitizer::normalizeExternalAssets(trim((string) ($data['custom_js_marketing'] ?? ''))),
             'custom_header_css' => ContentSanitizer::normalizeExternalAssets(trim((string) ($data['custom_header_css'] ?? ''))),
             'days_before_expiry_warning' => (string) $daysBeforeWarning,
+            'session_lifetime' => (string) $sessionLifetime,
             'force_https' => isset($data['force_https']) && $data['force_https'] === '1' ? '1' : '0',
             'enable_hsts' => isset($data['enable_hsts']) && $data['enable_hsts'] === '1' ? '1' : '0',
         ];
 
         foreach ($settings as $key => $value) {
             $repository->set('advanced', $key, $value);
-            if ($key === 'days_before_expiry_warning') {
+            if ($key === 'days_before_expiry_warning' || $key === 'session_lifetime') {
                 ConfigStore::set("advanced.$key", (int) $value);
             } elseif ($key === 'force_https' || $key === 'enable_hsts') {
                 ConfigStore::set("advanced.$key", $value === '1');
