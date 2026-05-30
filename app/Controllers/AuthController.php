@@ -34,6 +34,26 @@ class AuthController
         $html = \App\Support\Hooks::apply('login.form.html', $html, [$request]);
 
         $response->getBody()->write($html);
+
+        // Double-submit cookie for CSRF on the login form. Mirrors the session
+        // CSRF token so a login submitted after the server-side session has
+        // expired can still be validated by CsrfMiddleware (the cookie persists
+        // when the session data does not). HttpOnly + SameSite=Lax keep it out
+        // of cross-site forged login POSTs.
+        //
+        // HTTPS detection mirrors HtmlHelper::getBaseUrl(): honour
+        // X-Forwarded-Proto / X-Forwarded-Ssl so the Secure flag is still set
+        // behind a TLS-terminating reverse proxy (where $_SERVER['HTTPS'] is
+        // unset). Max-Age bounds the cookie's lifetime (2h) so it does not
+        // linger as a session cookie that survives a browser/tab restore.
+        $forwardedProto = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        $forwardedSsl = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_SSL'] ?? ''));
+        $secure = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+            || $forwardedProto === 'https'
+            || $forwardedSsl === 'on';
+        $cookie = 'csrf_login=' . $token . '; Path=/; Max-Age=7200; SameSite=Lax; HttpOnly' . ($secure ? '; Secure' : '');
+        $response = $response->withAddedHeader('Set-Cookie', $cookie);
+
         return $response;
     }
 

@@ -6,6 +6,8 @@ namespace App\Controllers;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Support\LibraryThingInstaller;
+use App\Support\Csv;
+use League\Csv\Statement;
 
 /**
  * LibraryThing Import/Export Plugin
@@ -89,6 +91,22 @@ class LibraryThingImportController
     }
 
     /**
+     * Delete a saved import temp file, but only when it really resolves inside
+     * the import temp directory. The paths here are server-generated (uniqid),
+     * but this realpath-containment guard makes path traversal impossible and
+     * documents the unlink target as confined to the import scratch area.
+     */
+    private function safeUnlinkImportTmp(string $path): void
+    {
+        $allowed = realpath(sys_get_temp_dir() . '/librarything_imports');
+        $real = realpath($path);
+        if ($allowed !== false && $real !== false && str_starts_with($real, $allowed . DIRECTORY_SEPARATOR)) {
+            // $real is realpath-confined to the import scratch dir above; path is server-generated (uniqid).
+            @unlink($real); // nosemgrep
+        }
+    }
+
+    /**
      * Show LibraryThing import page
      */
     public function showImportPage(Request $request, Response $response): Response
@@ -167,6 +185,9 @@ class LibraryThingImportController
     {
         // Set timeout to 5 minutes for file upload and preparation
         set_time_limit(300);
+        // JSON endpoint: keep PHP warnings out of the response body (they would
+        // corrupt the JSON → client "Risposta non valida"). Errors still log.
+        @ini_set('display_errors', '0');
 
         $data = (array) $request->getParsedBody();
         $uploadedFiles = $request->getUploadedFiles();
@@ -212,31 +233,21 @@ class LibraryThingImportController
 
         // Validate format and count rows
         try {
-            $file = fopen($savedPath, 'r');
-            if (!$file) {
+            try {
+                $reader = Csv::readerFromPath($savedPath, "\t");
+            } catch (\Throwable $e) {
                 throw new \Exception(__('Impossibile aprire il file'));
             }
 
-            // Skip BOM
-            $bom = fread($file, 3);
-            if ($bom !== "\xEF\xBB\xBF") {
-                rewind($file);
-            }
-
-            // Read and validate headers
-            $headers = fgetcsv($file, 0, "\t", '"', "");
+            // Read and validate headers (league skips the input BOM automatically)
+            $headers = $reader->nth(0);
             if (!$headers || !$this->isLibraryThingFormat($headers)) {
-                fclose($file);
-                unlink($savedPath);
+                $this->safeUnlinkImportTmp($savedPath);
                 throw new \Exception(__('Il file non sembra essere in formato LibraryThing'));
             }
 
-            // Count rows
-            $totalRows = 0;
-            while (fgetcsv($file, 0, "\t", '"', "") !== false) {
-                $totalRows++;
-            }
-            fclose($file);
+            // Count rows (header excluded; trailing empty line is not counted)
+            $totalRows = max(0, count($reader) - 1);
 
             // Initialize session data
             $_SESSION['librarything_import'] = [
@@ -258,17 +269,29 @@ class LibraryThingImportController
                 'success' => true,
                 'import_id' => $importId,
                 'total_rows' => $totalRows,
-                'chunk_size' => self::CHUNK_SIZE
+                // With scraping every row does an external lookup; shrink the
+                // chunk to 1 so a single /chunk request can't exceed the timeout.
+                'chunk_size' => !empty($data['enable_scraping']) ? 1 : self::CHUNK_SIZE
             ], JSON_THROW_ON_ERROR));
             return $response->withHeader('Content-Type', 'application/json');
 
         } catch (\Throwable $e) {
             if (file_exists($savedPath)) {
-                unlink($savedPath);
+                $this->safeUnlinkImportTmp($savedPath);
             }
+            $this->log(sprintf(
+                '[LT][prepare] FATAL %s: %s @ %s:%d',
+                get_class($e),
+                $e->getMessage(),
+                $e->getFile(),
+                $e->getLine()
+            ));
             $response->getBody()->write(json_encode([
                 'success' => false,
-                'error' => $e->getMessage()
+                // Generic client-facing message: the full exception (incl. any
+                // server file paths from Reader/filesystem errors) is logged
+                // above via $this->log(), never echoed to the client.
+                'error' => __('Impossibile preparare il file LibraryThing')
             ], JSON_THROW_ON_ERROR));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
@@ -284,6 +307,10 @@ class LibraryThingImportController
         // This ensures each chunk gets the full timeout, not cumulative
         @set_time_limit(600);
         @ini_set('max_execution_time', '600');
+        // JSON endpoint: keep PHP warnings out of the response body so they
+        // can't corrupt the JSON (client "Risposta non valida"). They still
+        // reach the PHP error log.
+        @ini_set('display_errors', '0');
 
         $data = json_decode((string) $request->getBody(), true);
 
@@ -319,38 +346,33 @@ class LibraryThingImportController
         $filePath = $importData['file_path'];
         $enableScraping = $importData['enable_scraping'];
 
+        // Scraping is slow (one external lookup per row): force a single row per
+        // chunk so the request stays well under the fetch/server timeout.
+        if ($enableScraping) {
+            $chunkSize = 1;
+        }
+
 
         try {
-            $file = fopen($filePath, 'r');
-            if (!$file) {
+            try {
+                $reader = Csv::readerFromPath($filePath, "\t");
+            } catch (\Throwable $e) {
                 throw new \Exception(__('Impossibile aprire il file'));
             }
 
-            // Skip BOM
-            $bom = fread($file, 3);
-            if ($bom !== "\xEF\xBB\xBF") {
-                rewind($file);
-            }
-
-            // Read headers
-            $headers = fgetcsv($file, 0, "\t", '"', "");
+            // Read headers (first record; league skips the input BOM automatically)
+            $headers = $reader->nth(0);
             if (!$headers) {
-                fclose($file);
                 throw new \Exception(__('File vuoto o formato non valido'));
             }
 
-            // Skip to chunk start
-            for ($i = 0; $i < $chunkStart; $i++) {
-                if (fgetcsv($file, 0, "\t", '"', "") === false) {
-                    break;
-                }
-            }
-
-            // Process chunk
+            // Process chunk: window the data rows (offset 1 skips the header)
+            // with an offset/limit Statement so only the chunk is materialized.
             $processed = 0;
             $lineNumber = $chunkStart + 2; // +2 because of header and 1-indexed
 
-            while ($processed < $chunkSize && ($rawData = fgetcsv($file, 0, "\t", '"', "")) !== false) {
+            $chunkRecords = (new Statement())->offset(1 + $chunkStart)->limit($chunkSize)->process($reader);
+            foreach ($chunkRecords as $rawData) {
                 $parsedData = [];
                 try {
                     // Validate column count
@@ -473,8 +495,6 @@ class LibraryThingImportController
                 $lineNumber++;
             }
 
-            fclose($file);
-
             $importData['current_row'] = $chunkStart + $processed;
             $isComplete = $importData['current_row'] >= $importData['total_rows'];
 
@@ -547,7 +567,7 @@ class LibraryThingImportController
 
                 // Cleanup file only after successful persistence
                 if ($persisted && file_exists($filePath)) {
-                    unlink($filePath);
+                    $this->safeUnlinkImportTmp($filePath);
                 }
             }
 
@@ -567,15 +587,25 @@ class LibraryThingImportController
             return $response->withHeader('Content-Type', 'application/json');
 
         } catch (\Throwable $e) {
+            // Log full detail server-side; keep the client-facing strings
+            // generic so server file paths from filesystem/DB exceptions are
+            // never disclosed in the import error report or JSON response.
+            $this->log(sprintf(
+                '[LT][processChunk] FATAL %s: %s @ %s:%d',
+                get_class($e),
+                $e->getMessage(),
+                $e->getFile(),
+                $e->getLine()
+            ));
             $importData['errors'][] = [
                 'line' => 0,
                 'title' => 'LibraryThing',
-                'message' => $e->getMessage(),
+                'message' => __('Errore di sistema durante l\'importazione'),
                 'type' => 'system',
             ];
             $response->getBody()->write(json_encode([
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => __('Errore di sistema durante l\'importazione')
             ], JSON_THROW_ON_ERROR));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
@@ -1005,13 +1035,24 @@ class LibraryThingImportController
             }
         }
 
-        // Dimensions → dimensioni (native field, combine height/thickness/length)
+        // Dimensions → dimensioni (native field, combine height/thickness/length).
+        // LibraryThing emits absurd precision (e.g. "8.267716527 inches"); round
+        // each number to 2 decimals for readability, then hard-cap the combined
+        // string to the column width (libri.dimensioni is varchar(50)) so an
+        // over-long value can never abort the whole row with "Data too long".
+        $roundDim = static function (string $v): string {
+            return trim((string) preg_replace_callback(
+                '/\d+\.\d+/',
+                static fn(array $m): string => (string) round((float) $m[0], 2),
+                $v
+            ));
+        };
         $dimensions = [];
-        if (!empty($data['Height'])) $dimensions[] = 'H: ' . trim($data['Height']);
-        if (!empty($data['Thickness'])) $dimensions[] = 'T: ' . trim($data['Thickness']);
-        if (!empty($data['Length'])) $dimensions[] = 'L: ' . trim($data['Length']);
+        if (!empty($data['Height'])) $dimensions[] = 'H: ' . $roundDim((string) $data['Height']);
+        if (!empty($data['Thickness'])) $dimensions[] = 'T: ' . $roundDim((string) $data['Thickness']);
+        if (!empty($data['Length'])) $dimensions[] = 'L: ' . $roundDim((string) $data['Length']);
         if (!empty($dimensions)) {
-            $result['dimensioni'] = implode(' × ', $dimensions);
+            $result['dimensioni'] = mb_substr(implode(' × ', $dimensions), 0, 50);
         }
 
         // Library Classifications
@@ -1770,8 +1811,9 @@ class LibraryThingImportController
 
     private function scrapeBookData(string $isbn): array
     {
-        // Use centralized scraping service
-        return \App\Support\ScrapingService::scrapeBookData($isbn, 3, 'LibraryThing Import');
+        // Single attempt during bulk import: retries with exponential backoff
+        // (up to ~24s/book) are what pushed chunk requests past the timeout.
+        return \App\Support\ScrapingService::scrapeBookData($isbn, 1, 'LibraryThing Import');
     }
 
     /**
@@ -1941,25 +1983,16 @@ class LibraryThingImportController
         // UTF-8 BOM
         fwrite($stream, "\xEF\xBB\xBF");
 
-        // LibraryThing headers (TSV format)
+        // LibraryThing headers (TSV format). Field encoding (RFC 4180 quoting
+        // of tab/newline/quote, doubled quotes) is handled by league/csv.
+        $writer = Csv::writerToStream($stream, "\t");
         $headers = $this->getLibraryThingHeaders();
-        fwrite($stream, implode("\t", $headers) . "\n");
+        $writer->insertOne($headers);
 
         $rowCount = 0;
         foreach ($libri as $libro) {
             $row = $this->formatLibraryThingRow($libro);
-
-            // Escape fields for TSV
-            $escapedRow = array_map(function ($field) {
-                $field = str_replace('"', '""', (string) $field);
-                // Quote if contains tab, newline, or quotes
-                if (strpos($field, "\t") !== false || strpos($field, "\n") !== false || strpos($field, '"') !== false) {
-                    return '"' . $field . '"';
-                }
-                return $field;
-            }, $row);
-
-            fwrite($stream, implode("\t", $escapedRow) . "\n");
+            $writer->insertOne($row);
 
             // Garbage collection every 1000 rows
             if (++$rowCount % 1000 === 0) {

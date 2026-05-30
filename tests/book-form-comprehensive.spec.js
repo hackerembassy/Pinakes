@@ -116,11 +116,14 @@ test.describe.serial('book_form — comprehensive smoke + regressions', () => {
     await expect(page.locator('#autori_hidden')).toHaveCount(1);
   });
 
-  test('7. Publisher chip-list field is rendered', async () => {
+  test('7. Publisher multi-select field is rendered (issue #143)', async () => {
     await page.goto(CREATE_BOOK_URL);
-    await expect(page.locator('#editore_field')).toBeVisible();
-    await expect(page.locator('#editore_search')).toBeVisible();
-    await expect(page.locator('#editore_id')).toHaveCount(1);
+    // Multi-publisher Choices.js select replaced the legacy single-publisher widget.
+    await expect(page.locator('#editori_select')).toHaveCount(1);
+    await expect(page.locator('#editori_hidden')).toHaveCount(1);
+    const publisherWrapper = page.locator('#editori_select')
+      .locator('xpath=ancestor::*[contains(@class,"choices")]').first();
+    await expect(publisherWrapper.locator('.choices__input--cloned')).toBeVisible();
   });
 
   test('8. Genre cascade UI is wired up', async () => {

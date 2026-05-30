@@ -1,0 +1,45 @@
+{
+  "name": "frbr-lrm",
+  "display_name": "FRBR / IFLA LRM (Opere & Espressioni)",
+  "description": "Introduce il modello concettuale FRBR / IFLA LRM (2017) nel catalogo: tabelle opzionali `opere` (Work) ed `espressioni` (Expression) che permettono di raggruppare più edizioni della stessa opera sotto un unico record, distinguere traduzioni/revisioni/adattamenti dalle manifestazioni fisiche e applicare correttamente i codici di relazione MARC21 (autore / traduttore / curatore / illustratore). Aggiunge la pagina pubblica /opera/{slug} che elenca tutte le edizioni disponibili di un'opera e un assistente di deduplicazione che propone accorpamenti per autore + titolo normalizzato. Le tabelle sono opzionali: con il plugin disattivato il catalogo `libri` continua a funzionare invariato (le FK opera_id / espressione_id restano NULL).",
+  "version": "1.0.0",
+  "changelog": "v1.0.0 (Pinakes 0.7.14 — issue #134): modello Work/Expression FRBR-LRM. Tabelle opere, espressioni, libri_autori_ruoli (relator codes MARC21). ALTER libri ADD opera_id, espressione_id (FK nullable, idempotente via INFORMATION_SCHEMA guard). CRUD admin /admin/opere, attach-to-opera sul form libro con autocomplete, pagina autore raggruppata per opera, pagina pubblica /opera/{slug}, assistente di deduplicazione. Predisposto per il cross-link con reicat-sbn (opere.sbn_work_bid) e rda-registry (output Work/Expression JSON-LD).",
+  "author": "Fabiodalez",
+  "author_url": "",
+  "plugin_url": "https://github.com/fabiodalez-dev/Pinakes/issues/134",
+  "main_file": "wrapper.php",
+  "requires_php": "8.1",
+  "requires_app": "0.7.14",
+  "metadata": {
+    "category": "cataloging",
+    "tags": [
+      "frbr",
+      "ifla-lrm",
+      "rda",
+      "work",
+      "expression",
+      "manifestation",
+      "relator-codes",
+      "marc21",
+      "cataloging"
+    ],
+    "priority": 20,
+    "features": [
+      "Tabelle Work (opere) ed Expression (espressioni) FRBR / IFLA LRM 2017",
+      "Raggruppamento di più edizioni della stessa opera sotto un unico record",
+      "Distinzione traduzioni / revisioni / adattamenti (Expression) dalle edizioni fisiche (Manifestation)",
+      "Codici di relazione MARC21 (aut / edt / trl / ill / ctb) su libri_autori_ruoli",
+      "Attach-to-Opera sul form libro con autocomplete",
+      "Pagina autore: opere raggruppate per Work",
+      "Pagina pubblica /opera/{slug} con tutte le edizioni disponibili",
+      "Assistente di deduplicazione (clustering per autore + titolo normalizzato)"
+    ],
+    "optional": true,
+    "status": "stable",
+    "references": [
+      "https://repository.ifla.org/handle/123456789/40",
+      "https://repository.ifla.org/handle/123456789/811",
+      "https://www.loc.gov/marc/relators/relacode.html"
+    ]
+  }
+}

@@ -375,30 +375,19 @@ class ViafAuthorityPlugin
         }
 
         $url = self::VIAF_SUGGEST_URL . urlencode($q);
-        $ch  = curl_init($url);
-        if ($ch === false) {
-            return $this->json($response, ['error' => true, 'message' => __('Errore interno.')], 500);
-        }
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER  => true,
-            CURLOPT_FOLLOWLOCATION  => true,
-            CURLOPT_MAXREDIRS       => 3,
-            CURLOPT_CONNECTTIMEOUT  => self::API_TIMEOUT,
-            CURLOPT_TIMEOUT         => self::API_TIMEOUT + 5,
-            CURLOPT_SSL_VERIFYPEER  => true,
-            CURLOPT_PROTOCOLS       => CURLPROTO_HTTPS | CURLPROTO_HTTP,
-            // F079: pin redirect protocols too — older libcurl includes file:// in
-            // CURLOPT_REDIR_PROTOCOLS defaults, allowing SSRF via redirect chains.
-            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS | CURLPROTO_HTTP,
-            CURLOPT_HTTPHEADER      => ['Accept: application/json'],
+        $res = \App\Support\HttpClient::get($url, [
+            'Accept' => 'application/json',
+        ], [
+            'connect_timeout' => self::API_TIMEOUT,
+            'timeout'         => self::API_TIMEOUT + 5,
+            'max_redirects'   => 3,
+            'verify'          => true,
         ]);
-        $raw  = curl_exec($ch);
-        $curlErr  = curl_error($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $raw      = $res['body'];
+        $httpCode = $res['status'];
 
-        if ($raw === false || $curlErr !== '' || $httpCode < 200 || $httpCode >= 300) {
-            SecureLogger::warning('[ViafAuthority] VIAF API unreachable for query: ' . $q . ' — ' . $curlErr);
+        if (!$res['ok'] || $httpCode < 200 || $httpCode >= 300) {
+            SecureLogger::warning('[ViafAuthority] VIAF API unreachable for query: ' . $q);
             return $this->json($response, [
                 'error'   => true,
                 'message' => __('Servizio VIAF non raggiungibile. Riprova più tardi.'),

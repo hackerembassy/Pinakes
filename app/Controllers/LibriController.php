@@ -7,6 +7,7 @@ use mysqli;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Support\SecureLogger;
+use App\Support\Csv;
 use App\Support\LibraryThingInstaller;
 use App\Models\SeriesRepository;
 use Slim\Exception\HttpNotFoundException;
@@ -635,6 +636,11 @@ class LibriController
         return $response;
     }
 
+    /**
+     * Create a book from the admin form: validates input, resolves authors and
+     * publishers (multi-publisher, issue #143), handles cover + scraping data,
+     * then persists via BookRepository.
+     */
     public function store(Request $request, Response $response, mysqli $db): Response
     {
         $data = $this->parseRequestBody($request);
@@ -1048,6 +1054,11 @@ class LibriController
                 }
             }
 
+            // Multi-publisher resolution (issue #143): existing ids + new names
+            // → ordered, deduplicated id list; libri.editore_id stays the primary.
+            $fields['editori_ids'] = $this->resolvePublisherIds($db, $data, $fields['editore_id'] ?? null);
+            $fields['editore_id'] = $fields['editori_ids'][0] ?? ($fields['editore_id'] ?? null);
+
             // Handle genere auto-creation from manual entry
             if ((int) $fields['genere_id'] === 0 && !empty($data['genere_search'])) {
                 $genereRepo = new \App\Models\GenereRepository($db);
@@ -1180,6 +1191,11 @@ class LibriController
         return $response;
     }
 
+    /**
+     * Update an existing book from the admin form: same validation and
+     * author/publisher resolution as store() (multi-publisher, issue #143),
+     * then persists the changes via BookRepository.
+     */
     public function update(Request $request, Response $response, mysqli $db, int $id): Response
     {
         $data = $this->parseRequestBody($request);
@@ -1622,6 +1638,11 @@ class LibriController
                     }
                 }
             }
+
+            // Multi-publisher resolution (issue #143): existing ids + new names
+            // → ordered, deduplicated id list; libri.editore_id stays the primary.
+            $fields['editori_ids'] = $this->resolvePublisherIds($db, $data, $fields['editore_id'] ?? null);
+            $fields['editore_id'] = $fields['editori_ids'][0] ?? ($fields['editore_id'] ?? null);
 
             // Handle genere auto-creation from manual entry
             if ((int) $fields['genere_id'] === 0 && !empty($data['genere_search'])) {
@@ -2975,6 +2996,9 @@ class LibriController
                 l.*,
                 GROUP_CONCAT(DISTINCT a.nome ORDER BY la.ordine_credito SEPARATOR ';') as autori_nomi,
                 e.nome as editore_nome,
+                (SELECT GROUP_CONCAT(e2.nome ORDER BY le.ordine, e2.nome SEPARATOR ';')
+                   FROM libri_editori le JOIN editori e2 ON e2.id = le.editore_id
+                  WHERE le.libro_id = l.id) as editori_nomi,
                 g.nome as genere_nome
             FROM libri l
             LEFT JOIN libri_autori la ON l.id = la.libro_id
@@ -3061,7 +3085,19 @@ class LibriController
             ];
         }
 
-        fwrite($stream, implode($delimiter, $headers) . "\n");
+        // formulaPrefix "'" neutralizes CSV injection: user-controlled fields
+        // (titolo, autori, editore, parole_chiave…) starting with = + - @ are
+        // prefixed so spreadsheet clients don't evaluate them as formulas.
+        //
+        // The LibraryThing export is a machine round-trip format (TSV re-imported
+        // into LibraryThing/Pinakes), NOT a spreadsheet view: EscapeFormula would
+        // prepend "'" to legitimate values starting with -, @, = or a tab,
+        // corrupting the round-trip and diverging from the dedicated
+        // LibraryThingImportController::exportLibraryThing (which does not prefix).
+        // So the formula guard applies only to the human-facing standard CSV.
+        $formulaPrefix = $format === 'librarything' ? null : "'";
+        $writer = Csv::writerToStream($stream, $delimiter, $formulaPrefix);
+        $writer->insertOne($headers);
 
         $rowCount = 0;
         foreach ($libri as $libro) {
@@ -3082,7 +3118,7 @@ class LibriController
                     $libro['sottotitolo'] ?? '',
                     $descrizione,
                     $libro['autori_nomi'] ?? '',
-                    $libro['editore_nome'] ?? '',
+                    ($libro['editori_nomi'] ?? '') !== '' ? $libro['editori_nomi'] : ($libro['editore_nome'] ?? ''),
                     $anno,
                     $libro['lingua'] ?? '',
                     $libro['edizione'] ?? '',
@@ -3099,17 +3135,7 @@ class LibriController
                 ];
             }
 
-            // Escape fields for CSV
-            $escapedRow = array_map(function ($field) use ($delimiter) {
-                $field = str_replace('"', '""', (string) $field);
-                // Quote if contains delimiter, newline, or quotes
-                if (strpos($field, $delimiter) !== false || strpos($field, "\n") !== false || strpos($field, "\r") !== false || strpos($field, '"') !== false) {
-                    return '"' . $field . '"';
-                }
-                return $field;
-            }, $row);
-
-            fwrite($stream, implode($delimiter, $escapedRow) . "\n");
+            $writer->insertOne($row);
 
             // OPTIMIZATION: Garbage collection every 1000 rows to prevent memory buildup
             if (++$rowCount % 1000 === 0) {
@@ -3488,6 +3514,86 @@ class LibriController
         if ($affectedRows > 0) {
             error_log("[LibriController] Updated author bio for ID $authorId from scraping");
         }
+    }
+
+    /**
+     * Resolve the multi-publisher selection (issue #143) into an ordered,
+     * deduplicated list of publisher ids. Combines existing ids (editori_ids[])
+     * with newly typed names (editori_new[], find-or-create), and falls back to
+     * the single primary publisher already resolved from the legacy
+     * editore_search field or from scraping.
+     *
+     * @param array<string,mixed> $data
+     * @return list<int>
+     */
+    private function resolvePublisherIds(\mysqli $db, array $data, ?int $primaryEditoreId): array
+    {
+        // Client-supplied existing ids are untrusted: validate them against the
+        // `editori` table before use (an unknown id would FK-fail the editore_id
+        // UPDATE in createBasic/updateBasic).
+        $clientIds = [];
+        foreach ((array) ($data['editori_ids'] ?? []) as $rawId) {
+            $id = (int) $rawId;
+            if ($id > 0) {
+                $clientIds[] = $id;
+            }
+        }
+        $ids = $this->filterExistingPublisherIds($db, array_values(array_unique($clientIds)));
+
+        // Newly typed publishers are find-or-created here, so their ids are valid
+        // by construction.
+        if (!empty($data['editori_new'])) {
+            $pubRepo = new \App\Models\PublisherRepository($db);
+            foreach ((array) $data['editori_new'] as $nome) {
+                $nome = $this->sanitizePublisherName(trim((string) $nome));
+                if ($nome === '') {
+                    continue;
+                }
+                $found = $pubRepo->findByName($nome);
+                $ids[] = $found ?? $pubRepo->create(['nome' => $nome, 'sito_web' => '']);
+            }
+        }
+
+        // Back-compat: no multi-select used, but a single publisher was resolved
+        // (legacy editore_search field or scraping) → keep it if it still exists.
+        if ($ids === [] && $primaryEditoreId !== null && $primaryEditoreId > 0
+            && $this->filterExistingPublisherIds($db, [$primaryEditoreId]) !== []) {
+            $ids[] = $primaryEditoreId;
+        }
+
+        return array_values(array_unique(array_map('intval', $ids)));
+    }
+
+    /**
+     * Filter a list of publisher ids down to those that actually exist in
+     * `editori`, preserving the input order.
+     *
+     * @param list<int> $ids
+     * @return list<int>
+     */
+    private function filterExistingPublisherIds(\mysqli $db, array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $db->prepare("SELECT id FROM editori WHERE id IN ($placeholders)");
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param(str_repeat('i', count($ids)), ...$ids);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $valid = [];
+        if ($res instanceof \mysqli_result) {
+            while ($row = $res->fetch_assoc()) {
+                $valid[] = (int) $row['id'];
+            }
+            $res->free();
+        }
+        $stmt->close();
+
+        return array_values(array_filter($ids, static fn(int $i): bool => in_array($i, $valid, true)));
     }
 
     /**
