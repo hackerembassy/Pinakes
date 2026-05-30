@@ -378,31 +378,26 @@ class ApiBookScraperPlugin
             $url .= $separator . 'isbn=' . urlencode($isbn);
         }
 
-        // Inizializza cURL
-        $ch = curl_init();
-
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => $this->timeout,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 3,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_HTTPHEADER => [
-                'X-API-Key: ' . $this->apiKey,
-                'Accept: application/json',
-                'User-Agent: Pinakes-API-Scraper/1.0'
-            ]
+        // Chiamata HTTP tramite helper centralizzato (Guzzle)
+        $res = \App\Support\HttpClient::get($url, [
+            'X-API-Key' => $this->apiKey,
+            'Accept' => 'application/json',
+            'User-Agent' => 'Pinakes-API-Scraper/1.0',
+        ], [
+            'timeout' => $this->timeout,
+            'max_redirects' => 3,
+            'verify' => true,
         ]);
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
+        $response = $res['body'];
+        $httpCode = $res['status'];
 
-        if ($error) {
-            throw new \Exception("Errore cURL: $error");
+        if (!$res['ok']) {
+            // Transport failure (DNS / connection / TLS / timeout). The
+            // underlying detail is logged by HttpClient via SecureLogger; the
+            // request goes through Guzzle now, so the old "cURL" label was
+            // both stale and uninformative.
+            throw new \Exception('Richiesta HTTP fallita (timeout o errore di rete)');
         }
 
         if ($httpCode !== 200) {

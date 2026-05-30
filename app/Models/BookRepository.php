@@ -45,6 +45,13 @@ class BookRepository
         return $rows;
     }
 
+    /**
+     * Fetch a single book with its joined relations: authors, publishers
+     * (ordered `editori` list — multi-publisher, issue #143), genre hierarchy
+     * and series memberships. Returns null when the book does not exist.
+     *
+     * @return array<string, mixed>|null
+     */
     public function getById(int $id): ?array
     {
         // Check if sottogenere_id column exists
@@ -135,6 +142,30 @@ class BookRepository
             $row['autori'][] = $a;
         }
 
+        // publishers list (issue #143). editore_id / editore_nome are kept as
+        // the primary publisher; this is the full ordered set.
+        $row['editori'] = [];
+        if ($this->hasColumnInTable('libri_editori', 'editore_id')) {
+            $hasOrdine = $this->hasColumnInTable('libri_editori', 'ordine');
+            $pubOrder = $hasOrdine ? 'ORDER BY le.ordine, e.nome' : 'ORDER BY e.nome';
+            $stmtPub = $this->db->prepare("SELECT e.id, e.nome FROM libri_editori le JOIN editori e ON le.editore_id=e.id WHERE le.libro_id=? $pubOrder");
+            if ($stmtPub) {
+                $stmtPub->bind_param('i', $id);
+                $stmtPub->execute();
+                $pubRes = $stmtPub->get_result();
+                while ($p = $pubRes->fetch_assoc()) {
+                    $row['editori'][] = $p;
+                }
+                $stmtPub->close();
+            }
+        }
+        // Fallback for installs before the libri_editori backfill: surface the
+        // single primary publisher as a one-element list so views can always
+        // iterate $row['editori'].
+        if ($row['editori'] === [] && !empty($row['editore_id']) && !empty($row['editore_nome'])) {
+            $row['editori'][] = ['id' => (int) $row['editore_id'], 'nome' => (string) $row['editore_nome']];
+        }
+
         $row['serie_appartenenze'] = $seriesRepo->getBookMemberships($id);
         // PERF-2 (review): reuse the memberships array we just fetched
         // instead of letting getOtherSeriesText fire the same query again.
@@ -220,6 +251,12 @@ class BookRepository
         return $rows;
     }
 
+    /**
+     * Insert a book row and sync its authors and publishers (multi-publisher,
+     * issue #143) from the resolved id lists, returning the new book id.
+     *
+     * @param array<string, mixed> $data
+     */
     public function createBasic(array $data): int
     {
         $hasSottogenere = $this->hasColumn('sottogenere_id');
@@ -568,9 +605,16 @@ class BookRepository
 
         $bookId = (int) $this->db->insert_id;
         $this->syncAuthors($bookId, $data['autori_ids'] ?? []);
+        $this->syncPublishers($bookId, $data['editori_ids'] ?? []);
         return $bookId;
     }
 
+    /**
+     * Update a book row and re-sync its authors and publishers (multi-publisher,
+     * issue #143) from the resolved id lists.
+     *
+     * @param array<string, mixed> $data
+     */
     public function updateBasic(int $id, array $data): bool
     {
         $hasSottogenere = $this->hasColumn('sottogenere_id');
@@ -906,6 +950,7 @@ class BookRepository
         }
 
         $this->syncAuthors($id, $data['autori_ids'] ?? []);
+        $this->syncPublishers($id, $data['editori_ids'] ?? []);
         return $ok;
     }
 
@@ -957,6 +1002,60 @@ class BookRepository
                 $stmt->execute();
             }
         }
+    }
+
+    /**
+     * Replace the publisher set for a book (issue #143).
+     *
+     * Mirrors {@see syncAuthors()}: deletes the libri_editori rows then inserts
+     * the given publisher ids in order. New publishers must already be resolved
+     * to numeric ids by the controller. The caller keeps libri.editore_id in
+     * sync with the first (primary) publisher.
+     *
+     * @param array<int, int|string> $publisherIds Ordered, deduplicated by caller
+     */
+    private function syncPublishers(int $bookId, array $publisherIds): void
+    {
+        // Backward-compat: skip on installs predating the multi-publisher
+        // migration (libri_editori absent) — otherwise the DELETE below errors.
+        if (!$this->hasColumnInTable('libri_editori', 'editore_id')) {
+            return;
+        }
+
+        // Prepare the INSERT BEFORE deleting, so a prepare failure can never
+        // leave the book with its publishers wiped (non-destructive on error).
+        $insert = null;
+        if ($publisherIds) {
+            $insert = $this->db->prepare('INSERT IGNORE INTO libri_editori (libro_id, editore_id, ordine) VALUES (?, ?, ?)');
+            if ($insert === false) {
+                \App\Support\SecureLogger::error('[BookRepository] prepare failed inserting book publishers', ['book_id' => $bookId]);
+                throw new \RuntimeException("Database error: unable to insert book publishers");
+            }
+        }
+
+        $del = $this->db->prepare('DELETE FROM libri_editori WHERE libro_id = ?');
+        if ($del === false) {
+            if ($insert !== null) { $insert->close(); }
+            \App\Support\SecureLogger::error('[BookRepository] prepare failed deleting book publishers', ['book_id' => $bookId]);
+            throw new \RuntimeException("Database error: unable to delete book publishers");
+        }
+        $del->bind_param('i', $bookId);
+        $del->execute();
+        $del->close();
+
+        if ($insert === null) {
+            return;
+        }
+        $ordine = 0;
+        foreach ($publisherIds as $publisherData) {
+            $publisherId = is_numeric($publisherData) ? (int) $publisherData : 0;
+            if ($publisherId > 0) {
+                $insert->bind_param('iii', $bookId, $publisherId, $ordine);
+                $insert->execute();
+                $ordine++;
+            }
+        }
+        $insert->close();
     }
 
     private function processAuthorId($authorData): int
@@ -1315,6 +1414,7 @@ class BookRepository
             'autori',
             'libri_autori',
             'editori',
+            'libri_editori',
             'generi',
             'utenti',
             'prestiti',

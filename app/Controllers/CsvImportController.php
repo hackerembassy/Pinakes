@@ -6,6 +6,8 @@ namespace App\Controllers;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Psr7\Stream;
+use App\Support\Csv;
+use League\Csv\Statement;
 
 class CsvImportController
 {
@@ -52,6 +54,22 @@ class CsvImportController
     }
 
     /**
+     * Delete a saved import temp file, but only when it really resolves inside
+     * the import uploads directory. Paths here are server-generated
+     * (session_id + uniqid); this realpath-containment guard makes path
+     * traversal impossible and confines the unlink to the import scratch area.
+     */
+    private function safeUnlinkImportTmp(string $path): void
+    {
+        $allowed = realpath(__DIR__ . '/../../writable/uploads');
+        $real = realpath($path);
+        if ($allowed !== false && $real !== false && str_starts_with($real, $allowed . DIRECTORY_SEPARATOR)) {
+            // $real is realpath-confined to the import uploads dir; path is server-generated.
+            @unlink($real); // nosemgrep
+        }
+    }
+
+    /**
      * Mostra la pagina di import CSV
      */
     public function showImportPage(Request $request, Response $response): Response
@@ -91,6 +109,11 @@ class CsvImportController
      */
     public function processImport(Request $request, Response $response, \mysqli $db): Response
     {
+        // JSON endpoint: keep PHP warnings/notices out of the response body
+        // (they would corrupt the JSON → client "Risposta non valida").
+        // Warnings still go to the PHP error log for diagnosis.
+        @ini_set('display_errors', '0');
+
         $data = (array) $request->getParsedBody();
 
         // CSRF validated by CsrfMiddleware
@@ -161,29 +184,18 @@ class CsvImportController
             return $response->withHeader('Location', '/admin/libri/import')->withStatus(302);
         }
 
-        // Count total rows for chunked processing
-        $file = fopen($savedFilePath, 'r');
-        if ($file === false) {
-            @unlink($savedFilePath);
+        // Count total rows for chunked processing (header excluded).
+        // league/csv skips the input BOM automatically and does not count a
+        // trailing empty line, so count(reader) - 1 matches the previous
+        // fgetcsv-based count exactly.
+        try {
+            $countReader = Csv::readerFromPath($savedFilePath, $delimiter);
+            $totalRows = max(0, count($countReader) - 1);
+        } catch (\Throwable $e) {
+            $this->safeUnlinkImportTmp($savedFilePath);
             $_SESSION['error'] = __('Impossibile aprire il file CSV salvato');
             return $response->withHeader('Location', '/admin/libri/import')->withStatus(302);
         }
-
-        // Skip BOM if present
-        $bom = fread($file, 3);
-        if ($bom !== "\xEF\xBB\xBF") {
-            rewind($file);
-        }
-
-        // Skip header
-        fgetcsv($file, 0, $delimiter, '"');
-
-        // Count rows
-        $totalRows = 0;
-        while (fgetcsv($file, 0, $delimiter, '"') !== false) {
-            $totalRows++;
-        }
-        fclose($file);
 
         // Store import metadata in session
         $_SESSION['csv_import_data'] = [
@@ -204,7 +216,9 @@ class CsvImportController
         $response->getBody()->write(json_encode([
             'success' => true,
             'total_rows' => $totalRows,
-            'chunk_size' => self::CHUNK_SIZE,
+            // With scraping every row does an external lookup; shrink the chunk
+            // to 1 so a single /chunk request can't exceed the timeout.
+            'chunk_size' => !empty($data['enable_scraping']) ? 1 : self::CHUNK_SIZE,
             'enable_scraping' => !empty($data['enable_scraping'])
         ]));
 
@@ -218,6 +232,10 @@ class CsvImportController
     {
         @set_time_limit(600);
         @ini_set('max_execution_time', '600');
+        // JSON endpoint: keep PHP warnings out of the response body so they
+        // can't corrupt the JSON (client "Risposta non valida"). They still
+        // reach the PHP error log.
+        @ini_set('display_errors', '0');
 
         $data = json_decode((string) $request->getBody(), true);
 
@@ -239,8 +257,15 @@ class CsvImportController
 
         $enableScraping = (bool) ($importData['enable_scraping'] ?? false);
 
-        $file = fopen($importData['file_path'], 'r');
-        if ($file === false) {
+        // Scraping is slow (one external lookup per row): force a single row per
+        // chunk so the request stays well under the fetch/server timeout.
+        if ($enableScraping) {
+            $chunkSize = 1;
+        }
+
+        try {
+            $reader = Csv::readerFromPath($importData['file_path'], $importData['delimiter']);
+        } catch (\Throwable $e) {
             $response->getBody()->write(json_encode([
                 'success' => false,
                 'error' => __('Impossibile aprire il file CSV')
@@ -248,16 +273,9 @@ class CsvImportController
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
 
-        // Skip BOM
-        $bom = fread($file, 3);
-        if ($bom !== "\xEF\xBB\xBF") {
-            rewind($file);
-        }
-
-        // Read headers
-        $headers = fgetcsv($file, 0, $importData['delimiter'], '"');
+        // Read headers (first record; league skips the input BOM automatically)
+        $headers = $reader->nth(0);
         if (!$headers) {
-            fclose($file);
             $response->getBody()->write(json_encode([
                 'success' => false,
                 'error' => __('File CSV vuoto o formato non valido')
@@ -268,18 +286,13 @@ class CsvImportController
         // Map headers
         $mappedHeaders = $this->mapColumnHeaders($headers);
 
-        // Skip to chunk start
-        for ($i = 0; $i < $chunkStart; $i++) {
-            if (fgetcsv($file, 0, $importData['delimiter'], '"') === false) {
-                break;
-            }
-        }
-
-        // Process chunk
+        // Process chunk: window the data rows (offset 1 skips the header) using
+        // an offset/limit Statement so only the chunk is materialized.
         $processed = 0;
         $lineNumber = $chunkStart + 2; // +2 for header and 1-indexed
 
-        while ($processed < $chunkSize && ($rawData = fgetcsv($file, 0, $importData['delimiter'], '"')) !== false) {
+        $chunkRecords = (new Statement())->offset(1 + $chunkStart)->limit($chunkSize)->process($reader);
+        foreach ($chunkRecords as $rawData) {
             $parsedData = []; // Initialize to avoid undefined variable in catch block
             try {
                 // Validate column count
@@ -423,8 +436,6 @@ class CsvImportController
             $lineNumber++;
         }
 
-        fclose($file);
-
         // Update session data
         $_SESSION['csv_import_data'] = $importData;
 
@@ -498,7 +509,7 @@ class CsvImportController
 
             // Cleanup file only after successful persistence
             if ($persisted) {
-                @unlink($importData['file_path']);
+                $this->safeUnlinkImportTmp((string) $importData['file_path']);
             } else {
                 error_log("[CsvImportController] Orphaned import file (persistence failed): " . ($importData['file_path'] ?? 'unknown'));
             }
@@ -1500,8 +1511,9 @@ class CsvImportController
      */
     private function scrapeBookData(string $isbn): array
     {
-        // Use centralized scraping service (same as LibraryThing: 3 attempts)
-        return \App\Support\ScrapingService::scrapeBookData($isbn, 3, 'CSV Import');
+        // Single attempt during bulk import: retries with exponential backoff
+        // (up to ~24s/book) are what pushed chunk requests past the timeout.
+        return \App\Support\ScrapingService::scrapeBookData($isbn, 1, 'CSV Import');
     }
 
     /**
