@@ -667,18 +667,9 @@ class PrestitiController
             $copyRepo = new \App\Models\CopyRepository($db);
             $copyRepo->updateStatus($copia_id, $copia_stato);
 
-            // Ricalcola le copie disponibili con controlli di integrità
-            // Questo aggiornerà anche lo stato del libro basandosi sulle copie
             $integrity = new DataIntegrity($db);
-            $integrity->recalculateBookAvailability($libro_id);
 
-            // Valida e aggiorna lo stato del prestito
-            $validationResult = $integrity->validateAndUpdateLoan($id);
-            if (!$validationResult['success']) {
-                SecureLogger::warning(__('Validazione prestito fallita'), ['loan_id' => $id, 'message' => $validationResult['message']]);
-            }
-
-            // Se copia torna disponibile, gestisci notifiche
+            // Se copia torna disponibile, gestisci notifiche e riassegnazione coda
             if ($copia_stato === 'disponibile') {
                 // Notifica utenti con libro in wishlist
                 $notificationService = new NotificationService($db);
@@ -698,6 +689,12 @@ class PrestitiController
                 $reservationManager = new \App\Controllers\ReservationManager($db);
                 $reservationManager->processBookAvailability($libro_id);
             }
+
+            // Ricalcola le copie disponibili DOPO l'eventuale riassegnazione/conversione
+            // delle prenotazioni: solo così copie_disponibili e libri.stato riflettono lo
+            // stato finale e un libro restituito torna correttamente prestabile (TXN-002,
+            // TXN-005, A2). insideTransaction:true mantiene l'atomicità della transazione.
+            $integrity->recalculateBookAvailability($libro_id, insideTransaction: true);
 
             $db->commit();
 
@@ -844,8 +841,20 @@ class PrestitiController
             return $response->withHeader('Location', $errorUrl . $separator . 'error=loan_overdue')->withStatus(302);
         }
 
-        // Check renewal limit
-        $maxRenewals = 3;
+        // Un prestito non ancora ritirato (da_ritirare/prenotato/pendente) non è
+        // rinnovabile: il rinnovo estende la scadenza di un prestito GIÀ in corso (F2).
+        if (in_array($loan['stato'], ['da_ritirare', 'prenotato', 'pendente'], true)) {
+            $errorUrl = $redirectTo ?? url('/admin/prestiti');
+            $separator = strpos($errorUrl, '?') === false ? '?' : '&';
+            return $response->withHeader('Location', $errorUrl . $separator . 'error=loan_not_picked_up')->withStatus(302);
+        }
+
+        // Check renewal limit (max_renewals configurabile, default 3) — F2
+        $settingsRepo = new \App\Models\SettingsRepository($db);
+        $maxRenewals = (int) ($settingsRepo->get('loans', 'max_renewals', '3') ?? 3);
+        if ($maxRenewals < 0) {
+            $maxRenewals = 3;
+        }
         $currentRenewals = (int) $loan['renewals'];
         if ($currentRenewals >= $maxRenewals) {
             $errorUrl = $redirectTo ?? url('/admin/prestiti');
@@ -884,6 +893,12 @@ class PrestitiController
                 $errorUrl = $redirectTo ?? url('/admin/prestiti');
                 $separator = strpos($errorUrl, '?') === false ? '?' : '&';
                 return $response->withHeader('Location', $errorUrl . $separator . 'error=loan_overdue')->withStatus(302);
+            }
+            if (in_array($lockedLoan['stato'], ['da_ritirare', 'prenotato', 'pendente'], true)) {
+                $db->rollback();
+                $errorUrl = $redirectTo ?? url('/admin/prestiti');
+                $separator = strpos($errorUrl, '?') === false ? '?' : '&';
+                return $response->withHeader('Location', $errorUrl . $separator . 'error=loan_not_picked_up')->withStatus(302);
             }
             if ((int) $lockedLoan['renewals'] >= $maxRenewals) {
                 $db->rollback();
@@ -960,19 +975,21 @@ class PrestitiController
             $newDueDate = $proposedNewDueDate;
             $newRenewalCount = $currentRenewals + 1;
 
-            // Update loan
+            // Update loan — azzera pickup_deadline così il cron checkExpiredPickups
+            // non scade un prestito già in corso e rinnovato (F2).
             $updateStmt = $db->prepare("
                 UPDATE prestiti
-                SET data_scadenza = ?, renewals = ?
+                SET data_scadenza = ?, renewals = ?, pickup_deadline = NULL
                 WHERE id = ?
             ");
             $updateStmt->bind_param("sii", $newDueDate, $newRenewalCount, $id);
             $updateStmt->execute();
             $updateStmt->close();
 
-            // Validate and update loan status
+            // Validate and update loan status (insideTransaction: true — TXN-001:
+            // siamo dentro la transazione aperta a inizio renew())
             $integrity = new DataIntegrity($db);
-            $validationResult = $integrity->validateAndUpdateLoan($id);
+            $validationResult = $integrity->validateAndUpdateLoan($id, insideTransaction: true);
             if (!$validationResult['success']) {
                 SecureLogger::warning(__('Validazione prestito fallita'), ['loan_id' => $id, 'message' => $validationResult['message']]);
             }

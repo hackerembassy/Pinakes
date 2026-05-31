@@ -86,6 +86,7 @@ class DataIntegrity {
                     SELECT COUNT(*)
                     FROM copie c
                     WHERE c.libro_id = l.id
+                    AND c.stato NOT IN ('perso', 'danneggiato', 'manutenzione')
                 ),
                 stato = CASE
                     WHEN GREATEST(
@@ -114,6 +115,8 @@ class DataIntegrity {
                     ) > 0 THEN 'disponibile'
                     WHEN (SELECT COUNT(*) FROM copie c WHERE c.libro_id = l.id AND c.stato = 'prestato') > 0 THEN 'prestato'
                     WHEN (SELECT COUNT(*) FROM copie c WHERE c.libro_id = l.id AND c.stato = 'prenotato') > 0 THEN 'prenotato'
+                    -- Copia in biblioteca ma assorbita da una prenotazione attiva → riservata (A1)
+                    WHEN (SELECT COUNT(*) FROM copie c WHERE c.libro_id = l.id AND c.stato IN ('disponibile', 'prenotato')) > 0 THEN 'prenotato'
                     ELSE l.stato
                 END
                 WHERE l.deleted_at IS NULL
@@ -328,6 +331,7 @@ class DataIntegrity {
                     SELECT COUNT(*)
                     FROM copie c
                     WHERE c.libro_id = ?
+                    AND c.stato NOT IN ('perso', 'danneggiato', 'manutenzione')
                 ),
                 stato = CASE
                     WHEN GREATEST(
@@ -356,11 +360,15 @@ class DataIntegrity {
                     ) > 0 THEN 'disponibile'
                     WHEN (SELECT COUNT(*) FROM copie c WHERE c.libro_id = ? AND c.stato = 'prestato') > 0 THEN 'prestato'
                     WHEN (SELECT COUNT(*) FROM copie c WHERE c.libro_id = ? AND c.stato = 'prenotato') > 0 THEN 'prenotato'
+                    -- Copia fisicamente in biblioteca ma assorbita da una prenotazione attiva:
+                    -- è riservata, non 'disponibile' né stantia (A1). Evita di lasciare il libro
+                    -- bloccato su uno stato precedente (es. 'prestato') dopo la restituzione.
+                    WHEN (SELECT COUNT(*) FROM copie c WHERE c.libro_id = ? AND c.stato IN ('disponibile', 'prenotato')) > 0 THEN 'prenotato'
                     ELSE l.stato
                 END
                 WHERE id = ?
             ");
-            $stmt->bind_param('iiiiiiii', $bookId, $bookId, $bookId, $bookId, $bookId, $bookId, $bookId, $bookId);
+            $stmt->bind_param('iiiiiiiii', $bookId, $bookId, $bookId, $bookId, $bookId, $bookId, $bookId, $bookId, $bookId);
             $result = $stmt->execute();
             $stmt->close();
 
@@ -832,17 +840,33 @@ class DataIntegrity {
             }
 
             foreach ($bookIds as $bookId) {
-                $this->db->query("SET @pos := 0");
-                $stmt = $this->db->prepare("
-                    UPDATE prenotazioni
-                    SET queue_position = (@pos := @pos + 1)
+                // Ordinamento deterministico (F1): le user-variable MySQL in un
+                // UPDATE ... ORDER BY non garantiscono l'ordine di assegnazione su
+                // MySQL 8 / MariaDB 10.3+. Leggiamo le righe ordinate e riscriviamo
+                // queue_position con un loop esplicito.
+                $sel = $this->db->prepare("
+                    SELECT id FROM prenotazioni
                     WHERE libro_id = ? AND stato = 'attiva'
-                    ORDER BY queue_position ASC
+                    ORDER BY queue_position ASC, id ASC
                 ");
-                $stmt->bind_param('i', $bookId);
-                $stmt->execute();
-                $results['fixed'] += $this->db->affected_rows;
-                $stmt->close();
+                $sel->bind_param('i', $bookId);
+                $sel->execute();
+                $rowsRes = $sel->get_result();
+                $ids = [];
+                while ($r = $rowsRes->fetch_assoc()) {
+                    $ids[] = (int) $r['id'];
+                }
+                $sel->close();
+
+                $pos = 0;
+                $upd = $this->db->prepare("UPDATE prenotazioni SET queue_position = ? WHERE id = ?");
+                foreach ($ids as $id) {
+                    $pos++;
+                    $upd->bind_param('ii', $pos, $id);
+                    $upd->execute();
+                    $results['fixed'] += $this->db->affected_rows;
+                }
+                $upd->close();
             }
 
             $this->db->commit();
@@ -882,7 +906,7 @@ class DataIntegrity {
     /**
      * Verifica ed aggiorna lo stato di un prestito
      */
-    public function validateAndUpdateLoan(int $loanId): array {
+    public function validateAndUpdateLoan(int $loanId, bool $insideTransaction = false): array {
         $result = ['success' => false, 'message' => '', 'updated_fields' => []];
 
         try {
@@ -905,7 +929,18 @@ class DataIntegrity {
             $loan = $loanResult->fetch_assoc();
             $stmt->close();
 
-            $this->db->begin_transaction();
+            // Un prestito già chiuso (attivo = 0: restituito/scaduto/annullato/...) non
+            // ha transizioni di stato applicabili. Restituire subito evita un ricalcolo
+            // ridondante su uno stato di copia già mutato dal flusso chiamante (TXN-005).
+            if ((int) ($loan['attivo'] ?? 0) === 0) {
+                $result['success'] = true;
+                $result['message'] = __('Prestito già chiuso, nessun aggiornamento necessario');
+                return $result;
+            }
+
+            if (!$insideTransaction) {
+                $this->db->begin_transaction();
+            }
             $updates = [];
 
             // Verifica stato in ritardo
@@ -939,11 +974,19 @@ class DataIntegrity {
             // Aggiorna disponibilità libro
             $this->recalculateBookAvailability($loan['libro_id'], insideTransaction: true);
 
-            $this->db->commit();
+            if (!$insideTransaction) {
+                $this->db->commit();
+            }
             $result['success'] = true;
             $result['message'] = __('Prestito validato e aggiornato');
 
         } catch (\Throwable $e) {
+            // Dentro una transazione esterna NON facciamo rollback qui (chiuderebbe
+            // la transazione del chiamante): rilanciamo perché sia il chiamante a
+            // gestire il rollback atomico (TXN-001).
+            if ($insideTransaction) {
+                throw $e;
+            }
             $this->db->rollback();
             $result['message'] = __('Errore validazione prestito:') . ' ' . $e->getMessage();
         }

@@ -179,9 +179,11 @@ class UserActionsController
                 $reassignmentService->reassignOnReturn($copiaId);
             }
 
-            // Recalculate book availability
+            // Recalculate book availability (insideTransaction: true — TXN-002:
+            // siamo dentro la transazione aperta in questo metodo, evita il
+            // commit implicito di una begin_transaction() annidata)
             $integrity = new \App\Support\DataIntegrity($db);
-            $integrity->recalculateBookAvailability((int) $loan['libro_id']);
+            $integrity->recalculateBookAvailability((int) $loan['libro_id'], insideTransaction: true);
 
             $db->commit();
 
