@@ -2055,39 +2055,7 @@ return function (App $app): void {
         $db = $app->getContainer()->get('db');
         $libroId = (int)$args['id'];
 
-        // Get all active loans/reservations for this book
-        $stmt = $db->prepare("
-            SELECT data_prestito, data_scadenza, stato
-            FROM prestiti
-            WHERE libro_id = ? AND attivo = 1 AND stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo')
-            ORDER BY data_prestito
-        ");
-        $stmt->bind_param('i', $libroId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        $occupiedRanges = [];
-        $today = date('Y-m-d');
-        $firstAvailable = $today;
-
-        while ($row = $result->fetch_assoc()) {
-            $occupiedRanges[] = [
-                'from' => $row['data_prestito'],
-                'to' => $row['data_scadenza'],
-                'stato' => $row['stato']
-            ];
-
-            // Calculate first available date (day after latest loan ends)
-            if ($row['data_scadenza'] >= $today) {
-                $nextDay = date('Y-m-d', strtotime($row['data_scadenza'] . ' +1 day'));
-                if ($nextDay > $firstAvailable) {
-                    $firstAvailable = $nextDay;
-                }
-            }
-        }
-        $stmt->close();
-
-        // Get book info
+        // Verifica esistenza libro
         $bookStmt = $db->prepare("SELECT copie_disponibili, copie_totali FROM libri WHERE id = ? AND deleted_at IS NULL");
         $bookStmt->bind_param('i', $libroId);
         $bookStmt->execute();
@@ -2098,13 +2066,42 @@ return function (App $app): void {
             return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
         }
 
+        // Intervalli occupati (per la visualizzazione) dai prestiti attivi
+        $stmt = $db->prepare("
+            SELECT data_prestito, data_scadenza, stato
+            FROM prestiti
+            WHERE libro_id = ? AND attivo = 1 AND stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo')
+            ORDER BY data_prestito
+        ");
+        $stmt->bind_param('i', $libroId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $occupiedRanges = [];
+        while ($row = $result->fetch_assoc()) {
+            $occupiedRanges[] = [
+                'from' => $row['data_prestito'],
+                'to' => $row['data_scadenza'],
+                'stato' => $row['stato']
+            ];
+        }
+        $stmt->close();
+
+        // first_available / is_available_now: delega al calcolo per-giorno e per-copia
+        // (AVAIL-001). Il vecchio "giorno dopo la scadenza più lontana" ignorava le
+        // copie multiple, restituendo una data troppo conservativa.
+        $today = date('Y-m-d');
+        $reservations = new \App\Controllers\ReservationsController($db);
+        $availability = $reservations->getBookAvailabilityData($libroId, $today, 180);
+        $todayData = $availability['by_date'][$today] ?? null;
+        $isAvailableNow = $todayData !== null && (int) ($todayData['available'] ?? 0) > 0;
+
         $data = [
             'libro_id' => $libroId,
             'copie_disponibili' => (int)($book['copie_disponibili'] ?? 0),
-            'copie_totali' => (int)($book['copie_totali'] ?? 0),
+            'copie_totali' => (int)($availability['total_copies'] ?? ($book['copie_totali'] ?? 0)),
             'occupied_ranges' => $occupiedRanges,
-            'first_available' => $firstAvailable,
-            'is_available_now' => (int)($book['copie_disponibili'] ?? 0) > 0
+            'first_available' => $availability['earliest_available'] ?? $today,
+            'is_available_now' => $isAvailableNow
         ];
 
         $response->getBody()->write(json_encode($data, JSON_UNESCAPED_UNICODE));

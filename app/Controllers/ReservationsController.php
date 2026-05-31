@@ -449,8 +449,10 @@ class ReservationsController
         }
 
         // Fallback: if NO copies exist in copie table at all, use libri.copie_totali
-        // This handles legacy data where copies weren't tracked individually
-        $stmt = $this->db->prepare("SELECT GREATEST(IFNULL(copie_totali, 1), 1) AS copie_totali FROM libri WHERE id = ? AND deleted_at IS NULL");
+        // This handles legacy data where copies weren't tracked individually.
+        // NON forzare un minimo di 1 (AVAIL-007): un libro dichiarato con 0 copie
+        // non deve risultare prestabile — resta prenotabile tramite la coda.
+        $stmt = $this->db->prepare("SELECT IFNULL(copie_totali, 0) AS copie_totali FROM libri WHERE id = ? AND deleted_at IS NULL");
         $stmt->bind_param('i', $bookId);
         $stmt->execute();
         $result = $stmt->get_result();
