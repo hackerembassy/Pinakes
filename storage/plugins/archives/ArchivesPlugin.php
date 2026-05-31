@@ -1479,10 +1479,24 @@ class ArchivesPlugin
             $p['version_note']
         );
 
-        if (!$stmt->execute()) {
-            SecureLogger::error('[Archives] INSERT failed: ' . $stmt->error);
+        // mysqli runs in exception mode (PHP 8.1+ default), so execute() THROWS
+        // on a duplicate reference_code instead of returning false. Catch it and
+        // re-render the form with a friendly error rather than 500-ing.
+        $insertOk = false;
+        $insertErrno = 0;
+        $insertError = '';
+        try {
+            $insertOk = $stmt->execute();
+        } catch (\mysqli_sql_exception $e) {
+            $insertOk = false;
+            $insertErrno = (int) $e->getCode();
+            $insertError = $e->getMessage();
+        }
+        if (!$insertOk) {
+            $errno = $insertErrno ?: (int) ($this->db->errno ?: ($stmt->errno ?? 0));
+            SecureLogger::error('[Archives] INSERT failed: ' . ($insertError ?: $stmt->error));
             $stmt->close();
-            $errors['_global'] = 'Insert failed. ' . ($this->db->errno === 1062 ? 'Reference code already exists.' : 'Check the log.');
+            $errors['_global'] = 'Insert failed. ' . ($errno === 1062 ? 'Reference code already exists.' : 'Check the log.');
             return $this->renderArchivalForm($response, 'create', null, $values, $errors);
         }
         $stmt->close();
@@ -1732,9 +1746,22 @@ class ArchivesPlugin
             $id
         );
 
-        if (!$stmt->execute()) {
-            SecureLogger::error('[Archives] UPDATE failed: ' . $stmt->error);
-            $errors['_global'] = $this->db->errno === 1062
+        // mysqli exception mode (PHP 8.1+): execute() THROWS on a duplicate
+        // reference_code instead of returning false — catch it and re-render.
+        $updateOk = false;
+        $updateErrno = 0;
+        $updateError = '';
+        try {
+            $updateOk = $stmt->execute();
+        } catch (\mysqli_sql_exception $e) {
+            $updateOk = false;
+            $updateErrno = (int) $e->getCode();
+            $updateError = $e->getMessage();
+        }
+        if (!$updateOk) {
+            $errno = $updateErrno ?: (int) ($this->db->errno ?: ($stmt->errno ?? 0));
+            SecureLogger::error('[Archives] UPDATE failed: ' . ($updateError ?: $stmt->error));
+            $errors['_global'] = $errno === 1062
                 ? 'Reference code already exists for this institution.'
                 : 'Update failed. Check the log.';
             $stmt->close();

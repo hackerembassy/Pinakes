@@ -164,23 +164,40 @@ class PluginManager
                 } elseif ($diskVersion === $dbVersion && (int) ($row['is_active'] ?? 0) === 1) {
                     // Same version re-deploy: hooks added to the code but not yet in DB
                     // (e.g. merging branches that extend the same plugin version).
-                    // ensureSchema uses DELETE+INSERT so calling onActivate is idempotent.
-                    // autoRegisterBundledPlugins runs only on admin plugin-page visits,
-                    // so this extra work is acceptable.
-                    try {
-                        $syncInstance = $this->instantiatePlugin([
-                            'id'        => (int) $row['id'],
-                            'name'      => $pluginName,
-                            'path'      => $pluginName,
-                            'main_file' => $pluginMeta['main_file'] ?? 'wrapper.php',
-                        ]);
-                        if (method_exists($syncInstance, 'onActivate')) {
-                            $syncInstance->onActivate();
+                    // Only re-run onActivate when the plugin has NO hooks registered
+                    // yet. Re-running it (ensureSchema DDL + hook re-insert) on EVERY
+                    // admin-plugin-page visit is wasteful and, when concurrent requests
+                    // (e.g. the admin layout's background polls) hit it at once,
+                    // deadlocks on plugin_hooks / metadata locks — surfacing as an
+                    // intermittent 500 on unrelated writes. When hooks already exist
+                    // we skip the work entirely; a wipe (count 0) re-triggers the sync.
+                    $pluginIdInt = (int) ($row['id'] ?? 0);
+                    $hookCount = 0;
+                    $hookStmt = $this->db->prepare('SELECT COUNT(*) FROM plugin_hooks WHERE plugin_id = ?');
+                    if ($hookStmt !== false) {
+                        $hookStmt->bind_param('i', $pluginIdInt);
+                        if ($hookStmt->execute()) {
+                            $hookStmt->bind_result($hookCount);
+                            $hookStmt->fetch();
                         }
-                    } catch (\Throwable $e) {
-                        // Non-fatal: log and continue. Hooks may be stale but the
-                        // plugin keeps running with whatever is currently in the DB.
-                        SecureLogger::warning("[PluginManager] Hook re-sync skipped for $pluginName (same version): " . $e->getMessage());
+                        $hookStmt->close();
+                    }
+                    if ((int) $hookCount === 0) {
+                        try {
+                            $syncInstance = $this->instantiatePlugin([
+                                'id'        => $pluginIdInt,
+                                'name'      => $pluginName,
+                                'path'      => $pluginName,
+                                'main_file' => $pluginMeta['main_file'] ?? 'wrapper.php',
+                            ]);
+                            if (method_exists($syncInstance, 'onActivate')) {
+                                $syncInstance->onActivate();
+                            }
+                        } catch (\Throwable $e) {
+                            // Non-fatal: log and continue. Hooks may be stale but the
+                            // plugin keeps running with whatever is currently in the DB.
+                            SecureLogger::warning("[PluginManager] Hook re-sync skipped for $pluginName (same version): " . $e->getMessage());
+                        }
                     }
                 }
                 continue;

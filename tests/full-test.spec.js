@@ -290,6 +290,27 @@ test.beforeEach(() => {
   clearRateLimits();
 });
 
+// ── Global HTTP 5xx interception (applies to EVERY test) ─────────────────────
+// Every page created in any phase calls attachServerErrorGuard(page) right after
+// context.newPage(); it records any response with status >= 500. The afterEach
+// below fails the test that produced one — so a page that "opens" (the goto
+// resolves) while the server actually returned a 500 error document no longer
+// slips through unnoticed.
+const pageServerErrors = [];
+function attachServerErrorGuard(page) {
+  page.on('response', (r) => {
+    if (r.status() >= 500) {
+      pageServerErrors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
+    }
+  });
+}
+test.afterEach(() => {
+  const errs = pageServerErrors.splice(0); // capture and clear for the next test
+  if (errs.length > 0) {
+    throw new Error(`HTTP 5xx response(s) during this test:\n${errs.join('\n')}`);
+  }
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 // All phases run serially — failure in any phase stops ALL subsequent phases
 // ════════════════════════════════════════════════════════════════════════════
@@ -307,6 +328,7 @@ test.describe.serial('Phase 1: Installation (Italian)', () => {
     clearRateLimits();
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     // Probe installer availability
     await page.goto(`${BASE}/installer/?step=0`);
     const radio = page.locator('input[name="language"][value="it_IT"]');
@@ -432,6 +454,7 @@ test.describe.serial('Phase 2: Login and Dashboard', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
   });
   test.afterAll(async () => { await context?.close(); });
   test.beforeEach(() => { test.skip(!appReady, 'App not ready — Phase 1 did not complete'); });
@@ -489,6 +512,7 @@ test.describe.serial('Phase 3: Manual Book Creation', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
 
     // Ensure a 3-level genre hierarchy exists
@@ -698,6 +722,7 @@ test.describe.serial('Phase 4: ISBN Scraping', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => { await context?.close(); });
@@ -783,6 +808,7 @@ test.describe.serial('Phase 5: Scraping-Pro Plugin', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => { await context?.close(); });
@@ -932,6 +958,7 @@ test.describe.serial('Phase 6: Edit Book', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => { await context?.close(); });
@@ -1129,6 +1156,7 @@ test.describe.serial('Phase 7: Author Management', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => { await context?.close(); });
@@ -1302,6 +1330,7 @@ test.describe.serial('Phase 8: Publisher Management', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => { await context?.close(); });
@@ -1421,6 +1450,7 @@ test.describe.serial('Phase 9: Bulk Cover Download', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => { await context?.close(); });
@@ -1463,6 +1493,7 @@ test.describe.serial('Phase 10: CSV/TSV Import & Export', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => {
@@ -1603,6 +1634,7 @@ test.describe.serial('Phase 11: Settings', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => { await context?.close(); });
@@ -1707,6 +1739,7 @@ test.describe.serial('Phase 12: CMS and Events', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => {
@@ -1823,6 +1856,7 @@ test.describe.serial('Phase 13: Shelf/Location Management', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => {
@@ -1942,6 +1976,7 @@ test.describe.serial('Phase 14: Admin Loan', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => {
@@ -2315,6 +2350,7 @@ test.describe.serial('Phase 16: Overlap Prevention', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
 
     testBookId = state.createdBookIds[0];
     if (!testBookId || !state.userId) return;
@@ -2404,6 +2440,7 @@ test.describe.serial('Phase 17: Frontend Search', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
   });
   test.afterAll(async () => { await context?.close(); });
   test.beforeEach(() => { test.skip(!appReady, 'App not ready — Phase 1 did not complete'); });
@@ -2465,6 +2502,7 @@ test.describe.serial('Phase 18: Issue Regressions', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
   test.afterAll(async () => { await context?.close(); });
@@ -2895,6 +2933,7 @@ test.describe.serial('Phase 19: Security', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
   });
   test.afterAll(async () => { await context?.close(); });
   test.beforeEach(() => { test.skip(!appReady, 'App not ready — Phase 1 did not complete'); });
@@ -3068,6 +3107,7 @@ test.describe.serial('Phase 21: Language Switch', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
     await loginAsAdmin(page);
   });
 
@@ -3318,6 +3358,8 @@ test.describe.serial('Phase 22: Archives', () => {
   /** @type {import('@playwright/test').Page} */
   let page;
   let archivesReady = false;
+  /** Every HTTP response with status >= 500 seen on this phase's page. */
+  const serverErrors = [];
 
   const TAG = `E2EARC${RUN_ID}`;
   const ids = { fonds: 0, series: 0, authority: 0, activity: 0, seeded: [] };
@@ -3327,6 +3369,14 @@ test.describe.serial('Phase 22: Archives', () => {
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
+    // Catch any 5xx the navigations trigger — a page can "open" (the goto
+    // resolves) while the server actually returned a 500 error document.
+    page.on('response', (r) => {
+      if (r.status() >= 500) {
+        serverErrors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
+      }
+    });
     await loginAsAdmin(page);
     archivesReady = await ensureArchivesActive(page).catch(() => false);
   });
@@ -3557,6 +3607,33 @@ test.describe.serial('Phase 22: Archives', () => {
     const body = await page.locator('body').textContent();
     expect(body).not.toContain(`${TAG} Serie figlia`);
   });
+
+  test('22.21 Public + admin archive pages render without a server error', async () => {
+    // Status codes are the reliable signal (the body carries the full i18n
+    // dictionary, which legitimately contains strings like "Errore interno",
+    // so a body substring scan would false-positive). The page.goto calls feed
+    // the phase-wide 5xx listener asserted in 22.22.
+
+    // Public archive index (the frontend a visitor actually sees).
+    const idx = await page.request.get(`${BASE}/archivio`);
+    expect(idx.status(), 'public /archivio index').toBe(200);
+    await page.goto(`${BASE}/archivio`, { waitUntil: 'domcontentloaded' });
+
+    // Public detail of the created fonds (publicShowAction; follows the slug
+    // redirect). Must not be a 5xx — a legit 404 (unit not public) is fine.
+    const pub = await page.request.get(`${BASE}/archivio/${ids.fonds}`, { maxRedirects: 5 });
+    expect(pub.status(), `public archive detail for fonds ${ids.fonds}`).toBeLessThan(500);
+    await page.goto(`${BASE}/archivio/${ids.fonds}`, { waitUntil: 'domcontentloaded' }).catch(() => {});
+
+    // Admin detail page renders the authority linked in 22.11 — a common 500 spot.
+    const adm = await page.request.get(`${BASE}/admin/archives/${ids.fonds}`);
+    expect(adm.status(), `admin archive detail for fonds ${ids.fonds}`).toBe(200);
+    await page.goto(`${BASE}/admin/archives/${ids.fonds}`, { waitUntil: 'domcontentloaded' });
+  });
+
+  test('22.22 No HTTP 5xx response occurred anywhere in the Archives phase', async () => {
+    expect(serverErrors, `5xx responses seen:\n${serverErrors.join('\n')}`).toEqual([]);
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -3579,12 +3656,20 @@ test.describe.serial('Phase 23: Multi-publisher & Multi-author', () => {
   const A2 = `${TAG} AutoreDue`;
   const A3 = `${TAG} AutoreTre`;
   let multiPubBook = 0;
+  /** Every HTTP response with status >= 500 seen on this phase's page. */
+  const serverErrors = [];
 
   test.beforeAll(async ({ browser }) => {
     clearRateLimits();
     if (!appReady) return;
     context = await browser.newContext();
     page = await context.newPage();
+    attachServerErrorGuard(page);
+    page.on('response', (r) => {
+      if (r.status() >= 500) {
+        serverErrors.push(`${r.status()} ${r.request().method()} ${r.url()}`);
+      }
+    });
     await loginAsAdmin(page);
   });
 
@@ -3708,5 +3793,9 @@ test.describe.serial('Phase 23: Multi-publisher & Multi-author', () => {
     const json = await res.json();
     const rows = json.data || json.rows || json.libri || [];
     expect(JSON.stringify(rows)).toContain('Libro due editori');
+  });
+
+  test('23.10 No HTTP 5xx response occurred anywhere in the phase', async () => {
+    expect(serverErrors, `5xx responses seen:\n${serverErrors.join('\n')}`).toEqual([]);
   });
 });
