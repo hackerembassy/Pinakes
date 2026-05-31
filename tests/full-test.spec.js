@@ -1624,10 +1624,27 @@ TSV_Book1_${RUN_ID}\tTSV Author\tTSV Publisher\t2024`;
     const selectedCsv = await selectedResp.text();
     const selectedRecords = countCsvRecords(selectedCsv);
 
-    // Selected export should have fewer records than all
-    expect(allRecords).toBeGreaterThan(selectedRecords);
-    // Selected: header + exactly 2 data rows
+    // Selected: header + exactly 2 data rows — this is the real #77 guarantee
+    // (the ?ids= filter returns ONLY the requested books, never the whole set).
     expect(selectedRecords).toBe(3);
+
+    // All-export must contain at least the full non-deleted catalog plus the
+    // header row. (Greater-or-equal, not strict equality: a multi-volume opera
+    // can legitimately emit more than one CSV row.) Derive the expectation from
+    // the DB so the assertion never depends on how many books earlier phases
+    // happened to leave alive — earlier ISBN/scraping phases may collide on a
+    // shared test ISBN and leave only 2 books, which previously made a hard
+    // `allRecords > 3` flake in CI while passing locally.
+    const totalBooks = Number(
+      dbQuery("SELECT COUNT(*) FROM libri WHERE deleted_at IS NULL")
+    );
+    expect(allRecords).toBeGreaterThanOrEqual(totalBooks + 1);
+
+    // The filter must actually narrow the result whenever the catalog holds
+    // more than the 2 selected books.
+    if (totalBooks > 2) {
+      expect(allRecords).toBeGreaterThan(selectedRecords);
+    }
   });
 });
 
