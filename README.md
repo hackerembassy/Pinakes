@@ -13,7 +13,7 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 [![Installer Ready](https://img.shields.io/badge/one--click_install-ready-22c55e?style=for-the-badge&logo=azurepipelines&logoColor=white)](installer)
 [![License](https://img.shields.io/badge/License-GPL--3.0-orange?style=for-the-badge)](LICENSE)
 
-[![PHP](https://img.shields.io/badge/PHP-777BB4?style=for-the-badge&logo=php&logoColor=white)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=for-the-badge&logo=php&logoColor=white)](https://www.php.net/)
 ![Slim](https://img.shields.io/badge/slim%20framework-2C3A3A?style=for-the-badge&logo=slim&logoColor=white)
 [![MySQL](https://img.shields.io/badge/mysql-4479A1.svg?style=for-the-badge&logo=mysql&logoColor=white)](https://www.mysql.com/)
 [![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E)](https://developer.mozilla.org/docs/Web/JavaScript)
@@ -21,6 +21,16 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 
 [![Documentation](https://img.shields.io/badge/Documentazione-Docsify-4285f4?style=for-the-badge&logo=readthedocs&logoColor=white)](https://fabiodalez-dev.github.io/Pinakes/)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/fabiodalez)
+
+---
+
+## Requirements
+
+- **PHP 8.2 or higher** — matches `composer.json` (`^8.2`); the installer and the in-app updater enforce this floor.
+- **MySQL 5.7+** or **MariaDB 10.3+**
+- **PHP extensions**: PDO, PDO MySQL, MySQLi, Mbstring, JSON, GD, Fileinfo, Zip
+- **Web server**: Apache (`mod_rewrite` + `.htaccess`) or nginx
+- No Composer or Node build tools are needed on the production host — frontend assets are precompiled and `vendor/` ships inside the release ZIP.
 
 ---
 
