@@ -592,16 +592,18 @@ test.describe.serial('Loan / Reservation Lifecycle', () => {
 
     await expect(userPage.locator('text=Prenotazioni attive')).toBeVisible({ timeout: 5000 });
 
-    // Handle native confirm() dialog
-    userPage.once('dialog', (dialog) => dialog.accept());
-
-    // Click the cancel button (form submit)
+    // The cancel form uses a SweetAlert confirmation (data-swal-confirm), NOT a
+    // native confirm() dialog — so we click the trigger, then confirm in the modal.
     const cancelBtn = userPage.locator('.btn-cancel').first();
     await expect(cancelBtn).toBeVisible({ timeout: 5000 });
     await cancelBtn.click();
 
-    // Form submits → redirect
-    await userPage.waitForURL(/prenotazioni/, { timeout: 15000 });
+    const swalConfirm = userPage.locator('.swal2-confirm');
+    await expect(swalConfirm).toBeVisible({ timeout: 5000 });
+    await swalConfirm.click();
+
+    // The form submits and redirects to the reservations page with ?canceled=1
+    await userPage.waitForURL(/canceled=1/, { timeout: 15000 });
 
     // DB verify: reservation cancelled
     const newStato = dbQuery(`SELECT stato FROM prenotazioni WHERE id=${reservationId}`);

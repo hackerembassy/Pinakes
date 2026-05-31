@@ -267,7 +267,7 @@ class UserActionsController
 
             // Recalculate book availability
             $integrity = new \App\Support\DataIntegrity($db);
-            $integrity->recalculateBookAvailability($libroId);
+            $integrity->recalculateBookAvailability($libroId, insideTransaction: true);
 
             $db->commit();
 
@@ -372,7 +372,7 @@ class UserActionsController
 
             // Recalculate book availability
             $integrity = new \App\Support\DataIntegrity($db);
-            $integrity->recalculateBookAvailability($libroId);
+            $integrity->recalculateBookAvailability($libroId, insideTransaction: true);
 
             $db->commit();
 
@@ -584,7 +584,7 @@ class UserActionsController
 
                 // Recalculate book availability after reservation
                 $integrity = new \App\Support\DataIntegrity($db);
-                $integrity->recalculateBookAvailability($libroId);
+                $integrity->recalculateBookAvailability($libroId, insideTransaction: true);
 
                 $db->commit();
                 $params = ['reserve_success' => 1];
