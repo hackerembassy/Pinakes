@@ -16,3 +16,78 @@ INSERT IGNORE INTO `system_settings` (`category`, `setting_key`, `setting_value`
 
 INSERT IGNORE INTO `system_settings` (`category`, `setting_key`, `setting_value`, `description`) VALUES
 ('loans', 'max_renewals', '3', 'Numero massimo di rinnovi consentiti per prestito');
+
+-- Aggiorna i trigger di integrità prestito sulle copie alla definizione corrente
+-- (installer/database/triggers.sql): esclude anche 'in_restauro' e 'in_trasferimento'
+-- dalle copie prestabili e usa 'da_ritirare' (non 'pendente', che ha attivo=0) nel
+-- controllo di sovrapposizione. Per gli install ESISTENTI questi trigger erano alla
+-- versione precedente: li ricreiamo (DROP + CREATE). Il runner delle migrazioni
+-- gestisce i blocchi DELIMITER; il fallimento dei trigger (es. privilegio TRIGGER
+-- mancante) è non fatale — le stesse regole sono applicate a livello applicativo.
+
+DROP TRIGGER IF EXISTS `trg_check_active_prestito_before_insert`;
+DELIMITER $$
+CREATE TRIGGER `trg_check_active_prestito_before_insert`
+BEFORE INSERT ON `prestiti`
+FOR EACH ROW
+BEGIN
+    IF (NEW.attivo = 1 AND NEW.copia_id IS NOT NULL) THEN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM copie c
+            WHERE c.id = NEW.copia_id
+              AND c.stato NOT IN ('perso', 'danneggiato', 'manutenzione', 'in_restauro', 'in_trasferimento')
+        ) THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'La copia non è disponibile per il prestito.';
+        END IF;
+
+        IF EXISTS (
+            SELECT 1
+            FROM prestiti p
+            WHERE p.copia_id = NEW.copia_id
+              AND p.attivo = 1
+              AND p.stato IN ('in_corso','in_ritardo','prenotato','da_ritirare')
+              AND p.data_prestito <= NEW.data_scadenza
+              AND p.data_scadenza >= NEW.data_prestito
+        ) THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Esiste già un prestito attivo e sovrapposto per questa copia.';
+        END IF;
+    END IF;
+END$$
+DELIMITER ;
+
+DROP TRIGGER IF EXISTS `trg_check_active_prestito_before_update`;
+DELIMITER $$
+CREATE TRIGGER `trg_check_active_prestito_before_update`
+BEFORE UPDATE ON `prestiti`
+FOR EACH ROW
+BEGIN
+    IF (NEW.attivo = 1 AND NEW.copia_id IS NOT NULL) THEN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM copie c
+            WHERE c.id = NEW.copia_id
+              AND c.stato NOT IN ('perso', 'danneggiato', 'manutenzione', 'in_restauro', 'in_trasferimento')
+        ) THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'La copia non è disponibile per il prestito.';
+        END IF;
+
+        IF EXISTS (
+            SELECT 1
+            FROM prestiti p
+            WHERE p.copia_id = NEW.copia_id
+              AND p.attivo = 1
+              AND p.id <> NEW.id
+              AND p.stato IN ('in_corso','in_ritardo','prenotato','da_ritirare')
+              AND p.data_prestito <= NEW.data_scadenza
+              AND p.data_scadenza >= NEW.data_prestito
+        ) THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Esiste già un prestito attivo e sovrapposto per questa copia.';
+        END IF;
+    END IF;
+END$$
+DELIMITER ;
