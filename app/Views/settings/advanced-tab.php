@@ -257,6 +257,20 @@ use App\Support\HtmlHelper;
             </div>
           </label>
         </div>
+        <div>
+          <label class="inline-flex items-center gap-3 cursor-pointer">
+            <input type="checkbox"
+                   id="private_mode"
+                   name="private_mode"
+                   value="1"
+                   <?php echo isset($advancedSettings['private_mode']) && $advancedSettings['private_mode'] === '1' ? 'checked' : ''; ?>
+                   class="w-5 h-5 text-gray-900 border-gray-300 rounded focus:ring-gray-500">
+            <div>
+              <span class="text-sm font-semibold text-gray-900"><?= __("Modalità privata") ?></span>
+              <p class="text-xs text-gray-600"><?= __("Limita l'accesso all'intero sito ai soli utenti registrati: i visitatori non autenticati vengono reindirizzati alla pagina di accesso") ?></p>
+            </div>
+          </label>
+        </div>
         <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
           <div class="text-xs text-gray-700 space-y-1">
             <p><strong><?= __("Requisiti:") ?></strong></p>
