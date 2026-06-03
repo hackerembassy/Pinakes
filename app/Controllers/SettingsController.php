@@ -1004,11 +1004,14 @@ class SettingsController
         $repository = new SettingsRepository($db);
         $repository->ensureTables();
 
-        // Validate: loan_duration_days >= 1; pickup_expiry_days >= 1; max_renewals >= 0; max_active_loans_per_user >= 0
-        $loanDurationDays = max(1, (int) ($data['loan_duration_days'] ?? 30));
-        $pickupExpiryDays = max(1, (int) ($data['pickup_expiry_days'] ?? 3));
-        $maxRenewals = max(0, (int) ($data['max_renewals'] ?? 3));
-        $maxActiveLoans = max(0, (int) ($data['max_active_loans_per_user'] ?? 0));
+        // Clamp to sane bounds on BOTH ends — a hand-crafted POST must not be
+        // able to persist absurd durations/renewals (the UI min/max attributes
+        // are advisory; the server is the authority). 0 = "unlimited" where the
+        // feature allows it (max_renewals, max_active_loans_per_user).
+        $loanDurationDays = min(3650, max(1, (int) ($data['loan_duration_days'] ?? 30)));         // 1 day … 10 years
+        $pickupExpiryDays = min(365,  max(1, (int) ($data['pickup_expiry_days'] ?? 3)));          // 1 … 365 days
+        $maxRenewals      = min(100,  max(0, (int) ($data['max_renewals'] ?? 3)));                // 0 … 100
+        $maxActiveLoans   = min(1000, max(0, (int) ($data['max_active_loans_per_user'] ?? 0)));   // 0 (unlimited) … 1000
 
         $repository->set('loans', 'loan_duration_days', (string) $loanDurationDays);
         $repository->set('loans', 'pickup_expiry_days', (string) $pickupExpiryDays);

@@ -262,7 +262,10 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
             <span class="font-medium"><?= __("Rinnovi effettuati") ?></span>
             <span class="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800">
               <i class="fas fa-redo-alt mr-1 text-xs"></i>
-              <?php echo (int)($activeLoan['renewals'] ?? 0); ?> / 3
+              <?php
+                /** @var int $maxRenewals admin-configurable renewal cap (loans.max_renewals) */
+                $maxRenewals = isset($maxRenewals) ? (int) $maxRenewals : 3;
+                echo (int)($activeLoan['renewals'] ?? 0); ?> / <?= (int) $maxRenewals ?>
             </span>
           </div>
           <?php if (!empty($activeLoan['processed_by_name'])): ?>
@@ -280,7 +283,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
 
           <div class="pt-3 border-t border-gray-200 space-y-2">
             <?php
-              $maxRenewals = 3;
+              // $maxRenewals (loans.max_renewals) was normalised just above.
               $currentRenewals = (int)($activeLoan['renewals'] ?? 0);
               $canRenew = !$isLate && $currentRenewals < $maxRenewals;
             ?>

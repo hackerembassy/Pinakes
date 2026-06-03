@@ -252,13 +252,21 @@ class ReservationManager
         // - Reservations are in a queue system - they wait their turn, they don't block each other
         // - When converting reservation #1, other reservations shouldn't prevent the conversion
         // Note: 'da_ritirare' counts as occupied even if copy is physically available
+        // P2 (#157): an already-converted reservation produces a loan with
+        // stato='pendente'/attivo=0 that holds a copy until the admin confirms
+        // pickup. Counting only attivo=1 loans let a repeated maintenance run
+        // re-convert the SAME copy for the next person in the queue, stacking up
+        // duplicate pendings. Pending conversions must therefore count as
+        // occupying the date range too.
         $stmt = $this->db->prepare("
             SELECT COUNT(*) as conflicts
             FROM prestiti
             WHERE libro_id = ?
-            AND attivo = 1
-            AND stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')
             AND data_prestito <= ? AND data_scadenza >= ?
+            AND (
+                (attivo = 1 AND stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato'))
+                OR stato = 'pendente'
+            )
         ");
         $stmt->bind_param('iss', $bookId, $endDate, $startDate);
         $stmt->execute();
@@ -306,10 +314,12 @@ class ReservationManager
                 AND NOT EXISTS (
                     SELECT 1 FROM prestiti p
                     WHERE p.copia_id = c.id
-                    AND p.attivo = 1
-                AND p.stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo')
                     AND p.data_prestito <= ?
                     AND p.data_scadenza >= ?
+                    AND (
+                        (p.attivo = 1 AND p.stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo'))
+                        OR p.stato = 'pendente'  -- a pending conversion already holds this copy (#157)
+                    )
                 )
                 LIMIT 1
             ");
@@ -335,9 +345,12 @@ class ReservationManager
 
             $overlapCopyStmt = $this->db->prepare("
                 SELECT 1 FROM prestiti
-                WHERE copia_id = ? AND attivo = 1
-                AND stato IN ('in_corso','da_ritirare','prenotato','in_ritardo')
+                WHERE copia_id = ?
                 AND data_prestito <= ? AND data_scadenza >= ?
+                AND (
+                    (attivo = 1 AND stato IN ('in_corso','da_ritirare','prenotato','in_ritardo'))
+                    OR stato = 'pendente'  -- pending conversion already holds this copy (#157)
+                )
                 LIMIT 1
             ");
             $overlapCopyStmt->bind_param('iss', $copyId, $endDate, $startDate);

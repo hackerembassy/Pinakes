@@ -336,7 +336,9 @@ async function returnLoanViaApi(adminPage, loanId) {
  * Returns { status: 0|1|2, output: string } where status 0=ok, 2=non-fatal errors.
  */
 function performMaintenance() {
-  const projectRoot = '/Users/fabio/Documents/GitHub/biblioteca';
+  // Derive the repo root from this spec's location (tests/ → ..) so the test
+  // runs under any checkout / CI path, not just one developer's machine.
+  const projectRoot = path.resolve(__dirname, '..');
   // Remove lock file so concurrent test runs don't skip
   try { fs.unlinkSync(`${projectRoot}/storage/cache/full-maintenance.lock`); } catch { /* ignore */ }
   try {
@@ -372,7 +374,7 @@ const TEST2_EMAIL = `loantest2-${RUN_ID}@test.local`;
 // ═════════════════════════════════════════════════════════════════════════════
 // MAIN SERIAL SUITE
 // ═════════════════════════════════════════════════════════════════════════════
-test.describe.serial('Loan & Reservation Complete Suite (25 tests)', () => {
+test.describe.serial('Loan & Reservation Complete Suite (26 tests)', () => {
 
   /** @type {import('@playwright/test').BrowserContext} */
   let adminCtx;
@@ -1281,6 +1283,52 @@ test.describe.serial('Loan & Reservation Complete Suite (25 tests)', () => {
     dbQuery(`DELETE FROM prestiti WHERE id=${expiredLoanId21}`);
     if (copia21) dbQuery(`UPDATE copie SET stato='disponibile' WHERE id=${copia21}`);
     recalcAvailability(testBookId);
+  });
+
+  // ── Test 21b: double-conversion guard (#157) ─────────────────────────────
+  // A converted reservation becomes a pending loan (attivo=0) that holds its
+  // copy until the admin confirms pickup. Before the fix, isDateRangeAvailable
+  // counted only attivo=1 loans, so a SECOND maintenance run re-converted the
+  // SAME single copy for the next person in the queue → duplicate pendings.
+  test('F.21b: 1 copy + 2 queued reservations → two maintenance runs yield only ONE pending (#157)', async () => {
+    const tag = 'E2E_DBLCONV_' + Date.now();
+    dbQuery(`INSERT INTO libri (titolo, copie_totali, copie_disponibili, created_at, updated_at)
+             VALUES ('${tag}', 1, 1, NOW(), NOW())`);
+    const bookId = parseInt(
+      dbQuery(`SELECT id FROM libri WHERE titolo='${tag}' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1`), 10);
+    dbQuery(`INSERT INTO copie (libro_id, numero_inventario, stato, created_at, updated_at)
+             VALUES (${bookId}, '${tag}-INV', 'disponibile', NOW(), NOW())`);
+
+    const start = dateISO(0);    // start date has arrived → eligible to convert
+    const end = dateISO(+14);
+
+    // Two users queue for the SAME single copy over the SAME date range.
+    dbQuery(`INSERT INTO prenotazioni (libro_id, utente_id, data_inizio_richiesta, data_fine_richiesta, queue_position, stato, created_at, updated_at)
+             VALUES (${bookId}, ${testUserId},  '${start}', '${end}', 1, 'attiva', NOW(), NOW())`);
+    dbQuery(`INSERT INTO prenotazioni (libro_id, utente_id, data_inizio_richiesta, data_fine_richiesta, queue_position, stato, created_at, updated_at)
+             VALUES (${bookId}, ${testUser2Id}, '${start}', '${end}', 2, 'attiva', NOW(), NOW())`);
+
+    // Repeated cron BEFORE the admin approves the first pending loan.
+    const m1 = performMaintenance();
+    expect([0, 2].includes(m1.status)).toBe(true);
+    const m2 = performMaintenance();
+    expect([0, 2].includes(m2.status)).toBe(true);
+
+    // Exactly ONE reservation converted onto the single copy; the second is
+    // still queued, never double-converted into a duplicate pending.
+    const pendenti = parseInt(
+      dbQuery(`SELECT COUNT(*) FROM prestiti WHERE libro_id=${bookId} AND stato='pendente' AND attivo=0`), 10);
+    expect(pendenti).toBe(1);
+
+    const ancoraAttive = parseInt(
+      dbQuery(`SELECT COUNT(*) FROM prenotazioni WHERE libro_id=${bookId} AND stato='attiva'`), 10);
+    expect(ancoraAttive).toBe(1);
+
+    // Cleanup (FK-safe).
+    dbQuery(`DELETE FROM prestiti WHERE libro_id=${bookId}`);
+    dbQuery(`DELETE FROM prenotazioni WHERE libro_id=${bookId}`);
+    dbQuery(`DELETE FROM copie WHERE libro_id=${bookId}`);
+    dbQuery(`DELETE FROM libri WHERE id=${bookId}`);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

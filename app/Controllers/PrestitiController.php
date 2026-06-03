@@ -714,9 +714,10 @@ class PrestitiController
 
             // Se copia torna disponibile, gestisci notifiche e riassegnazione coda
             if ($copia_stato === 'disponibile') {
-                // Notifica utenti con libro in wishlist
-                $notificationService = new NotificationService($db);
-                $notificationService->notifyWishlistBookAvailability($libro_id);
+                // Wishlist availability notifications are DEFERRED until after the
+                // commit (#157): firing them here, inside the transaction, could
+                // e-mail users about availability that a later rollback would undo.
+                $notifyWishlistForLibroId = $libro_id;
 
                 // Case 3: Reassign returned copy to next waiting reservation (NEW SYSTEM - prestiti table)
                 $reassignmentService = null;
@@ -744,6 +745,11 @@ class PrestitiController
 
             // Send deferred notifications after commit
             try {
+                // Wishlist availability: only now that the return is durably
+                // committed do we tell wishlist watchers the book is back (#157).
+                if (isset($notifyWishlistForLibroId)) {
+                    (new NotificationService($db))->notifyWishlistBookAvailability($notifyWishlistForLibroId);
+                }
                 if (isset($reassignmentService)) {
                     $reassignmentService->flushDeferredNotifications();
                 }
