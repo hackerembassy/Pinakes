@@ -22,6 +22,25 @@ async function loginAsAdmin(page) {
 // Unique suffix per run to avoid stale data collisions
 const RUN_ID = Date.now().toString(36);
 
+/**
+ * Delete a genre via its detail-page form. The delete form uses
+ * data-swal-confirm (dettaglio_genere.php), so the submit is intercepted by a
+ * SweetAlert — we MUST click .swal2-confirm or the record is never removed
+ * (the page stays on /admin/genres/{id}, so a bare waitForURL(/genres/) would
+ * pass while leaking the row).
+ */
+async function deleteGenre(page, genreId) {
+  await page.goto(`${BASE}/admin/genres/${genreId}`);
+  const df = page.locator('form[action*="/delete"]');
+  if (!(await df.isVisible({ timeout: 2000 }).catch(() => false))) return;
+  await df.locator('button[type="submit"]').click();
+  const confirm = page.locator('.swal2-confirm');
+  if (await confirm.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await confirm.click();
+  }
+  await page.waitForURL(/\/admin\/genres(\?|$|\/)/, { timeout: 10000 }).catch(() => {});
+}
+
 // ────────────────────────────────────────────────────────────────────────
 // Genre Merge + Rearrange (Issue #64 continuation)
 // ────────────────────────────────────────────────────────────────────────
@@ -70,19 +89,9 @@ test.describe('Genre Merge & Rearrange', () => {
     await expect(page.locator('body')).toContainText(`ParentB_${RUN_ID}`);
 
     // Cleanup: delete child, then both parents
-    await page.goto(`${BASE}/admin/genres/${childId}`);
-    const deleteForm = page.locator('form[action*="/delete"]');
-    if (await deleteForm.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await deleteForm.locator('button[type="submit"]').click();
-      await page.waitForURL(/.*genres.*/);
-    }
+    await deleteGenre(page, childId);
     for (const pid of [parentAId, parentBId]) {
-      await page.goto(`${BASE}/admin/genres/${pid}`);
-      const df = page.locator('form[action*="/delete"]');
-      if (await df.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await df.locator('button[type="submit"]').click();
-        await page.waitForURL(/.*genres.*/);
-      }
+      await deleteGenre(page, pid);
     }
   });
 
@@ -117,15 +126,11 @@ test.describe('Genre Merge & Rearrange', () => {
     await swalConfirm.click();
 
     // Should redirect to target genre
-    await page.waitForURL(new RegExp(`genres/${targetId}`));
+    await page.waitForURL(url => url.href.includes(`genres/${targetId}`));
     await expect(page.locator('body')).toContainText('uniti con successo');
 
-    // Cleanup: delete target (the delete form action is /admin/genres/{id}/delete)
-    const df = page.locator('form[action*="/delete"]');
-    if (await df.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await df.locator('button[type="submit"]').click();
-      await page.waitForURL(/.*genres.*/);
-    }
+    // Cleanup: delete target
+    await deleteGenre(page, targetId);
   });
 
   test('merge card shows grouped dropdown', async ({ page }) => {
