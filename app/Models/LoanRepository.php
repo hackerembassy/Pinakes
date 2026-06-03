@@ -133,8 +133,8 @@ class LoanRepository
             }
             $bookId = (int) $lrow['libro_id'];
 
-            // Lock della riga `libri` per prima
-            $lockBook = $this->db->prepare('SELECT id FROM libri WHERE id=? FOR UPDATE');
+            // Lock della riga `libri` per prima (soft-delete guard, rule 2)
+            $lockBook = $this->db->prepare('SELECT id FROM libri WHERE id=? AND deleted_at IS NULL FOR UPDATE');
             $lockBook->bind_param('i', $bookId);
             $lockBook->execute();
             $lockBook->close();

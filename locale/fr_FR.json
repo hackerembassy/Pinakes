@@ -5203,5 +5203,7 @@
   "Predefinito: 0 (nessun limite)": "Par défaut : 0 (aucune limite)",
   "Salva impostazioni prestiti": "Enregistrer les paramètres d'emprunt",
   "Impostazioni prestiti aggiornate correttamente.": "Paramètres d'emprunt mis à jour avec succès.",
-  "Hai raggiunto il numero massimo di prestiti attivi consentiti": "Vous avez atteint le nombre maximum d'emprunts actifs autorisés"
+  "Hai raggiunto il numero massimo di prestiti attivi consentiti": "Vous avez atteint le nombre maximum d'emprunts actifs autorisés",
+  "Capienza prenotazioni/prestiti superata": "Capacité de réservation/prêt dépassée",
+  "Richiesta duplicata utente/libro": "Demande utilisateur/livre en double"
 }

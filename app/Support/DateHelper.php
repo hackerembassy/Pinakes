@@ -6,6 +6,27 @@ namespace App\Support;
 
 class DateHelper
 {
+    /**
+     * Today's date (Y-m-d) in the application's configured timezone.
+     *
+     * PHP's default timezone is often UTC while the library runs in a local
+     * zone (default Europe/Rome). Near midnight the two disagree by a day, so a
+     * reservation/loan dated "today" (stored via MySQL CURDATE() in the local
+     * zone) would look like a future date to a raw date('Y-m-d') (UTC)
+     * comparison and have its eligibility deferred by 24h. Every "is this date
+     * eligible today?" check in the loan/reservation pipeline must compute
+     * "today" through here so PHP and MySQL agree on the day boundary.
+     */
+    public static function today(): string
+    {
+        $tz = (string) ConfigStore::get('app.timezone', 'Europe/Rome');
+        try {
+            return (new \DateTime('now', new \DateTimeZone($tz)))->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return date('Y-m-d');
+        }
+    }
+
     private static array $monthNames = [
         'gennaio' => '01', 'febbraio' => '02', 'marzo' => '03', 'aprile' => '04',
         'maggio' => '05', 'giugno' => '06', 'luglio' => '07', 'agosto' => '08',

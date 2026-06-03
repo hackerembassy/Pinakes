@@ -314,11 +314,13 @@ class LoanApprovalController
                     AND NOT EXISTS (
                         SELECT 1 FROM prestiti p
                         WHERE p.copia_id = c.id
-                        AND p.attivo = 1
                         AND p.id != ?
-                        AND p.stato IN ('in_corso', 'prenotato', 'da_ritirare', 'in_ritardo')
                         AND p.data_prestito <= ?
                         AND p.data_scadenza >= ?
+                        AND (
+                            (p.attivo = 1 AND p.stato IN ('in_corso', 'prenotato', 'da_ritirare', 'in_ritardo'))
+                            OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL)
+                        )
                     )
                 ");
                 $existingCopyStmt->bind_param('iiss', $existingCopiaId, $loanId, $dataScadenza, $dataPrestito);
@@ -340,9 +342,12 @@ class LoanApprovalController
                 // Step 2b: Count overlapping loans (excluding the current pending one)
                 $loanCountStmt = $db->prepare("
                     SELECT COUNT(*) as count FROM prestiti
-                    WHERE libro_id = ? AND attivo = 1 AND id != ?
-                    AND stato IN ('in_corso', 'prenotato', 'da_ritirare', 'in_ritardo')
+                    WHERE libro_id = ? AND id != ?
                     AND data_prestito <= ? AND data_scadenza >= ?
+                    AND (
+                        (attivo = 1 AND stato IN ('in_corso', 'prenotato', 'da_ritirare', 'in_ritardo'))
+                        OR (stato = 'pendente' AND copia_id IS NOT NULL)
+                    )
                 ");
                 $loanCountStmt->bind_param('iiss', $libroId, $loanId, $dataScadenza, $dataPrestito);
                 $loanCountStmt->execute();
@@ -384,10 +389,12 @@ class LoanApprovalController
                     AND NOT EXISTS (
                         SELECT 1 FROM prestiti p
                         WHERE p.copia_id = c.id
-                        AND p.attivo = 1
-                        AND p.stato IN ('in_corso', 'prenotato', 'da_ritirare', 'in_ritardo')
                         AND p.data_prestito <= ?
                         AND p.data_scadenza >= ?
+                        AND (
+                            (p.attivo = 1 AND p.stato IN ('in_corso', 'prenotato', 'da_ritirare', 'in_ritardo'))
+                            OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL)
+                        )
                     )
                     LIMIT 1
                 ");

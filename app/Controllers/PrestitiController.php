@@ -244,9 +244,12 @@ class PrestitiController
                 // Step 2: Count overlapping loans for the loan period
                 $loanCountStmt = $db->prepare("
                 SELECT COUNT(*) as count FROM prestiti
-                WHERE libro_id = ? AND attivo = 1
-                AND stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo')
+                WHERE libro_id = ?
                     AND data_prestito <= ? AND data_scadenza >= ?
+                AND (
+                    (attivo = 1 AND stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo'))
+                    OR (stato = 'pendente' AND copia_id IS NOT NULL)
+                )
                 ");
                 $loanCountStmt->bind_param('iss', $libro_id, $data_scadenza, $data_prestito);
                 $loanCountStmt->execute();
@@ -284,10 +287,12 @@ class PrestitiController
                     AND NOT EXISTS (
                         SELECT 1 FROM prestiti p
                         WHERE p.copia_id = c.id
-                        AND p.attivo = 1
-                        AND p.stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo')
                         AND p.data_prestito <= ?
                         AND p.data_scadenza >= ?
+                        AND (
+                            (p.attivo = 1 AND p.stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo'))
+                            OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL)
+                        )
                     )
                     LIMIT 1
                 ");
@@ -312,9 +317,12 @@ class PrestitiController
                 // Step 2: Count overlapping loans (approved states only)
                 $loanCountStmt = $db->prepare("
                 SELECT COUNT(*) as count FROM prestiti
-                WHERE libro_id = ? AND attivo = 1
-                AND stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo')
+                WHERE libro_id = ?
                     AND data_prestito <= ? AND data_scadenza >= ?
+                AND (
+                    (attivo = 1 AND stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo'))
+                    OR (stato = 'pendente' AND copia_id IS NOT NULL)
+                )
                 ");
                 $loanCountStmt->bind_param('iss', $libro_id, $data_scadenza, $data_prestito);
                 $loanCountStmt->execute();
@@ -352,10 +360,12 @@ class PrestitiController
                     AND NOT EXISTS (
                         SELECT 1 FROM prestiti p
                         WHERE p.copia_id = c.id
-                        AND p.attivo = 1
-                        AND p.stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo')
                         AND p.data_prestito <= ?
                         AND p.data_scadenza >= ?
+                        AND (
+                            (p.attivo = 1 AND p.stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo'))
+                            OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL)
+                        )
                     )
                     LIMIT 1
                 ");

@@ -10,7 +10,9 @@ CREATE TRIGGER `trg_check_active_prestito_before_insert`
 BEFORE INSERT ON `prestiti`
 FOR EACH ROW
 BEGIN
-    IF (NEW.attivo = 1 AND NEW.copia_id IS NOT NULL) THEN
+    -- #157 model A-refined: a copy is "held" by an active loan OR by a
+    -- reservation-conversion 'pendente' that already carries a copia_id.
+    IF (NEW.copia_id IS NOT NULL AND (NEW.attivo = 1 OR NEW.stato = 'pendente')) THEN
         -- 1) La copia deve essere utilizzabile (non persa, danneggiata, in manutenzione, restauro o trasferimento)
         -- Consente: disponibile (nuovi prestiti), prenotato (prestiti futuri non sovrapposti), prestato (prestiti futuri)
         IF NOT EXISTS (
@@ -28,10 +30,12 @@ BEGIN
             SELECT 1
             FROM prestiti p
             WHERE p.copia_id = NEW.copia_id
-              AND p.attivo = 1
-              AND p.stato IN ('in_corso','in_ritardo','prenotato','da_ritirare')
               AND p.data_prestito <= NEW.data_scadenza
               AND p.data_scadenza >= NEW.data_prestito
+              AND (
+                  (p.attivo = 1 AND p.stato IN ('in_corso','in_ritardo','prenotato','da_ritirare'))
+                  OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL)
+              )
         ) THEN
             SIGNAL SQLSTATE '45000'
                 SET MESSAGE_TEXT = 'Esiste già un prestito attivo e sovrapposto per questa copia.';
@@ -49,7 +53,9 @@ BEFORE UPDATE ON `prestiti`
 FOR EACH ROW
 BEGIN
     -- Solo se si sta assegnando/cambiando una copia a un prestito attivo
-    IF (NEW.attivo = 1 AND NEW.copia_id IS NOT NULL) THEN
+    -- #157 model A-refined: a copy is "held" by an active loan OR by a
+    -- reservation-conversion 'pendente' that already carries a copia_id.
+    IF (NEW.copia_id IS NOT NULL AND (NEW.attivo = 1 OR NEW.stato = 'pendente')) THEN
         -- 1) La copia deve essere utilizzabile (non persa, danneggiata, in manutenzione, restauro o trasferimento)
         -- Nota: durante un update la copia può essere già in stato prestato/prenotato per QUESTO prestito
         IF NOT EXISTS (
@@ -68,11 +74,13 @@ BEGIN
             SELECT 1
             FROM prestiti p
             WHERE p.copia_id = NEW.copia_id
-              AND p.attivo = 1
               AND p.id <> NEW.id
-              AND p.stato IN ('in_corso','in_ritardo','prenotato','da_ritirare')
               AND p.data_prestito <= NEW.data_scadenza
               AND p.data_scadenza >= NEW.data_prestito
+              AND (
+                  (p.attivo = 1 AND p.stato IN ('in_corso','in_ritardo','prenotato','da_ritirare'))
+                  OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL)
+              )
         ) THEN
             SIGNAL SQLSTATE '45000'
                 SET MESSAGE_TEXT = 'Esiste già un prestito attivo e sovrapposto per questa copia.';

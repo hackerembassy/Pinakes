@@ -5203,5 +5203,7 @@
   "Predefinito: 0 (nessun limite)": "Standard: 0 (kein Limit)",
   "Salva impostazioni prestiti": "Ausleiheinstellungen speichern",
   "Impostazioni prestiti aggiornate correttamente.": "Ausleiheinstellungen erfolgreich aktualisiert.",
-  "Hai raggiunto il numero massimo di prestiti attivi consentiti": "Sie haben die maximale Anzahl aktiver Ausleihen erreicht"
+  "Hai raggiunto il numero massimo di prestiti attivi consentiti": "Sie haben die maximale Anzahl aktiver Ausleihen erreicht",
+  "Capienza prenotazioni/prestiti superata": "Reservierungs-/Ausleihkapazität überschritten",
+  "Richiesta duplicata utente/libro": "Doppelte Benutzer-/Buchanfrage"
 }

@@ -5203,5 +5203,7 @@
   "Predefinito: 0 (nessun limite)": "Predefinito: 0 (nessun limite)",
   "Salva impostazioni prestiti": "Salva impostazioni prestiti",
   "Impostazioni prestiti aggiornate correttamente.": "Impostazioni prestiti aggiornate correttamente.",
-  "Hai raggiunto il numero massimo di prestiti attivi consentiti": "Hai raggiunto il numero massimo di prestiti attivi consentiti"
+  "Hai raggiunto il numero massimo di prestiti attivi consentiti": "Hai raggiunto il numero massimo di prestiti attivi consentiti",
+  "Capienza prenotazioni/prestiti superata": "Capienza prenotazioni/prestiti superata",
+  "Richiesta duplicata utente/libro": "Richiesta duplicata utente/libro"
 }

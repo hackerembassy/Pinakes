@@ -45,11 +45,17 @@ class ReservationsController
         $bookId = (int) $args['id'];
         $totalCopies = $this->getBookTotalCopies($bookId);
 
-        // Get current and future loans for this book (approved states only)
+        // Get current and future loans for this book. Approved states always
+        // hold a copy; a reservation-conversion pending (attivo=0 with a
+        // copia_id) also holds its copy until pickup confirmation (#157, model
+        // A-refined). Bare 'pendente' requests with no copy are excluded.
         $stmt = $this->db->prepare("
-            SELECT data_prestito, data_scadenza, data_restituzione, pickup_deadline, stato
+            SELECT data_prestito, data_scadenza, data_restituzione, pickup_deadline, stato, copia_id
             FROM prestiti
-            WHERE libro_id = ? AND stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')
+            WHERE libro_id = ? AND (
+                stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')
+                OR (stato = 'pendente' AND copia_id IS NOT NULL)
+            )
             ORDER BY data_prestito
         ");
         $stmt->bind_param('i', $bookId);
@@ -87,9 +93,11 @@ class ReservationsController
         $start = $startDate ? new DateTime($startDate) : new DateTime(); // today by default
         $start->setTime(0, 0, 0);
 
-        // Normalize intervals
-        // Note: 'pendente' loans do NOT block slots - they are just unconfirmed requests.
-        // Only approved loans (prenotato, da_ritirare, in_corso, in_ritardo) block slots.
+        // Normalize intervals (#157, model A-refined):
+        // approved loans (prenotato, da_ritirare, in_corso, in_ritardo) hold a
+        // copy, and so does a reservation-conversion 'pendente' that already
+        // carries a copia_id. A bare 'pendente' request with no copy assigned
+        // does NOT block a slot.
         $loanIntervals = [];
         foreach ($currentLoans as $loan) {
             $startDateLoan = $loan['data_prestito'] ?? null;
@@ -99,8 +107,8 @@ class ReservationsController
                 continue;
             }
 
-            // Skip 'pendente' - it's just a request, doesn't block any slot
-            if ($loanStatus === 'pendente') {
+            // A 'pendente' loan blocks a slot only when it already holds a copy.
+            if ($loanStatus === 'pendente' && empty($loan['copia_id'])) {
                 continue;
             }
 
@@ -414,11 +422,17 @@ class ReservationsController
     {
         $totalCopies = $this->getBookTotalCopies($bookId);
 
-        // Get current and future loans for this book (approved states only)
+        // Get current and future loans for this book. Approved states always
+        // hold a copy; a reservation-conversion pending (attivo=0 with a
+        // copia_id) also holds its copy until pickup confirmation (#157, model
+        // A-refined). Bare 'pendente' requests with no copy are excluded.
         $stmt = $this->db->prepare("
-            SELECT data_prestito, data_scadenza, data_restituzione, pickup_deadline, stato
+            SELECT data_prestito, data_scadenza, data_restituzione, pickup_deadline, stato, copia_id
             FROM prestiti
-            WHERE libro_id = ? AND stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')
+            WHERE libro_id = ? AND (
+                stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')
+                OR (stato = 'pendente' AND copia_id IS NOT NULL)
+            )
             ORDER BY data_prestito
         ");
         $stmt->bind_param('i', $bookId);

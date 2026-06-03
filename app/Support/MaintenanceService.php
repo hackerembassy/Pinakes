@@ -320,7 +320,7 @@ class MaintenanceService
      */
     public function processScheduledReservations(): int
     {
-        $today = date('Y-m-d');
+        $today = DateHelper::today();
 
         // Find all active reservations where the requested start date has arrived
         // Process them in queue order (queue_position ASC)
@@ -424,7 +424,7 @@ class MaintenanceService
      */
     public function checkExpiredReservations(): int
     {
-        $today = date('Y-m-d');
+        $today = DateHelper::today();
 
         // Find expired reservations
         $stmt = $this->db->prepare("
@@ -544,7 +544,7 @@ class MaintenanceService
      */
     public function checkExpiredPickups(): int
     {
-        $today = date('Y-m-d');
+        $today = DateHelper::today();
 
         // Find expired pickups (da_ritirare with pickup_deadline passed)
         $stmt = $this->db->prepare("

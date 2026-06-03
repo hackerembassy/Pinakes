@@ -131,7 +131,9 @@ class ReservationManager
      */
     public function processBookAvailability($bookId)
     {
-        $today = date('Y-m-d');
+        // App-timezone "today" (not PHP UTC) so MySQL-stored dates and the
+        // eligibility comparison agree across the midnight boundary (#157).
+        $today = \App\Support\DateHelper::today();
         $ownTransaction = $this->beginTransactionIfNeeded();
 
         try {
@@ -252,12 +254,15 @@ class ReservationManager
         // - Reservations are in a queue system - they wait their turn, they don't block each other
         // - When converting reservation #1, other reservations shouldn't prevent the conversion
         // Note: 'da_ritirare' counts as occupied even if copy is physically available
-        // P2 (#157): an already-converted reservation produces a loan with
-        // stato='pendente'/attivo=0 that holds a copy until the admin confirms
-        // pickup. Counting only attivo=1 loans let a repeated maintenance run
-        // re-convert the SAME copy for the next person in the queue, stacking up
-        // duplicate pendings. Pending conversions must therefore count as
-        // occupying the date range too.
+        // CANONICAL "copy is occupied" predicate (#157, model A-refined):
+        //   (attivo = 1 AND stato IN active-states)
+        //   OR (stato = 'pendente' AND copia_id IS NOT NULL)
+        // A reservation-conversion pending (attivo=0) carries a copia_id and
+        // holds that copy until the admin confirms pickup, so it must count;
+        // a bare 'pendente' request with no copy assigned (origine='richiesta')
+        // does NOT yet hold a copy and must NOT reduce availability. The same
+        // predicate is mirrored in store/approveLoan/createReservation and the
+        // DB triggers so every entry point agrees.
         $stmt = $this->db->prepare("
             SELECT COUNT(*) as conflicts
             FROM prestiti
@@ -265,7 +270,7 @@ class ReservationManager
             AND data_prestito <= ? AND data_scadenza >= ?
             AND (
                 (attivo = 1 AND stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato'))
-                OR stato = 'pendente'
+                OR (stato = 'pendente' AND copia_id IS NOT NULL)
             )
         ");
         $stmt->bind_param('iss', $bookId, $endDate, $startDate);
@@ -318,7 +323,7 @@ class ReservationManager
                     AND p.data_scadenza >= ?
                     AND (
                         (p.attivo = 1 AND p.stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo'))
-                        OR p.stato = 'pendente'  -- a pending conversion already holds this copy (#157)
+                        OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL)  -- pending conversion holds this copy (#157, model A-refined)
                     )
                 )
                 LIMIT 1
@@ -349,7 +354,7 @@ class ReservationManager
                 AND data_prestito <= ? AND data_scadenza >= ?
                 AND (
                     (attivo = 1 AND stato IN ('in_corso','da_ritirare','prenotato','in_ritardo'))
-                    OR stato = 'pendente'  -- pending conversion already holds this copy (#157)
+                    OR (stato = 'pendente' AND copia_id IS NOT NULL)  -- pending conversion holds this copy (#157, model A-refined)
                 )
                 LIMIT 1
             ");
@@ -663,9 +668,15 @@ class ReservationManager
             $cancelledCount = $this->db->affected_rows;
             $stmt->close();
 
-            // Reorder queue positions for affected books
+            // Reorder queue positions for affected books and refresh their
+            // availability (#157): a today-covering active reservation absorbs a
+            // copy, so a book freed purely by an expired reservation would keep
+            // a stale 'prenotato'/0-availability status until an unrelated event
+            // recalculated it. Recalc here, inside the transaction.
+            $integrity = new \App\Support\DataIntegrity($this->db);
             foreach ($affectedBooks as $bookId) {
                 $this->reorderQueuePositions($bookId);
+                $integrity->recalculateBookAvailability($bookId, true);
             }
 
             $this->commitIfOwned($ownTransaction);

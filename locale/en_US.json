@@ -5203,5 +5203,7 @@
   "Predefinito: 0 (nessun limite)": "Default: 0 (no limit)",
   "Salva impostazioni prestiti": "Save loan settings",
   "Impostazioni prestiti aggiornate correttamente.": "Loan settings updated successfully.",
-  "Hai raggiunto il numero massimo di prestiti attivi consentiti": "You have reached the maximum number of active loans allowed"
+  "Hai raggiunto il numero massimo di prestiti attivi consentiti": "You have reached the maximum number of active loans allowed",
+  "Capienza prenotazioni/prestiti superata": "Reservation/loan capacity exceeded",
+  "Richiesta duplicata utente/libro": "Duplicate user/book request"
 }
