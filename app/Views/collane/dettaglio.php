@@ -122,7 +122,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     </div>
     <div class="divide-y divide-gray-200">
       <?php foreach ($relatedParents as $related): ?>
-      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/series/detailso?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
+      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/series/detail?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
         <span class="font-medium text-gray-900"><?= HtmlHelper::e($related['nome']) ?></span>
         <span class="text-sm text-gray-500">(<?= (int) $related['book_count'] ?> <?= __("libri") ?>)</span>
       </a>
@@ -138,7 +138,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     </div>
     <div class="divide-y divide-gray-200">
       <?php foreach ($relatedSiblings as $related): ?>
-      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/series/detailso?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
+      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/series/detail?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
         <span class="font-medium text-gray-900"><?= HtmlHelper::e($related['nome']) ?></span>
         <span class="text-sm text-gray-500">
           <?php if (!empty($related['ciclo'])): ?>
@@ -162,7 +162,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     </div>
     <div class="divide-y divide-gray-200">
       <?php foreach ($relatedChildren as $related): ?>
-      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/series/detailso?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
+      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/series/detail?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
         <span class="font-medium text-gray-900"><?= HtmlHelper::e($related['nome']) ?></span>
         <span class="text-sm text-gray-500">(<?= (int) $related['book_count'] ?> <?= __("libri") ?>)</span>
       </a>
@@ -245,7 +245,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow md:col-span-2">
       <h3 class="text-sm font-medium text-gray-700 mb-1"><i class="fas fa-book-open text-gray-400 mr-1"></i> <?= __("Crea opera multi-volume") ?></h3>
       <p class="text-xs text-gray-500 mb-3"><?= __("Crea un libro padre che raccoglie tutti i volumi di questa collana.") ?></p>
-      <form method="post" action="<?= htmlspecialchars(url('/admin/series/createte-opera'), ENT_QUOTES, 'UTF-8') ?>">
+      <form method="post" action="<?= htmlspecialchars(url('/admin/series/create-opera'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="collana" value="<?= HtmlHelper::e($collana) ?>">
         <div class="flex gap-2">

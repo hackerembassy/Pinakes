@@ -155,7 +155,7 @@ class CollaneController
         ]);
 
         $_SESSION['success_message'] = sprintf(__('Collana "%s" creata'), $nome);
-        return $response->withHeader('Location', url('/admin/series/detailso?nome=' . urlencode($nome)))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/series/detail?nome=' . urlencode($nome)))->withStatus(302);
     }
 
     /**
@@ -234,7 +234,7 @@ class CollaneController
 
         if (!$seriesRepo->hasCollaneTable()) {
             $_SESSION['error_message'] = __('Errore database');
-            return $response->withHeader('Location', url('/admin/series/detailso?nome=' . urlencode($nome)))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series/detail?nome=' . urlencode($nome)))->withStatus(302);
         }
         $seriesRepo->ensureCollana($nome, [
             'descrizione' => $descrizione,
@@ -246,7 +246,7 @@ class CollaneController
         ]);
 
         $_SESSION['success_message'] = __('Descrizione salvata');
-        return $response->withHeader('Location', url('/admin/series/detailso?nome=' . urlencode($nome)))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/series/detail?nome=' . urlencode($nome)))->withStatus(302);
     }
 
     /**
@@ -275,7 +275,7 @@ class CollaneController
             $_SESSION['error_message'] = __('Errore database');
         }
 
-        return $response->withHeader('Location', url('/admin/series/detailso?nome=' . urlencode($newName)))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/series/detail?nome=' . urlencode($newName)))->withStatus(302);
     }
 
     /**
@@ -426,7 +426,7 @@ class CollaneController
 
         (new SeriesRepository($db))->removeBookFromSeries($bookId, $collana);
         $_SESSION['success_message'] = __('Libro rimosso dalla serie');
-        return $response->withHeader('Location', url('/admin/series/detailso?nome=' . urlencode($collana)))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/series/detail?nome=' . urlencode($collana)))->withStatus(302);
     }
 
     /**

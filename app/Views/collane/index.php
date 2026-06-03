@@ -104,7 +104,7 @@ $seriesTypeLabels = SeriesLabels::types();
         <?php foreach ($collane as $c): ?>
         <tr class="hover:bg-gray-50">
           <td class="px-6 py-4">
-            <a href="<?= htmlspecialchars(url('/admin/series/detailso?nome=' . urlencode($c['collana'])), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-gray-700 font-medium">
+            <a href="<?= htmlspecialchars(url('/admin/series/detail?nome=' . urlencode($c['collana'])), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-gray-700 font-medium">
               <?= HtmlHelper::e($c['collana']) ?>
             </a>
           </td>
@@ -142,7 +142,7 @@ $seriesTypeLabels = SeriesLabels::types();
             <?php endif; ?>
           </td>
           <td class="px-6 py-4 text-right">
-            <a href="<?= htmlspecialchars(url('/admin/series/detailso?nome=' . urlencode($c['collana'])), ENT_QUOTES, 'UTF-8') ?>" class="text-sm text-gray-500 hover:text-gray-700">
+            <a href="<?= htmlspecialchars(url('/admin/series/detail?nome=' . urlencode($c['collana'])), ENT_QUOTES, 'UTF-8') ?>" class="text-sm text-gray-500 hover:text-gray-700">
               <i class="fas fa-chevron-right"></i>
             </a>
           </td>

@@ -52,13 +52,13 @@ class LanguagesController
     /**
      * Show form to create new language
      *
-     * GET /admin/languages/createte
+     * GET /admin/languages/create
      */
     public function create(Request $request, Response $response, \mysqli $db, array $args): Response
     {
         // Render view content
         ob_start();
-        require __DIR__ . '/../../Views/admin/languages/createte.php';
+        require __DIR__ . '/../../Views/admin/languages/create.php';
         $content = ob_get_clean();
 
         // Render with admin layout
@@ -116,7 +116,7 @@ class LanguagesController
         if (!empty($errors)) {
             $_SESSION['flash_error'] = implode('<br>', $errors);
             return $response
-                ->withHeader('Location', '/admin/languages/createte')
+                ->withHeader('Location', '/admin/languages/create')
                 ->withStatus(302);
         }
 
@@ -135,7 +135,7 @@ class LanguagesController
             SecureLogger::error('LanguagesController::store error: ' . $e->getMessage());
             $_SESSION['flash_error'] = __("Errore nella creazione della lingua.");
             return $response
-                ->withHeader('Location', '/admin/languages/createte')
+                ->withHeader('Location', '/admin/languages/create')
                 ->withStatus(302);
         }
     }

@@ -91,7 +91,7 @@ test.describe.serial('Collane Management', () => {
   });
 
   test('3. Save collana description', async () => {
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(TEST_COLLANA)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(TEST_COLLANA)}`);
     await page.waitForLoadState('networkidle');
 
     // Fill description textarea
@@ -108,7 +108,7 @@ test.describe.serial('Collane Management', () => {
   });
 
   test('4. Collane detail page shows description', async () => {
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(TEST_COLLANA)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(TEST_COLLANA)}`);
     await page.waitForLoadState('networkidle');
 
     const textarea = page.locator('textarea[name="descrizione"]');
@@ -147,7 +147,7 @@ test.describe.serial('Collane Management', () => {
     // First assign the collana to a book
     dbExec(`INSERT INTO libri (titolo, collana, copie_totali, created_at, updated_at) VALUES ('E2E Delete Test', '${TEST_COLLANA}', 1, NOW(), NOW())`);
 
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(TEST_COLLANA)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(TEST_COLLANA)}`);
     await page.waitForLoadState('networkidle');
 
     // Accept the confirm dialog

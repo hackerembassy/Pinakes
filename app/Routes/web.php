@@ -1024,7 +1024,7 @@ return function (App $app): void {
         return $response->withHeader('Content-Type', 'application/json');
     })->add(new AuthMiddleware(['admin', 'staff', 'standard', 'premium']));
 
-    // Utenti (protected admin)
+    // Users (protected admin)
     $app->get('/admin/users', function ($request, $response) use ($app) {
         $controller = new \App\Controllers\UsersController();
         $db = $app->getContainer()->get('db');
@@ -1077,7 +1077,7 @@ return function (App $app): void {
         return $controller->exportCsv($request, $response, $db);
     })->add(new \App\Middleware\RateLimitMiddleware(15, 60))->add(new AdminAuthMiddleware()); // 15 requests per minute
 
-    // Autori (protected admin)
+    // Authors (protected admin)
     $app->get('/admin/authors', function ($request, $response) use ($app) {
         $controller = new AutoriController();
         $db = $app->getContainer()->get('db');
@@ -1131,7 +1131,7 @@ return function (App $app): void {
         return \App\Support\MergeHelper::handleMergeRequest($request, $response, $db, 'autori');
     })->add(new CsrfMiddleware())->add(new AdminAuthMiddleware());
 
-    // Prestiti (protected admin) - Disabled in catalogue mode
+    // Loans (protected admin) - Disabled in catalogue mode
     $app->get('/admin/loans', function ($request, $response) use ($app) {
         if (\App\Support\ConfigStore::isCatalogueMode()) {
             return $response->withHeader('Location', '/admin/dashboard')->withStatus(302);
@@ -1191,7 +1191,7 @@ return function (App $app): void {
         return $controller->update($request, $response, $db, (int) $args['id']);
     })->add(new CsrfMiddleware())->add(new AdminAuthMiddleware());
 
-    // Libri (protected admin)
+    // Books (protected admin)
     $app->get('/admin/books', function ($request, $response) use ($app) {
         $controller = new LibriController();
         $db = $app->getContainer()->get('db');
@@ -1436,7 +1436,7 @@ return function (App $app): void {
         return $controller->deleteCopy($request, $response, $db, (int) $args['id']);
     })->add(new CsrfMiddleware())->add(new AdminAuthMiddleware());
 
-    // Collane (Series) management
+    // Series (Series) management
     $app->get('/admin/series', function ($request, $response) use ($app) {
         $controller = new \App\Controllers\CollaneController();
         $db = $app->getContainer()->get('db');
@@ -1522,7 +1522,7 @@ return function (App $app): void {
         return $controller->removeVolume($request, $response, $db);
     })->add(new CsrfMiddleware())->add(new AdminAuthMiddleware());
 
-    // Generi (protected admin/staff only)
+    // Genres (protected admin/staff only)
     $app->get('/admin/genres', function ($request, $response) use ($app) {
         $controller = new GeneriController();
         $db = $app->getContainer()->get('db');
@@ -1565,7 +1565,7 @@ return function (App $app): void {
         return $controller->destroy($request, $response, $db, (int) $args['id']);
     })->add(new CsrfMiddleware())->add(new AdminAuthMiddleware());
 
-    // Collocazione (protected admin)
+    // Placement (protected admin)
     $app->get('/admin/placement', function ($request, $response) use ($app) {
         $controller = new CollocazioneController();
         $db = $app->getContainer()->get('db');
@@ -1617,7 +1617,7 @@ return function (App $app): void {
         return $controller->exportCSV($request, $response, $db);
     })->add(new \App\Middleware\RateLimitMiddleware(30, 60))->add(new AdminAuthMiddleware()); // 30 requests per minute
 
-    // Prestiti (protected) - Disabled in catalogue mode
+    // Loans (protected) - Disabled in catalogue mode
     $app->get('/prestiti', function ($request, $response) use ($app) {
         if (\App\Support\ConfigStore::isCatalogueMode()) {
             return $response->withHeader('Location', '/admin/dashboard')->withStatus(302);
@@ -1815,21 +1815,21 @@ return function (App $app): void {
         return $controller->downloadPdf($request, $response, $db, (int) $args['id']);
     })->add(new AdminAuthMiddleware())->add(new CsrfMiddleware());
 
-    // API prestiti per DataTables
+    // API loans per DataTables
     $app->get('/api/prestiti', function ($request, $response) use ($app) {
         $controller = new \App\Controllers\PrestitiApiController();
         $db = $app->getContainer()->get('db');
         return $controller->list($request, $response, $db);
     })->add(new \App\Middleware\RateLimitMiddleware(30, 60))->add(new AdminAuthMiddleware()); // 30 requests per minute
 
-    // API utenti per DataTables
+    // API users per DataTables
     $app->get('/api/utenti', function ($request, $response) use ($app) {
         $controller = new \App\Controllers\UtentiApiController();
         $db = $app->getContainer()->get('db');
         return $controller->list($request, $response, $db);
     })->add(new \App\Middleware\RateLimitMiddleware(30, 60))->add(new AdminAuthMiddleware()); // 30 requests per minute
 
-    // Prenotazioni (admin)
+    // Reservations (admin)
     $app->get('/admin/reservations', function ($request, $response) use ($app) {
         $db = $app->getContainer()->get('db');
         $controller = new ReservationsAdminController();
@@ -1920,7 +1920,7 @@ return function (App $app): void {
 
     // Debug endpoint intentionally removed to avoid accidental exposure of sensitive data
 
-    // Editori (protected)
+    // Publishers (protected)
     $app->get('/admin/publishers', function ($request, $response) use ($app) {
         $controller = new \App\Controllers\EditorsController();
         $db = $app->getContainer()->get('db');
@@ -2173,7 +2173,7 @@ return function (App $app): void {
 
 
 
-    // Editori - Elimina
+    // Publishers - Delete
     $app->post('/admin/publishers/delete/{id:\d+}', function ($request, $response, $args) use ($app) {
         $controller = new \App\Controllers\EditorsController();
         $db = $app->getContainer()->get('db');
@@ -3116,6 +3116,7 @@ return function (App $app): void {
 
     /** @var array<string,string> $actionSegmentMap Italian action words → English */
     $actionSegmentMap = [
+        'crea-opera'    => 'create-opera',
         'crea'          => 'create',
         'modifica'      => 'edit',
         'elimina'       => 'delete',
@@ -3147,8 +3148,12 @@ return function (App $app): void {
                 // Split on '/', translate each segment, then rejoin.
                 if ($rest !== '') {
                     $parts = explode('/', ltrim($rest, '/'));
+                    // Translate known action segments; rawurlencode every segment so a
+                    // user-controlled {rest} capture can never be structurally ambiguous
+                    // in the Location header (defense in depth — the '/admin/' prefix
+                    // already prevents host break-out).
                     $parts = array_map(
-                        fn(string $part) => $actionSegmentMap[$part] ?? $part,
+                        fn(string $part) => rawurlencode($actionSegmentMap[$part] ?? $part),
                         $parts
                     );
                     $rest = '/' . implode('/', $parts);

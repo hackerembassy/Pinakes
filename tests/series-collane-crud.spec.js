@@ -251,7 +251,7 @@ test.describe.serial('series/collane — CRUD + hierarchy + i18n (issue #110)', 
   test('10. READ: dettaglio.php loads for a known series', async () => {
     const name = tag('Test Read Detail');
     createSeriesViaDb(name, { tipo: 'serie', descrizione: 'desc' });
-    const resp = await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(name)}`);
+    const resp = await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(name)}`);
     expect(resp?.status()).toBe(200);
     const html = await page.content();
     expect(html).toContain(name);
@@ -260,7 +260,7 @@ test.describe.serial('series/collane — CRUD + hierarchy + i18n (issue #110)', 
   test('11. READ: dettaglio shows hierarchy form fields when supportsHierarchy()', async () => {
     const name = tag('Test Read Hierarchy');
     createSeriesViaDb(name, { tipo: 'serie' });
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(name)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(name)}`);
     const groupField = await page.locator('#gruppo_serie').count();
     const cycleField = await page.locator('#ciclo').count();
     const orderField = await page.locator('#ordine_ciclo').count();
@@ -271,7 +271,7 @@ test.describe.serial('series/collane — CRUD + hierarchy + i18n (issue #110)', 
   test('12. READ: SeriesRepository::supportsHierarchy via probe through view', async () => {
     const name = tag('Test SupportsHierarchy');
     createSeriesViaDb(name, { tipo: 'serie' });
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(name)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(name)}`);
     const html = await page.content();
     // If hierarchy is supported, the form references gruppo_serie input
     expect(html).toMatch(/gruppo_serie/);
@@ -450,7 +450,7 @@ test.describe.serial('series/collane — CRUD + hierarchy + i18n (issue #110)', 
     const stored = dbScalar(`SELECT nome FROM collane WHERE nome = '${escapeSqlString(name)}'`);
     expect(stored).toBe(name);
     // And retrieve via the dettaglio endpoint to ensure no collation/encoding drift
-    const resp = await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(name)}`);
+    const resp = await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(name)}`);
     expect(resp?.status()).toBe(200);
     const html = await page.content();
     expect(html).toContain('🐉');
@@ -487,7 +487,7 @@ test.describe.serial('series/collane — CRUD + hierarchy + i18n (issue #110)', 
       descrizione: xss,
       tipo_collana: 'serie',
     });
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(name)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(name)}`);
     // No script tag containing the payload may have been injected
     const pwn = await page.evaluate(() => window.__pwn ?? null);
     expect(pwn).toBeNull();

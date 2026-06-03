@@ -548,7 +548,7 @@ test.describe.serial('Admin Events & Reviews', () => {
   test('Test 13: Admin creates an event', async () => {
     const eventTitle = `E2E Event Create ${RUN_ID}`;
 
-    await page.goto(`${BASE}/admin/cms/events/createte`);
+    await page.goto(`${BASE}/admin/cms/events/create`);
     await page.waitForLoadState('networkidle');
 
     await page.fill('#event_title', eventTitle);

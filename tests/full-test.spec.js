@@ -1800,7 +1800,7 @@ test.describe.serial('Phase 12: CMS and Events', () => {
   test('12.3 Create event', async () => {
     const eventTitle = `E2E Event ${RUN_ID}`;
 
-    await page.goto(`${BASE}/admin/cms/events/createte`);
+    await page.goto(`${BASE}/admin/cms/events/create`);
     await page.waitForLoadState('domcontentloaded');
 
     await page.fill('#event_title', eventTitle);

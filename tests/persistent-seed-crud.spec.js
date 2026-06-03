@@ -248,7 +248,7 @@ test.describe.serial('persistent seed + CRUD on collane hierarchy', () => {
   });
 
   test('6. READ: dettaglio.php shows hierarchy + relatedCollane sections', async () => {
-    const resp = await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(`${SEED_PREFIX}Fairy Tail`)}`);
+    const resp = await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(`${SEED_PREFIX}Fairy Tail`)}`);
     expect(resp?.status()).toBe(200);
     const html = await page.content();
     expect(html).toContain(`${SEED_PREFIX}Fairy Tail`);
@@ -364,7 +364,7 @@ test.describe.serial('persistent seed + CRUD on collane hierarchy', () => {
     const bookId = parseInt(dbScalar(`SELECT id FROM libri WHERE titolo = '${escapeSqlString(bookTitle)}' ORDER BY id DESC LIMIT 1`), 10);
     dbQuery(`INSERT INTO libri_collane (libro_id, collana_id, is_principale, tipo_appartenenza) VALUES (${bookId}, ${sId}, 1, 'principale')`);
     // Now createParentWork should NOT reject "Nessun libro nella collana"
-    const resp = await postAdminForm(page, '/admin/series/createte-opera', {
+    const resp = await postAdminForm(page, '/admin/series/create-opera', {
       collana: sName,
       parent_title: `Parent of ${sName}`,
     });

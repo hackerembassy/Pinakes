@@ -234,7 +234,7 @@ test.describe.serial('Series groups and cycles', () => {
   });
 
   test('03. main series detail shows saved group metadata', async () => {
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(MAIN_SERIES)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(MAIN_SERIES)}`);
     await expect(page.locator('#gruppo_serie')).toHaveValue(GROUP_FAIRY);
     await expect(page.locator('body')).toContainText(`${TAG} Main volume 1`);
   });
@@ -267,13 +267,13 @@ test.describe.serial('Series groups and cycles', () => {
   });
 
   test('06. series detail links other spin-offs in the same group', async () => {
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(MAIN_SERIES)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(MAIN_SERIES)}`);
     await expect(page.locator('body')).toContainText('Altre serie nello stesso gruppo');
     await expect(page.locator('a', { hasText: SPINOFF_SERIES })).toBeVisible();
   });
 
   test('07. save cycle metadata from the series admin page', async () => {
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(MAIN_SERIES)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(MAIN_SERIES)}`);
     await page.fill('#ciclo', 'Original series');
     await page.fill('#ordine_ciclo', '1');
     await page.click('button:has-text("Salva descrizione")');
@@ -378,7 +378,7 @@ test.describe.serial('Series groups and cycles', () => {
   });
 
   test('13. series detail can add group metadata to the bulk-assigned series', async () => {
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(HAPPY_SERIES)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(HAPPY_SERIES)}`);
     await page.fill('#gruppo_serie', GROUP_FAIRY);
     await page.fill('#ciclo', 'Happy spin-off');
     await page.fill('#ordine_ciclo', '4');
@@ -391,7 +391,7 @@ test.describe.serial('Series groups and cycles', () => {
 
   test('14. update volume number inside a series', async () => {
     const bookId = ids.get('happy1');
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(HAPPY_SERIES)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(HAPPY_SERIES)}`);
     const csrf = await page.evaluate(() => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
     const resp = await page.evaluate(async ({ base, bookId, csrf }) => {
       const r = await fetch(base + '/admin/series/order', {
@@ -417,7 +417,7 @@ test.describe.serial('Series groups and cycles', () => {
 
   test('15. remove a book from one series, then delete a whole series', async () => {
     const mainBookId = ids.get('main1');
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(SPINOFF_SERIES)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(SPINOFF_SERIES)}`);
     let csrf = await page.evaluate(() => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
     let resp = await page.evaluate(async ({ base, bookId, collana, csrf }) => {
       const body = new URLSearchParams({ book_id: String(bookId), collana, csrf_token: csrf });
@@ -441,7 +441,7 @@ test.describe.serial('Series groups and cycles', () => {
     expect(dbQuery(`SELECT collana FROM libri WHERE id = ${mainBookId}`)).toBe(MAIN_SERIES);
 
     const bookId = ids.get('happy1');
-    await page.goto(`${BASE}/admin/series/detailso?nome=${encodeURIComponent(HAPPY_SERIES)}`);
+    await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(HAPPY_SERIES)}`);
     page.once('dialog', dialog => dialog.accept());
     await Promise.all([
       page.waitForURL(/\/admin\/series$/, { timeout: 10000 }),
