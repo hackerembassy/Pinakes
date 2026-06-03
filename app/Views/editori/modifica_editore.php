@@ -21,7 +21,7 @@ $title = "Modifica " . __("Editore:") . " " . ($editore['nome'] ?? 'N/D');
           <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
         </li>
         <li>
-          <a href="<?= htmlspecialchars(url('/admin/editori'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors">
+          <a href="<?= htmlspecialchars(url('/admin/publishers'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors">
             <i class="fas fa-building mr-1"></i><?= __("Editori") ?>
           </a>
         </li>
@@ -41,7 +41,7 @@ $title = "Modifica " . __("Editore:") . " " . ($editore['nome'] ?? 'N/D');
     </div>
 
     <!-- Main Form -->
-    <form method="post" action="<?= htmlspecialchars(url('/admin/editori/update/' . (int)$editore['id']), ENT_QUOTES, 'UTF-8') ?>" class="space-y-8 slide-in-up">
+    <form method="post" action="<?= htmlspecialchars(url('/admin/publishers/update/' . (int)$editore['id']), ENT_QUOTES, 'UTF-8') ?>" class="space-y-8 slide-in-up">
       <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8'); ?>">
       
       <!-- Basic Information Section -->
@@ -120,7 +120,7 @@ $title = "Modifica " . __("Editore:") . " " . ($editore['nome'] ?? 'N/D');
 
       <!-- Submit Section -->
       <div class="flex flex-col sm:flex-row gap-4 justify-end">
-        <a href="<?= htmlspecialchars(url('/admin/editori'), ENT_QUOTES, 'UTF-8') ?>" class="btn-secondary order-2 sm:order-1 text-center">
+        <a href="<?= htmlspecialchars(url('/admin/publishers'), ENT_QUOTES, 'UTF-8') ?>" class="btn-secondary order-2 sm:order-1 text-center">
           <i class="fas fa-times mr-2"></i>
           <?= __("Annulla") ?>
         </a>
@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Initialize Form Validation
 function initializeFormValidation() {
-    const form = document.querySelector('form[action*="/admin/editori/update/"]');
+    const form = document.querySelector('form[action*="/admin/publishers/update/"]');
     if (!form) return;
     
     form.addEventListener('submit', async function(e) {

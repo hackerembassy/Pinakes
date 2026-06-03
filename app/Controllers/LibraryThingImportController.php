@@ -664,7 +664,7 @@ class LibraryThingImportController
         $response->getBody()->write(json_encode([
             'success' => true,
             'message' => $message,
-            'redirect' => url('/admin/libri/import/librarything')
+            'redirect' => url('/admin/books/import/librarything')
         ], JSON_THROW_ON_ERROR));
         return $response->withHeader('Content-Type', 'application/json');
     }
@@ -1320,7 +1320,7 @@ class LibraryThingImportController
             $this->updateBook($db, $existingBookId, $data, $editorId, $genreId);
             // REG-2 (review): keep collane / libri_collane in sync the same
             // way CsvImportController::syncImportedSeries does, so LT-imported
-            // books appear in /admin/collane and getBookMemberships finds them.
+            // books appear in /admin/series and getBookMemberships finds them.
             $this->syncSeriesAfterImport($db, $existingBookId, $data);
             return ['id' => $existingBookId, 'action' => 'updated'];
         } else {

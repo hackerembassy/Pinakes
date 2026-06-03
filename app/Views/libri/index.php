@@ -20,7 +20,7 @@ $libri = $data['libri'];
           <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
         </li>
         <li class="text-gray-900 font-medium">
-          <a href="<?= htmlspecialchars(url('/admin/libri'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-gray-700">
+          <a href="<?= htmlspecialchars(url('/admin/books'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-gray-700">
             <i class="fas fa-book mr-1"></i><?= __("Libri") ?>
           </a>
         </li>
@@ -56,10 +56,10 @@ $libri = $data['libri'];
               <i class="fas fa-download mr-2"></i><?= __("Export") ?><i class="fas fa-chevron-down ml-2 text-xs"></i>
             </button>
             <div class="export-menu hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-              <a href="<?= htmlspecialchars(url('/admin/libri/export/csv'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg">
+              <a href="<?= htmlspecialchars(url('/admin/books/export/csv'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg">
                 <i class="fas fa-file-csv mr-2"></i><?= __("CSV Standard") ?>
               </a>
-              <a href="<?= htmlspecialchars(url('/admin/libri/export/librarything'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-b-lg">
+              <a href="<?= htmlspecialchars(url('/admin/books/export/librarything'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-b-lg">
                 <i class="fas fa-cloud-download-alt mr-2"></i><?= __("LibraryThing TSV") ?>
               </a>
             </div>
@@ -71,10 +71,10 @@ $libri = $data['libri'];
               <i class="fas fa-upload mr-2"></i><?= __("Import") ?><i class="fas fa-chevron-down ml-2 text-xs"></i>
             </button>
             <div class="import-menu hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-              <a href="<?= htmlspecialchars(url('/admin/libri/import'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg">
+              <a href="<?= htmlspecialchars(url('/admin/books/import'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg">
                 <i class="fas fa-file-csv mr-2"></i><?= __("CSV Standard") ?>
               </a>
-              <a href="<?= htmlspecialchars(url('/admin/libri/import/librarything'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+              <a href="<?= htmlspecialchars(url('/admin/books/import/librarything'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                 <i class="fas fa-cloud-upload-alt mr-2"></i><?= __("LibraryThing TSV") ?>
               </a>
               <hr class="border-gray-200">
@@ -83,7 +83,7 @@ $libri = $data['libri'];
               </a>
             </div>
           </div>
-          <a href="<?= htmlspecialchars(url('/admin/libri/crea'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center text-sm">
+          <a href="<?= htmlspecialchars(url('/admin/books/create'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center text-sm">
             <i class="fas fa-plus mr-2"></i><?= __("Nuovo Libro") ?>
           </a>
         </div>
@@ -104,15 +104,15 @@ $libri = $data['libri'];
             <i class="fas fa-download mr-1"></i><?= __("Export") ?><i class="fas fa-chevron-down ml-1 text-xs"></i>
           </button>
           <div class="export-menu-mobile hidden absolute left-0 mt-2 w-full bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-            <a href="<?= htmlspecialchars(url('/admin/libri/export/csv'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg">
+            <a href="<?= htmlspecialchars(url('/admin/books/export/csv'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg">
               <i class="fas fa-file-csv mr-2"></i><?= __("CSV") ?>
             </a>
-            <a href="<?= htmlspecialchars(url('/admin/libri/export/librarything'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-b-lg">
+            <a href="<?= htmlspecialchars(url('/admin/books/export/librarything'), ENT_QUOTES, 'UTF-8') ?>" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-b-lg">
               <i class="fas fa-cloud-download-alt mr-2"></i><?= __("LibraryThing") ?>
             </a>
           </div>
         </div>
-        <a href="<?= htmlspecialchars(url('/admin/libri/crea'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1 px-3 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center justify-center text-sm">
+        <a href="<?= htmlspecialchars(url('/admin/books/create'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1 px-3 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center justify-center text-sm">
           <i class="fas fa-plus mr-1"></i><?= __("Nuovo") ?>
         </a>
       </div>
@@ -731,7 +731,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const linkedAutori = autoriArray.map((nome, i) => {
               const safeName = escapeHtml(nome);
               const safeAuthorId = parseInt(idsArray[i], 10);
-              if (Number.isFinite(safeAuthorId)) return `<a href="${window.BASE_PATH}/admin/autori/${safeAuthorId}" class="text-gray-600 hover:text-gray-900 hover:underline">${safeName}</a>`;
+              if (Number.isFinite(safeAuthorId)) return `<a href="${window.BASE_PATH}/admin/authors/${safeAuthorId}" class="text-gray-600 hover:text-gray-900 hover:underline">${safeName}</a>`;
               return safeName;
             });
             autoriHtml = `<div class="text-xs text-gray-600 mt-1"><i class="fas fa-user text-gray-400 mr-1"></i>${linkedAutori.join(', ')}${autoriStr.split(', ').length > 2 ? ' ...' : ''}</div>`;
@@ -749,7 +749,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
           const safeId = parseInt(row.id, 10);
           const titleLink = Number.isFinite(safeId)
-            ? `<a href="${window.BASE_PATH}/admin/libri/${safeId}" class="font-medium text-gray-900 hover:text-gray-700 hover:underline line-clamp-2 leading-tight">${titolo}</a>`
+            ? `<a href="${window.BASE_PATH}/admin/books/${safeId}" class="font-medium text-gray-900 hover:text-gray-700 hover:underline line-clamp-2 leading-tight">${titolo}</a>`
             : `<span class="font-medium text-gray-900 line-clamp-2 leading-tight">${titolo}</span>`;
           return `<div class="min-w-0">
             ${titleLink}
@@ -801,10 +801,10 @@ document.addEventListener('DOMContentLoaded', function() {
           const safeActionId = parseInt(data, 10);
           if (!Number.isFinite(safeActionId)) return '<span class="text-gray-400">-</span>';
           return `<div class="flex items-center justify-center gap-0.5">
-            <a href="${window.BASE_PATH}/admin/libri/${safeActionId}" class="w-7 h-7 inline-flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all" title="${<?= json_encode(__('Visualizza'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>}">
+            <a href="${window.BASE_PATH}/admin/books/${safeActionId}" class="w-7 h-7 inline-flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all" title="${<?= json_encode(__('Visualizza'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>}">
               <i class="fas fa-eye text-xs"></i>
             </a>
-            <a href="${window.BASE_PATH}/admin/libri/modifica/${safeActionId}" class="w-7 h-7 inline-flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all" title="${<?= json_encode(__('Modifica'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>}">
+            <a href="${window.BASE_PATH}/admin/books/edit/${safeActionId}" class="w-7 h-7 inline-flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all" title="${<?= json_encode(__('Modifica'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>}">
               <i class="fas fa-edit text-xs"></i>
             </a>
             <button onclick="deleteBook(${safeActionId})" class="w-7 h-7 inline-flex items-center justify-center text-gray-500 hover:text-red-500 hover:bg-red-50 rounded transition-all" title="${<?= json_encode(__('Elimina'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>}">
@@ -1227,7 +1227,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!collanaName) return;
     try {
       const ids = Array.from(selectedBooks);
-      const resp = await fetch((window.BASE_PATH || '') + '/admin/collane/bulk-assign', {
+      const resp = await fetch((window.BASE_PATH || '') + '/admin/series/bulk-assign', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
@@ -1249,7 +1249,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('bulk-export').addEventListener('click', function() {
     if (selectedBooks.size === 0) return;
     const ids = Array.from(selectedBooks).join(',');
-    window.location.href = `${window.BASE_PATH}/admin/libri/export/csv?ids=${ids}`;
+    window.location.href = `${window.BASE_PATH}/admin/books/export/csv?ids=${ids}`;
   });
 
   // View toggle
@@ -1307,7 +1307,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const titolo = escapeHtml(book.titolo || <?= json_encode(__("Senza titolo"), JSON_HEX_TAG) ?>);
       const anno = escapeHtml(book.anno_pubblicazione_formatted || '');
       const safeBookId = parseInt(book.id, 10);
-      const bookHref = Number.isFinite(safeBookId) ? `${window.BASE_PATH}/admin/libri/${safeBookId}` : '#';
+      const bookHref = Number.isFinite(safeBookId) ? `${window.BASE_PATH}/admin/books/${safeBookId}` : '#';
       return `
         <div class="group relative bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow h-full flex flex-col">
           <a href="${bookHref}" class="flex flex-col h-full">
@@ -1344,7 +1344,7 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('clear-filters').click();
     } else if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
       e.preventDefault();
-      window.location.href = window.BASE_PATH + '/admin/libri/crea';
+      window.location.href = window.BASE_PATH + '/admin/books/create';
     } else if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
       e.preventDefault();
       document.getElementById('select-all').click();
@@ -1371,7 +1371,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (result.isConfirmed) {
           const form = document.createElement('form');
           form.method = 'POST';
-          form.action = `${window.BASE_PATH}/admin/libri/delete/${bookId}`;
+          form.action = `${window.BASE_PATH}/admin/books/delete/${bookId}`;
           form.innerHTML = `<input type="hidden" name="csrf_token" value="${csrf}">`;
           document.body.appendChild(form);
           form.submit();
@@ -1397,8 +1397,8 @@ document.addEventListener('DOMContentLoaded', function() {
             ${autori ? `<p class="text-sm text-gray-600 mt-1">${autori}</p>` : ''}
             ${editore ? `<p class="text-sm text-gray-500">${editore}</p>` : ''}
             <div class="flex gap-2 mt-4">
-              <a href="${window.BASE_PATH}/admin/libri/${bookId}" class="flex-1 px-4 py-2 bg-gray-800 text-white text-center rounded-lg text-sm hover:bg-gray-700">${<?= json_encode(__("Dettagli"), JSON_HEX_TAG) ?>}</a>
-              <a href="${window.BASE_PATH}/admin/libri/modifica/${bookId}" class="flex-1 px-4 py-2 bg-gray-100 text-gray-800 text-center rounded-lg text-sm hover:bg-gray-200">${<?= json_encode(__("Modifica"), JSON_HEX_TAG) ?>}</a>
+              <a href="${window.BASE_PATH}/admin/books/${bookId}" class="flex-1 px-4 py-2 bg-gray-800 text-white text-center rounded-lg text-sm hover:bg-gray-700">${<?= json_encode(__("Dettagli"), JSON_HEX_TAG) ?>}</a>
+              <a href="${window.BASE_PATH}/admin/books/edit/${bookId}" class="flex-1 px-4 py-2 bg-gray-100 text-gray-800 text-center rounded-lg text-sm hover:bg-gray-200">${<?= json_encode(__("Modifica"), JSON_HEX_TAG) ?>}</a>
             </div>
           </div>
         `,

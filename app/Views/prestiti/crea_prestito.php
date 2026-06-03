@@ -23,7 +23,7 @@ $isItalian = str_starts_with($currentLocale, 'it');
         <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
       </li>
       <li>
-        <a href="<?= htmlspecialchars(url('/admin/prestiti'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors">
+        <a href="<?= htmlspecialchars(url('/admin/loans'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors">
           <i class="fas fa-handshake mr-1"></i><?= __("Prestiti") ?></a>
       </li>
       <li>
@@ -68,7 +68,7 @@ $isItalian = str_starts_with($currentLocale, 'it');
     <div class="mb-4 p-4 bg-green-100 text-green-800 rounded"><?= __("Prestito creato con successo.") ?></div>
   <?php endif; ?>
 
-  <form method="post" action="<?= htmlspecialchars(url('/admin/prestiti/crea'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-6 bg-white p-6 rounded-2xl border border-gray-200 shadow">
+  <form method="post" action="<?= htmlspecialchars(url('/admin/loans/create'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-6 bg-white p-6 rounded-2xl border border-gray-200 shadow">
     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8'); ?>">
 
     <!-- Ricerca Utente -->
@@ -169,7 +169,7 @@ $isItalian = str_starts_with($currentLocale, 'it');
     <div class="flex items-center gap-4">
       <button type="submit" class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium">
         <i class="fas fa-save mr-2"></i><?= __("Crea Prestito") ?></button>
-      <a href="<?= htmlspecialchars(url('/admin/prestiti'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-100 text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors font-medium">
+      <a href="<?= htmlspecialchars(url('/admin/loans'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-100 text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors font-medium">
         <i class="fas fa-times mr-2"></i><?= __("Annulla") ?>
       </a>
     </div>

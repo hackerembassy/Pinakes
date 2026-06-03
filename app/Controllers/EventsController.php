@@ -228,7 +228,7 @@ class EventsController
 
         if (!empty($errors)) {
             $_SESSION['error_message'] = implode('<br>', $errors);
-            return $response->withHeader('Location', '/admin/cms/events/create')->withStatus(302);
+            return $response->withHeader('Location', '/admin/cms/events/createte')->withStatus(302);
         }
 
         // Insert event

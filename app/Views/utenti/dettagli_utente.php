@@ -119,18 +119,18 @@ $display = static function (?string $value, string $placeholder = '—'): string
 
   <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
     <div>
-      <a href="<?= htmlspecialchars(url('/admin/utenti'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700">
+      <a href="<?= htmlspecialchars(url('/admin/users'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700">
         <i class="fas fa-arrow-left mr-2"></i> <?= __("Torna alla lista") ?>
       </a>
       <h1 class="mt-2 text-2xl font-bold text-gray-900"><?= $display($name, __("Utente senza nome")); ?></h1>
       <p class="text-sm text-gray-500"><?= __("Ruolo:") ?> <?= $display($roleLabels[$ruolo] ?? ucfirst($ruolo)); ?></p>
     </div>
     <div class="flex items-center gap-3 flex-shrink-0">
-        <a href="<?= htmlspecialchars(url('/admin/prestiti/crea?utente_id=' . $id), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-100 text-gray-900 hover:bg-gray-200 rounded-lg transition-colors duration-200 inline-flex items-center border border-gray-300">
+        <a href="<?= htmlspecialchars(url('/admin/loans/create?utente_id=' . $id), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-100 text-gray-900 hover:bg-gray-200 rounded-lg transition-colors duration-200 inline-flex items-center border border-gray-300">
             <i class="fas fa-handshake mr-2"></i>
             <?= __("Nuovo Prestito") ?>
         </a>
-        <a href="<?= htmlspecialchars(url('/admin/utenti/modifica/' . $id), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center">
+        <a href="<?= htmlspecialchars(url('/admin/users/edit/' . $id), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center">
             <i class="fas fa-pencil-alt mr-2"></i>
             <?= __("Modifica Utente") ?>
         </a>
@@ -233,7 +233,7 @@ $display = static function (?string $value, string $placeholder = '—'): string
     </div>
 
     <div class="flex flex-col sm:flex-row gap-3">
-      <form method="POST" action="<?= htmlspecialchars(url('/admin/utenti/' . $id . '/approve-and-send-activation'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1">
+      <form method="POST" action="<?= htmlspecialchars(url('/admin/users/' . $id . '/approve-and-send-activation'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(App\Support\Csrf::ensureToken(), ENT_QUOTES, 'UTF-8'); ?>">
         <button type="submit" class="w-full px-4 py-3 bg-gray-900 text-white hover:bg-blue-700 rounded-lg transition-colors duration-200 inline-flex items-center justify-center gap-2 border border-blue-700">
           <i class="fas fa-envelope"></i>
@@ -244,7 +244,7 @@ $display = static function (?string $value, string $placeholder = '—'): string
         </p>
       </form>
 
-      <form method="POST" action="<?= htmlspecialchars(url('/admin/utenti/' . $id . '/activate-directly'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1"
+      <form method="POST" action="<?= htmlspecialchars(url('/admin/users/' . $id . '/activate-directly'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1"
             data-swal-confirm="<?= htmlspecialchars(__('Confermi di voler attivare direttamente questo utente senza richiedere verifica email?'), ENT_QUOTES, 'UTF-8') ?>"
             data-swal-confirm-title="<?= htmlspecialchars(__('Conferma attivazione'), ENT_QUOTES, 'UTF-8') ?>"
             data-swal-confirm-button="<?= htmlspecialchars(__('Attiva utente'), ENT_QUOTES, 'UTF-8') ?>"
@@ -304,7 +304,7 @@ $display = static function (?string $value, string $placeholder = '—'): string
                                 <?= getLoanStatusBadge($prestito['stato']); ?>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right">
-                                <a href="<?= htmlspecialchars(url('/admin/prestiti/dettagli/' . (int)$prestito['id']), ENT_QUOTES, 'UTF-8') ?>" class="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" title="Dettagli Prestito">
+                                <a href="<?= htmlspecialchars(url('/admin/loans/details/' . (int)$prestito['id']), ENT_QUOTES, 'UTF-8') ?>" class="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" title="Dettagli Prestito">
                                     <i class="fas fa-eye w-4 h-4"></i>
                                 </a>
                             </td>

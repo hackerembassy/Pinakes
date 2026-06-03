@@ -25,7 +25,7 @@ $autori = $data['autori'];
           </h1>
         </div>
         <div class="flex items-center gap-2">
-          <a href="<?= htmlspecialchars(url('/admin/autori/crea'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors text-sm font-medium inline-flex items-center">
+          <a href="<?= htmlspecialchars(url('/admin/authors/create'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors text-sm font-medium inline-flex items-center">
             <i class="fas fa-plus mr-2"></i><?= __("Nuovo Autore") ?>
           </a>
         </div>
@@ -260,7 +260,7 @@ document.addEventListener('DOMContentLoaded', function() {
           const nome = escapeHtml(row.nome) || <?= json_encode(__("Autore sconosciuto"), JSON_HEX_TAG) ?>;
           const bio = row.biografia ? `<p class="text-xs text-gray-500 mt-0.5 line-clamp-1">${escapeHtml(row.biografia.substring(0, 80))}...</p>` : '';
           return `<div>
-            <a href="${window.BASE_PATH || ''}/admin/autori/${parseInt(row.id, 10)}" class="font-medium text-gray-900 hover:text-gray-700 hover:underline">${nome}</a>
+            <a href="${window.BASE_PATH || ''}/admin/authors/${parseInt(row.id, 10)}" class="font-medium text-gray-900 hover:text-gray-700 hover:underline">${nome}</a>
             ${bio}
           </div>`;
         }
@@ -305,10 +305,10 @@ document.addEventListener('DOMContentLoaded', function() {
         render: function(data) {
           const id = parseInt(data, 10);
           return `<div class="flex items-center justify-center gap-0.5">
-            <a href="${window.BASE_PATH || ''}/admin/autori/${id}" class="w-7 h-7 inline-flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all" title="${<?= json_encode(__('Visualizza'), JSON_HEX_TAG) ?>}">
+            <a href="${window.BASE_PATH || ''}/admin/authors/${id}" class="w-7 h-7 inline-flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all" title="${<?= json_encode(__('Visualizza'), JSON_HEX_TAG) ?>}">
               <i class="fas fa-eye text-xs"></i>
             </a>
-            <a href="${window.BASE_PATH || ''}/admin/autori/modifica/${id}" class="w-7 h-7 inline-flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all" title="${<?= json_encode(__('Modifica'), JSON_HEX_TAG) ?>}">
+            <a href="${window.BASE_PATH || ''}/admin/authors/edit/${id}" class="w-7 h-7 inline-flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-all" title="${<?= json_encode(__('Modifica'), JSON_HEX_TAG) ?>}">
               <i class="fas fa-edit text-xs"></i>
             </a>
             <button onclick="deleteAuthor(${id})" class="w-7 h-7 inline-flex items-center justify-center text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-all" title="${<?= json_encode(__('Elimina'), JSON_HEX_TAG) ?>}">
@@ -675,7 +675,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = `${window.BASE_PATH || ''}/admin/autori/delete/${id}`;
+        form.action = `${window.BASE_PATH || ''}/admin/authors/delete/${id}`;
         const inp = document.createElement('input');
         inp.type = 'hidden';
         inp.name = 'csrf_token';

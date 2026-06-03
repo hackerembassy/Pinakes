@@ -52,7 +52,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
         <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
       </li>
       <li>
-        <a href="<?= htmlspecialchars(url('/admin/libri'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors">
+        <a href="<?= htmlspecialchars(url('/admin/books'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors">
           <i class="fas fa-book mr-1"></i><?= __("Libri") ?>
         </a>
       </li>
@@ -100,7 +100,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
 
         <!-- Secondo blocco: Modifica ed Elimina: 50% each su mobile, inline su desktop -->
         <div class="flex gap-3 w-full lg:w-auto">
-          <a href="<?= htmlspecialchars(url('/admin/libri/modifica/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>" class="<?php echo $btnGhost; ?> flex-1 lg:flex-none justify-center">
+          <a href="<?= htmlspecialchars(url('/admin/books/edit/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>" class="<?php echo $btnGhost; ?> flex-1 lg:flex-none justify-center">
             <i class="fas fa-edit"></i>
             <?= __("Modifica") ?>
           </a>
@@ -110,7 +110,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
             <?= __("Restituzione") ?>
           </button>
           <?php endif; ?>
-          <form id="delete-book" method="post" action="<?= htmlspecialchars(url('/admin/libri/delete/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirmDeleteBook(event);" class="flex-1 lg:flex-none">
+          <form id="delete-book" method="post" action="<?= htmlspecialchars(url('/admin/books/delete/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirmDeleteBook(event);" class="flex-1 lg:flex-none">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(App\Support\Csrf::ensureToken(), ENT_QUOTES, 'UTF-8'); ?>">
             <button type="submit" class="<?php echo $btnDanger; ?> w-full">
               <i class="fas fa-trash"></i>
@@ -176,7 +176,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
                     $label = trim((string)($a['nome'] ?? ''));
                     if ($label === '') continue;
               ?>
-                <a href="<?= htmlspecialchars(url('/admin/autori/' . (int)($a['id'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>"
+                <a href="<?= htmlspecialchars(url('/admin/authors/' . (int)($a['id'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>"
                    class="inline-flex items-center px-2 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
                   <i class="fas fa-user mr-1"></i><?php echo App\Support\HtmlHelper::e($label); ?>
                 </a>
@@ -208,7 +208,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
             <?php if (!empty($genreParts)): ?>
               <?php foreach ($genreParts as $i => $gp): ?>
                 <?php if ($i > 0): ?> <span class="text-gray-400">→</span> <?php endif; ?>
-                <a href="<?= htmlspecialchars(url('/admin/libri?genere=' . $gp[0]), ENT_QUOTES, 'UTF-8') ?>"
+                <a href="<?= htmlspecialchars(url('/admin/books?genere=' . $gp[0]), ENT_QUOTES, 'UTF-8') ?>"
                    class="text-gray-900 hover:text-gray-600 hover:underline font-semibold"><?= App\Support\HtmlHelper::e($gp[1]) ?></a>
               <?php endforeach; ?>
             <?php else: ?>
@@ -286,9 +286,9 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
             ?>
 
             <?php if ($canRenew): ?>
-            <form method="post" action="<?= htmlspecialchars(url('/admin/prestiti/rinnova/' . (int)$activeLoan['id']), ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirmRenewal(event);">
+            <form method="post" action="<?= htmlspecialchars(url('/admin/loans/renew/' . (int)$activeLoan['id']), ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirmRenewal(event);">
               <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(App\Support\Csrf::ensureToken(), ENT_QUOTES, 'UTF-8'); ?>">
-              <input type="hidden" name="redirect_to" value="<?php echo htmlspecialchars(url('/admin/libri/' . (int)($libro['id'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?>">
+              <input type="hidden" name="redirect_to" value="<?php echo htmlspecialchars(url('/admin/books/' . (int)($libro['id'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?>">
               <button type="submit" class="<?php echo $btnPrimary; ?> w-full justify-center">
                 <i class="fas fa-redo-alt"></i> <?= __("Rinnova prestito (+14 giorni)") ?>
               </button>
@@ -384,7 +384,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
             <div>
               <dt class="text-xs uppercase text-gray-500"><?= __("Serie principale") ?></dt>
               <dd class="text-gray-900 font-medium">
-                <a href="<?= htmlspecialchars(url('/admin/libri?collana=' . urlencode($libro['collana'])), ENT_QUOTES, 'UTF-8') ?>"
+                <a href="<?= htmlspecialchars(url('/admin/books?collana=' . urlencode($libro['collana'])), ENT_QUOTES, 'UTF-8') ?>"
                    class="text-gray-700 hover:text-gray-900 hover:underline transition-colors">
                   <?php echo App\Support\HtmlHelper::e($libro['collana']); ?>
                 </a>
@@ -554,7 +554,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
                   foreach ($keywords as $keyword):
                     if (empty($keyword)) continue;
                 ?>
-                  <a href="<?= htmlspecialchars(url('/admin/libri?keywords=' . urlencode($keyword)), ENT_QUOTES, 'UTF-8') ?>"
+                  <a href="<?= htmlspecialchars(url('/admin/books?keywords=' . urlencode($keyword)), ENT_QUOTES, 'UTF-8') ?>"
                      class="inline-block px-2 py-1 mr-2 mb-2 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-full transition-colors">
                     <i class="fas fa-tag mr-1"></i><?php echo App\Support\HtmlHelper::e($keyword); ?>
                   </a>
@@ -1056,7 +1056,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
         <p class="text-sm text-gray-600">
           <i class="fas fa-layer-group text-gray-500 mr-1"></i>
           <?= sprintf(__("Questo libro è il volume %s dell'opera"), '<strong>' . (int) $parentWork['numero_volume'] . '</strong>') ?>
-          <a href="<?= htmlspecialchars(url('/admin/libri/' . (int)$parentWork['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:underline font-semibold">
+          <a href="<?= htmlspecialchars(url('/admin/books/' . (int)$parentWork['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:underline font-semibold">
             <?= App\Support\HtmlHelper::e($parentWork['titolo']) ?>
           </a>
         </p>
@@ -1092,7 +1092,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
               <tr class="hover:bg-gray-50">
                 <td class="px-4 py-2 text-sm font-semibold text-gray-900"><?= (int) $vol['numero_volume'] ?></td>
                 <td class="px-4 py-2 text-sm">
-                  <a href="<?= htmlspecialchars(url('/admin/libri/' . (int)$vol['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-primary hover:underline">
+                  <a href="<?= htmlspecialchars(url('/admin/books/' . (int)$vol['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-primary hover:underline">
                     <?= App\Support\HtmlHelper::e($vol['titolo_volume'] ?: $vol['titolo']) ?>
                   </a>
                 </td>
@@ -1157,7 +1157,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
                   <div class="flex items-center">
                     <div>
                       <div class="text-sm font-medium text-gray-900">
-                        <a href="<?= htmlspecialchars(url('/admin/utenti/dettagli/' . (int)$loan['utente_id']), ENT_QUOTES, 'UTF-8') ?>" class="hover:text-blue-600 transition-colors">
+                        <a href="<?= htmlspecialchars(url('/admin/users/details/' . (int)$loan['utente_id']), ENT_QUOTES, 'UTF-8') ?>" class="hover:text-blue-600 transition-colors">
                           <?php echo App\Support\HtmlHelper::e($loan['utente_nome'] . ' ' . $loan['utente_cognome']); ?>
                         </a>
                       </div>
@@ -1625,7 +1625,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
       if (!formData) return;
 
       try {
-        const resp = await fetch((window.BASE_PATH || '') + '/admin/libri/volumi/add', {
+        const resp = await fetch((window.BASE_PATH || '') + '/admin/books/volumes/add', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
@@ -1663,7 +1663,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
       if (!result.isConfirmed) return;
 
       try {
-        const resp = await fetch((window.BASE_PATH || '') + '/admin/libri/volumi/remove', {
+        const resp = await fetch((window.BASE_PATH || '') + '/admin/books/volumes/remove', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
@@ -1711,9 +1711,9 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
             <i class="fas fa-times"></i>
           </button>
         </div>
-        <form method="post" action="<?= htmlspecialchars(url('/admin/prestiti/restituito/' . (int)$activeLoan['id']), ENT_QUOTES, 'UTF-8') ?>" class="px-6 py-5 space-y-4">
+        <form method="post" action="<?= htmlspecialchars(url('/admin/loans/returned/' . (int)$activeLoan['id']), ENT_QUOTES, 'UTF-8') ?>" class="px-6 py-5 space-y-4">
           <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(App\Support\Csrf::ensureToken(), ENT_QUOTES, 'UTF-8'); ?>">
-          <input type="hidden" name="redirect_to" value="<?php echo htmlspecialchars($bookPath ?? url('/admin/libri/' . (int)($libro['id'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?>">
+          <input type="hidden" name="redirect_to" value="<?php echo htmlspecialchars($bookPath ?? url('/admin/books/' . (int)($libro['id'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?>">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700">
             <div>
               <div class="text-xs text-gray-500 uppercase"><?= __("Utente") ?></div>
@@ -1870,7 +1870,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
 
       statoSelect.value = stato;
 
-      editCopyForm.action = `${window.BASE_PATH}/admin/libri/copie/${copyId}/update`;
+      editCopyForm.action = `${window.BASE_PATH}/admin/books/copies/${copyId}/update`;
 
       editCopyModal.classList.remove('hidden');
       editCopyModal.classList.add('flex');
@@ -1925,7 +1925,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
           if (result.isConfirmed) {
             const form = document.createElement('form');
             form.method = 'POST';
-            form.action = `${window.BASE_PATH}/admin/libri/copie/${copyId}/delete`;
+            form.action = `${window.BASE_PATH}/admin/books/copies/${copyId}/delete`;
 
             const csrfInput = document.createElement('input');
             csrfInput.type = 'hidden';
@@ -1941,7 +1941,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
         if (confirm(`${__('Sei sicuro di voler eliminare la copia')} ${numeroInventario}? ${__('Questa azione non può essere annullata.')}`)) {
           const form = document.createElement('form');
           form.method = 'POST';
-          form.action = `${window.BASE_PATH}/admin/libri/copie/${copyId}/delete`;
+          form.action = `${window.BASE_PATH}/admin/books/copies/${copyId}/delete`;
 
           const csrfInput = document.createElement('input');
           csrfInput.type = 'hidden';

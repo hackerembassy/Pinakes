@@ -34,7 +34,7 @@ class RecensioniAdminController
         $title = 'Recensioni';
 
         ob_start();
-        include __DIR__ . '/../../Views/admin/recensioni/index.php';
+        include __DIR__ . '/../../Views/admin/reviews/index.php';
         $content = ob_get_clean();
 
         ob_start();

@@ -7,7 +7,7 @@ $mode = $mode ?? 'create';
 $book = $book ?? [];
 $csrfToken = $csrfToken ?? null;
 $error_message = $error_message ?? null;
-$action = $action ?? url($mode === 'edit' ? '/admin/libri/update/' . (int)($book['id'] ?? 0) : '/admin/libri/crea');
+$action = $action ?? url($mode === 'edit' ? '/admin/books/update/' . (int)($book['id'] ?? 0) : '/admin/books/create');
 $currentCover = $book['copertina_url'] ?? ($book['copertina'] ?? '');
 $scrapingAvailable = Hooks::has('scrape.fetch.custom');
 $scaffali = $scaffali ?? [];
@@ -1480,7 +1480,7 @@ function initializeChoicesJS() {
         // │  both times.                                                        │
         // │                                                                     │
         // │  ## What the bug is                                                 │
-        // │  User opens /admin/libri/crea, types a new author name (e.g.       │
+        // │  User opens /admin/books/create, types a new author name (e.g.       │
         // │  "Norbert Wex") that partially matches an existing one (e.g.      │
         // │  "Norbert Bauer" is highlighted in the dropdown), and presses     │
         // │  Enter. The expected behavior is that the typed text becomes the  │
@@ -2981,7 +2981,7 @@ async function handleDuplicateBook(existingBook) {
         await increaseCopies(existingBook);
     } else if (result.isDenied) {
         // Redirect to book detail page
-        window.location.href = `${window.BASE_PATH}/admin/libri/${existingBook.id}`;
+        window.location.href = `${window.BASE_PATH}/admin/books/${existingBook.id}`;
     }
 }
 
@@ -3067,7 +3067,7 @@ async function increaseCopies(book) {
                     confirmButtonText: __('OK')
                 });
                 // Redirect to book list
-                window.location.href = window.BASE_PATH + '/admin/libri';
+                window.location.href = window.BASE_PATH + '/admin/books';
             } else {
                 const error = data;
                 Swal.fire({
@@ -3202,7 +3202,7 @@ function initializeFormValidation() {
                     if (response.redirected) {
                         window.location.href = response.url;
                     } else {
-                        window.location.href = window.BASE_PATH + '/admin/libri';
+                        window.location.href = window.BASE_PATH + '/admin/books';
                     }
                 } else {
                     // Other error
@@ -3229,8 +3229,8 @@ function initializeFormValidation() {
         cancelBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             const cancelUrl = (FORM_MODE === 'edit' && INITIAL_BOOK.id)
-                ? `${window.BASE_PATH}/admin/libri/${INITIAL_BOOK.id}`
-                : window.BASE_PATH + '/admin/libri';
+                ? `${window.BASE_PATH}/admin/books/${INITIAL_BOOK.id}`
+                : window.BASE_PATH + '/admin/books';
             const result = await Swal.fire({
                 title: __('Conferma Annullamento'),
                 text: __('Sei sicuro di voler annullare? Tutti i dati inseriti andranno persi.'),

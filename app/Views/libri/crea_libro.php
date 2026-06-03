@@ -18,7 +18,7 @@ $csrfToken = Csrf::ensureToken();
           <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
         </li>
         <li>
-          <a href="<?= htmlspecialchars(url('/admin/libri'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors">
+          <a href="<?= htmlspecialchars(url('/admin/books'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors">
             <i class="fas fa-book mr-1"></i><?= __("Libri") ?>
           </a>
         </li>

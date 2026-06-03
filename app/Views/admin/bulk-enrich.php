@@ -137,8 +137,8 @@ const csrfToken = <?= json_encode(Csrf::ensureToken(), JSON_HEX_TAG) ?>;
 // window.BASE_PATH + hardcoded path. If the route changes or the subfolder
 // install prefix shifts, there's a single source of truth (url() helper).
 const BULK_ENRICH_URLS = <?= json_encode([
-    'toggle' => url('/admin/libri/bulk-enrich/toggle'),
-    'start'  => url('/admin/libri/bulk-enrich/start'),
+    'toggle' => url('/admin/books/bulk-enrich/toggle'),
+    'start'  => url('/admin/books/bulk-enrich/start'),
 ], JSON_HEX_TAG) ?>;
 
 // Toggle automatic enrichment
