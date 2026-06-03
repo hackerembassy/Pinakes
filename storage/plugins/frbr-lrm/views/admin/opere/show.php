@@ -51,7 +51,7 @@
         <ul class="divide-y divide-gray-100">
           <?php foreach ($edizioni as $ed): ?>
             <li class="py-2 flex items-center justify-between">
-              <a href="<?= htmlspecialchars(url('/admin/libri/' . (int) $ed['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-primary">
+              <a href="<?= htmlspecialchars(url('/admin/books/' . (int) $ed['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-primary">
                 <?= htmlspecialchars((string) $ed['titolo'], ENT_QUOTES, 'UTF-8') ?>
                 <?php if (!empty($ed['anno_pubblicazione'])): ?><span class="text-gray-400">(<?= (int) $ed['anno_pubblicazione'] ?>)</span><?php endif; ?>
               </a>

@@ -108,7 +108,7 @@ use App\Support\HtmlHelper;
             fd.set('authorized_form', c.authorized_form || '');
             fd.set('qualifier_dates', c.qualifier_dates || '');
             fd.set('csrf_token', csrf);
-            fetch(base + '/admin/autori/' + encodeURIComponent(authorId) + '/apply-authority', {
+            fetch(base + '/admin/authors/' + encodeURIComponent(authorId) + '/apply-authority', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrf },
@@ -169,7 +169,7 @@ use App\Support\HtmlHelper;
         fd.set('name', name);
         fd.set('csrf_token', csrf);
 
-        fetch(base + '/admin/autori/' + encodeURIComponent(authorId) + '/lookup-ccn', {
+        fetch(base + '/admin/authors/' + encodeURIComponent(authorId) + '/lookup-ccn', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrf },

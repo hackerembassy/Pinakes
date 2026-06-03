@@ -4649,7 +4649,7 @@ class ArchivesPlugin
      *   2. authority_records (FULLTEXT on authorised_form + history + functions)
      *   3. autori (FULLTEXT on nome) — only when reconciled to an authority
      *      via autori_authority_link, so bibliographic hits without an
-     *      ISAAR counterpart don't flood the view (use /admin/autori for those).
+     *      ISAAR counterpart don't flood the view (use /admin/authors for those).
      *
      * FULLTEXT NATURAL LANGUAGE mode gives us relevance ranking for free;
      * we cap each source at 50 rows. Empty query renders the empty form.
@@ -4881,7 +4881,7 @@ class ArchivesPlugin
     /**
      * FULLTEXT search against `autori.nome` — scoped to rows that are
      * reconciled to an authority_record so non-archival authors don't
-     * flood the cross-entity view (they're reachable via /admin/autori).
+     * flood the cross-entity view (they're reachable via /admin/authors).
      *
      * @return list<array<string, mixed>>
      */

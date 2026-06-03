@@ -104,7 +104,7 @@ $soggettiJson = $soggettiJson !== false ? $soggettiJson : '[]';
     <?php if ($id > 0): ?>
     <!-- UNIMARC export -->
     <div class="pt-3 border-t border-emerald-200">
-        <a href="<?php echo htmlspecialchars(url('/admin/libri/' . $id . '/export.unimarc.xml'), ENT_QUOTES, 'UTF-8'); ?>"
+        <a href="<?php echo htmlspecialchars(url('/admin/books/' . $id . '/export.unimarc.xml'), ENT_QUOTES, 'UTF-8'); ?>"
            class="inline-flex items-center gap-2 text-sm text-emerald-800 hover:text-emerald-900 font-medium">
             <i class="fas fa-file-export"></i>
             <?= __("Esporta record UNIMARC (MARCXchange)") ?>
@@ -196,7 +196,7 @@ $soggettiJson = $soggettiJson !== false ? $soggettiJson : '[]';
         if (sTimer) { clearTimeout(sTimer); }
         if (q.length < 2) { hideResults(); return; }
         sTimer = setTimeout(function () {
-            fetch(base + '/admin/libri/soggettario-search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+            fetch(base + '/admin/books/soggettario-search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
                 .then(function (d) { showResults((d && d.results) ? d.results : []); })
                 .catch(function () { hideResults(); });
@@ -264,7 +264,7 @@ $soggettiJson = $soggettiJson !== false ? $soggettiJson : '[]';
         fd.set('csrf_token', csrf);
         if (bookId && bookId !== '0') { fd.set('libro_id', bookId); }
 
-        fetch(base + '/admin/libri/import-sbn', {
+        fetch(base + '/admin/books/import-sbn', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrf },

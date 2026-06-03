@@ -163,7 +163,7 @@ $totalHits = count($results['archival_units']) + count($results['authority_recor
                         ?>
                         <li class="px-6 py-3">
                             <div class="flex items-center gap-3">
-                                <a href="<?= $e(url('/admin/autori/' . $aid)) ?>" class="text-blue-600 hover:underline font-medium">
+                                <a href="<?= $e(url('/admin/authors/' . $aid)) ?>" class="text-blue-600 hover:underline font-medium">
                                     <?= $e((string) $row['nome']) ?>
                                 </a>
                                 <span class="text-xs text-gray-500">

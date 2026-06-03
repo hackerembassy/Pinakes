@@ -142,7 +142,7 @@ $id = (int) $row['id'];
     <div class="bg-white shadow rounded-lg overflow-hidden mt-6">
         <div class="px-6 py-3 bg-gray-50 border-b flex items-center justify-between">
             <h2 class="text-sm font-semibold text-gray-700"><?= __("Autori di libreria collegati") ?></h2>
-            <a href="<?= $e(url('/admin/autori')) ?>" class="text-xs text-blue-600 hover:underline">
+            <a href="<?= $e(url('/admin/authors')) ?>" class="text-xs text-blue-600 hover:underline">
                 <?= __("Vai ad Autori") ?>
             </a>
         </div>
@@ -157,7 +157,7 @@ $id = (int) $row['id'];
                     <?php $aid = (int) ($a['id'] ?? 0); ?>
                     <li class="px-6 py-3 flex items-center justify-between text-sm">
                         <div class="flex items-center gap-3">
-                            <a href="<?= $e(url('/admin/autori/' . $aid)) ?>" class="text-blue-600 hover:underline">
+                            <a href="<?= $e(url('/admin/authors/' . $aid)) ?>" class="text-blue-600 hover:underline">
                                 <?= $e((string) ($a['nome'] ?? '')) ?>
                             </a>
                             <?php if (!empty($a['data_nascita']) || !empty($a['data_morte'])): ?>

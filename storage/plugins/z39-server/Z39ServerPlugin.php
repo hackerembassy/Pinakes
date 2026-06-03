@@ -674,24 +674,24 @@ class Z39ServerPlugin
         $adminMiddleware = new \App\Middleware\AdminAuthMiddleware();
         $csrfMiddleware  = new \App\Middleware\CsrfMiddleware();
 
-        // POST /admin/libri/import-sbn — fetch a record from SBN by ISBN or BID.
-        $app->post('/admin/libri/import-sbn', function (
+        // POST /admin/books/import-sbn — fetch a record from SBN by ISBN or BID.
+        $app->post('/admin/books/import-sbn', function (
             ServerRequestInterface $request,
             ResponseInterface $response
         ) use ($plugin): ResponseInterface {
             return $plugin->importSbnAction($request, $response);
         })->add($csrfMiddleware)->add($adminMiddleware);
 
-        // POST /admin/libri/bulk-import-sbn — batch import from a CSV of ISBNs.
-        $app->post('/admin/libri/bulk-import-sbn', function (
+        // POST /admin/books/bulk-import-sbn — batch import from a CSV of ISBNs.
+        $app->post('/admin/books/bulk-import-sbn', function (
             ServerRequestInterface $request,
             ResponseInterface $response
         ) use ($plugin): ResponseInterface {
             return $plugin->bulkImportSbnAction($request, $response);
         })->add($csrfMiddleware)->add($adminMiddleware);
 
-        // GET /admin/libri/{id}/export.unimarc.xml — single-book UNIMARC export.
-        $app->get('/admin/libri/{id:[0-9]+}/export.unimarc.xml', function (
+        // GET /admin/books/{id}/export.unimarc.xml — single-book UNIMARC export.
+        $app->get('/admin/books/{id:[0-9]+}/export.unimarc.xml', function (
             ServerRequestInterface $request,
             ResponseInterface $response,
             array $args
@@ -699,16 +699,16 @@ class Z39ServerPlugin
             return $plugin->exportUnimarcAction($request, $response, (int) $args['id']);
         })->add($adminMiddleware);
 
-        // GET /admin/libri/soggettario-search?q= — Nuovo Soggettario autocomplete.
-        $app->get('/admin/libri/soggettario-search', function (
+        // GET /admin/books/soggettario-search?q= — Nuovo Soggettario autocomplete.
+        $app->get('/admin/books/soggettario-search', function (
             ServerRequestInterface $request,
             ResponseInterface $response
         ) use ($plugin): ResponseInterface {
             return $plugin->soggettarioSearchAction($request, $response);
         })->add($adminMiddleware);
 
-        // POST /admin/autori/{id}/lookup-ccn — SBN authority lookup for a name.
-        $app->post('/admin/autori/{id:[0-9]+}/lookup-ccn', function (
+        // POST /admin/authors/{id}/lookup-ccn — SBN authority lookup for a name.
+        $app->post('/admin/authors/{id:[0-9]+}/lookup-ccn', function (
             ServerRequestInterface $request,
             ResponseInterface $response,
             array $args
@@ -716,8 +716,8 @@ class Z39ServerPlugin
             return $plugin->lookupCcnAction($request, $response, (int) $args['id']);
         })->add($csrfMiddleware)->add($adminMiddleware);
 
-        // POST /admin/autori/{id}/apply-authority — persist the chosen form.
-        $app->post('/admin/autori/{id:[0-9]+}/apply-authority', function (
+        // POST /admin/authors/{id}/apply-authority — persist the chosen form.
+        $app->post('/admin/authors/{id:[0-9]+}/apply-authority', function (
             ServerRequestInterface $request,
             ResponseInterface $response,
             array $args
@@ -728,9 +728,9 @@ class Z39ServerPlugin
         \App\Support\SecureLogger::debug('[Z39 Server Plugin] Routes registered', [
             'routes' => [
                 '/api/sru', '/api/sbn/search',
-                '/admin/libri/import-sbn', '/admin/libri/bulk-import-sbn',
-                '/admin/libri/{id}/export.unimarc.xml', '/admin/libri/soggettario-search',
-                '/admin/autori/{id}/lookup-ccn', '/admin/autori/{id}/apply-authority',
+                '/admin/books/import-sbn', '/admin/books/bulk-import-sbn',
+                '/admin/books/{id}/export.unimarc.xml', '/admin/books/soggettario-search',
+                '/admin/authors/{id}/lookup-ccn', '/admin/authors/{id}/apply-authority',
             ]
         ]);
     }
@@ -1189,7 +1189,7 @@ class Z39ServerPlugin
     }
 
     /**
-     * POST /admin/libri/import-sbn — fetch a record from SBN by ISBN.
+     * POST /admin/books/import-sbn — fetch a record from SBN by ISBN.
      *
      * Returns the parsed book data for the form to pre-fill (copy cataloguing).
      * When `libro_id` is supplied (editing an existing book) the SBN BID, polo
@@ -1235,7 +1235,7 @@ class Z39ServerPlugin
     }
 
     /**
-     * POST /admin/libri/bulk-import-sbn — fetch metadata for a CSV/list of ISBNs.
+     * POST /admin/books/bulk-import-sbn — fetch metadata for a CSV/list of ISBNs.
      *
      * Returns a per-ISBN result set for review; it does not auto-create books
      * (creation goes through the standard catalogue validation flow).
@@ -1302,7 +1302,7 @@ class Z39ServerPlugin
     }
 
     /**
-     * GET /admin/libri/{id}/export.unimarc.xml — UNIMARC (MARCXchange) export.
+     * GET /admin/books/{id}/export.unimarc.xml — UNIMARC (MARCXchange) export.
      */
     public function exportUnimarcAction(ServerRequestInterface $request, ResponseInterface $response, int $id): ResponseInterface
     {
@@ -1331,7 +1331,7 @@ class Z39ServerPlugin
     }
 
     /**
-     * GET /admin/libri/soggettario-search?q= — Nuovo Soggettario autocomplete.
+     * GET /admin/books/soggettario-search?q= — Nuovo Soggettario autocomplete.
      */
     public function soggettarioSearchAction(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
@@ -1350,7 +1350,7 @@ class Z39ServerPlugin
     }
 
     /**
-     * POST /admin/autori/{id}/lookup-ccn — SBN authority candidates for a name.
+     * POST /admin/authors/{id}/lookup-ccn — SBN authority candidates for a name.
      */
     public function lookupCcnAction(ServerRequestInterface $request, ResponseInterface $response, int $id): ResponseInterface
     {
@@ -1381,7 +1381,7 @@ class Z39ServerPlugin
     }
 
     /**
-     * POST /admin/autori/{id}/apply-authority — persist the chosen authorized form.
+     * POST /admin/authors/{id}/apply-authority — persist the chosen authorized form.
      */
     public function applyAuthorityAction(ServerRequestInterface $request, ResponseInterface $response, int $id): ResponseInterface
     {
