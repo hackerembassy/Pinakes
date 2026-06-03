@@ -124,7 +124,7 @@ test.describe('Issue #64: Genre Edit/Update', () => {
     if (rootWithChildren) {
       await page.goto(`${BASE}/admin/genres/${rootWithChildren.id}`);
       // Delete button should NOT be visible for genres with children
-      const deleteForm = page.locator('form[action*="/elimina"]');
+      const deleteForm = page.locator('form[action*="/delete"]');
       await expect(deleteForm).toBeHidden();
     }
 
@@ -134,7 +134,7 @@ test.describe('Issue #64: Genre Edit/Update', () => {
     const leafGenre = allGenres.find(g => g.children_count === 0);
     if (leafGenre) {
       await page.goto(`${BASE}/admin/genres/${leafGenre.id}`);
-      const deleteForm = page.locator('form[action*="/elimina"]');
+      const deleteForm = page.locator('form[action*="/delete"]');
       await expect(deleteForm).toBeVisible();
     }
   });
@@ -208,9 +208,9 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     // Submit the form
     await page.click('button[type="submit"]');
     await handleConfirmDialog(page);
-    await page.waitForURL(/.*libri\/\d+.*/, { timeout: 30000 });
+    await page.waitForURL(/.*books\/\d+.*/, { timeout: 30000 });
 
-    const testBookId = page.url().match(/libri\/(\d+)/)?.[1];
+    const testBookId = page.url().match(/books\/(\d+)/)?.[1];
     expect(testBookId).toBeTruthy();
 
     // ── Edit: verify cascade pre-populates all 3 levels ──
@@ -238,7 +238,7 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     // ── Re-save: verify genres persist after save without changes ──
     await page.click('button[type="submit"]');
     await handleConfirmDialog(page);
-    await page.waitForURL(/.*libri\/\d+.*/, { timeout: 30000 });
+    await page.waitForURL(/.*books\/\d+.*/, { timeout: 30000 });
 
     // Re-edit and verify all 3 levels survived
     await page.goto(`${BASE}/admin/books/edit/${testBookId}`);
@@ -261,7 +261,7 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     }
     for (const gid of [subId, genreId, rootId]) {
       await page.goto(`${BASE}/admin/genres/${gid}`);
-      const df = page.locator('form[action*="/elimina"]');
+      const df = page.locator('form[action*="/delete"]');
       if (await df.isVisible({ timeout: 2000 }).catch(() => false)) {
         await df.locator('button[type="submit"]').click();
         await page.waitForURL(/.*genres.*/, { timeout: 10000 });
@@ -283,10 +283,10 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
 
     await page.click('button[type="submit"]');
     await handleConfirmDialog(page);
-    await page.waitForURL(/.*libri\/\d+.*/, { timeout: 30000 });
+    await page.waitForURL(/.*books\/\d+.*/, { timeout: 30000 });
 
     const url = page.url();
-    const match = url.match(/libri\/(\d+)/);
+    const match = url.match(/books\/(\d+)/);
     const bookId = match ? match[1] : null;
     expect(bookId).toBeTruthy();
 

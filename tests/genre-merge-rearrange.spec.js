@@ -71,14 +71,14 @@ test.describe('Genre Merge & Rearrange', () => {
 
     // Cleanup: delete child, then both parents
     await page.goto(`${BASE}/admin/genres/${childId}`);
-    const deleteForm = page.locator('form[action*="/elimina"]');
+    const deleteForm = page.locator('form[action*="/delete"]');
     if (await deleteForm.isVisible({ timeout: 2000 }).catch(() => false)) {
       await deleteForm.locator('button[type="submit"]').click();
       await page.waitForURL(/.*genres.*/);
     }
     for (const pid of [parentAId, parentBId]) {
       await page.goto(`${BASE}/admin/genres/${pid}`);
-      const df = page.locator('form[action*="/elimina"]');
+      const df = page.locator('form[action*="/delete"]');
       if (await df.isVisible({ timeout: 2000 }).catch(() => false)) {
         await df.locator('button[type="submit"]').click();
         await page.waitForURL(/.*genres.*/);
@@ -107,18 +107,21 @@ test.describe('Genre Merge & Rearrange', () => {
     await page.goto(`${BASE}/admin/genres/${sourceId}`);
     await expect(page.locator('#merge-genre-form')).toBeVisible();
 
-    // Accept confirm dialog
-    page.on('dialog', dialog => dialog.accept());
-
     await page.selectOption('#merge_target_id', targetId);
     await page.click('#merge-genre-form button[type="submit"]');
+
+    // The merge form confirms via SweetAlert (window.SwalApp.confirm), not a
+    // native confirm() dialog — click the modal's confirm button to submit.
+    const swalConfirm = page.locator('.swal2-confirm');
+    await expect(swalConfirm).toBeVisible({ timeout: 5000 });
+    await swalConfirm.click();
 
     // Should redirect to target genre
     await page.waitForURL(new RegExp(`genres/${targetId}`));
     await expect(page.locator('body')).toContainText('uniti con successo');
 
-    // Cleanup: delete target
-    const df = page.locator('form[action*="/elimina"]');
+    // Cleanup: delete target (the delete form action is /admin/genres/{id}/delete)
+    const df = page.locator('form[action*="/delete"]');
     if (await df.isVisible({ timeout: 2000 }).catch(() => false)) {
       await df.locator('button[type="submit"]').click();
       await page.waitForURL(/.*genres.*/);
