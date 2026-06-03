@@ -34,21 +34,21 @@ test.describe('Genre Merge & Rearrange', () => {
     await page.goto(`${BASE}/admin/genres/create`);
     await page.fill('input[name="nome"]', `ParentA_${RUN_ID}`);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const parentAId = page.url().match(/generi\/(\d+)/)[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const parentAId = page.url().match(/genres\/(\d+)/)[1];
 
     await page.goto(`${BASE}/admin/genres/create`);
     await page.fill('input[name="nome"]', `ParentB_${RUN_ID}`);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const parentBId = page.url().match(/generi\/(\d+)/)[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const parentBId = page.url().match(/genres\/(\d+)/)[1];
 
     // Create a child under ParentA
     await page.goto(`${BASE}/admin/genres/${parentAId}`);
     await page.fill('#nome_sottogenere', `Child_${RUN_ID}`);
     await page.click('form:has(input[name="parent_id"]) button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const childId = page.url().match(/generi\/(\d+)/)[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const childId = page.url().match(/genres\/(\d+)/)[1];
 
     // Now rearrange: move child to ParentB
     await page.goto(`${BASE}/admin/genres/${childId}`);
@@ -74,14 +74,14 @@ test.describe('Genre Merge & Rearrange', () => {
     const deleteForm = page.locator('form[action*="/elimina"]');
     if (await deleteForm.isVisible({ timeout: 2000 }).catch(() => false)) {
       await deleteForm.locator('button[type="submit"]').click();
-      await page.waitForURL(/.*generi.*/);
+      await page.waitForURL(/.*genres.*/);
     }
     for (const pid of [parentAId, parentBId]) {
       await page.goto(`${BASE}/admin/genres/${pid}`);
       const df = page.locator('form[action*="/elimina"]');
       if (await df.isVisible({ timeout: 2000 }).catch(() => false)) {
         await df.locator('button[type="submit"]').click();
-        await page.waitForURL(/.*generi.*/);
+        await page.waitForURL(/.*genres.*/);
       }
     }
   });
@@ -93,15 +93,15 @@ test.describe('Genre Merge & Rearrange', () => {
     await page.goto(`${BASE}/admin/genres/create`);
     await page.fill('input[name="nome"]', `Source_${RUN_ID}`);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const sourceId = page.url().match(/generi\/(\d+)/)[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const sourceId = page.url().match(/genres\/(\d+)/)[1];
 
     // Create target genre
     await page.goto(`${BASE}/admin/genres/create`);
     await page.fill('input[name="nome"]', `Target_${RUN_ID}`);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const targetId = page.url().match(/generi\/(\d+)/)[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const targetId = page.url().match(/genres\/(\d+)/)[1];
 
     // Go to source genre detail, select target in merge dropdown
     await page.goto(`${BASE}/admin/genres/${sourceId}`);
@@ -114,14 +114,14 @@ test.describe('Genre Merge & Rearrange', () => {
     await page.click('#merge-genre-form button[type="submit"]');
 
     // Should redirect to target genre
-    await page.waitForURL(new RegExp(`generi/${targetId}`));
+    await page.waitForURL(new RegExp(`genres/${targetId}`));
     await expect(page.locator('body')).toContainText('uniti con successo');
 
     // Cleanup: delete target
     const df = page.locator('form[action*="/elimina"]');
     if (await df.isVisible({ timeout: 2000 }).catch(() => false)) {
       await df.locator('button[type="submit"]').click();
-      await page.waitForURL(/.*generi.*/);
+      await page.waitForURL(/.*genres.*/);
     }
   });
 

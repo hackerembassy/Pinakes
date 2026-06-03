@@ -1904,7 +1904,7 @@ test.describe.serial('Phase 13: Shelf/Location Management', () => {
     await page.fill('input[name="codice"]', scaffaleCode);
     await page.fill('input[name="nome"]', `E2E Shelf ${RUN_ID}`);
 
-    const scaffaleForm = page.locator('form[action*="scaffali"]').first();
+    const scaffaleForm = page.locator('form[action*="shelving-units"]').first();
     await scaffaleForm.locator('button[type="submit"]').click();
     await page.waitForLoadState('domcontentloaded');
 
@@ -1919,7 +1919,7 @@ test.describe.serial('Phase 13: Shelf/Location Management', () => {
     await page.goto(`${BASE}/admin/placement`);
     await page.waitForLoadState('domcontentloaded');
 
-    const mensolaForm = page.locator('form[action*="mensole"]').first();
+    const mensolaForm = page.locator('form[action*="shelves"]').first();
     await mensolaForm.locator('select[name="scaffale_id"], #add-mensola-scaffale').selectOption(String(state.shelfId));
     await mensolaForm.locator('input[name="numero_livello"]').fill('1');
     await mensolaForm.locator('button[type="submit"]').click();

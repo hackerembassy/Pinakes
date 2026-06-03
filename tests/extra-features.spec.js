@@ -744,7 +744,7 @@ test.describe.serial('Infrastructure', () => {
     await page.fill('input[name="codice"]', scaffaleCode);
     await page.fill('input[name="nome"]', `E2E Shelf ${RUN_ID}`);
     // Submit scaffale form (first form on page)
-    const scaffaleForm = page.locator('form[action*="scaffali"]').first();
+    const scaffaleForm = page.locator('form[action*="shelving-units"]').first();
     await scaffaleForm.locator('button[type="submit"]').click();
     await page.waitForLoadState('networkidle');
 
@@ -757,7 +757,7 @@ test.describe.serial('Infrastructure', () => {
       await page.goto(`${BASE}/admin/placement`);
       await page.waitForLoadState('networkidle');
 
-      const mensolaForm = page.locator('form[action*="mensole"]').first();
+      const mensolaForm = page.locator('form[action*="shelves"]').first();
       await mensolaForm.locator('select[name="scaffale_id"], #add-mensola-scaffale').selectOption(scaffaleId);
       const livelloInput = mensolaForm.locator('input[name="numero_livello"]');
       await livelloInput.fill('1');

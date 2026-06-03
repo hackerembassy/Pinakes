@@ -92,7 +92,7 @@ test.describe('Issue #64: Genre Edit/Update', () => {
     await nameInput.fill(newName);
     await page.click('#edit-genre-form button[type="submit"]');
 
-    await page.waitForURL(/.*generi\/\d+.*/);
+    await page.waitForURL(/.*genres\/\d+.*/);
     await expect(page.locator('#genre-name-display')).toContainText('(test)');
 
     // Restore original name
@@ -100,7 +100,7 @@ test.describe('Issue #64: Genre Edit/Update', () => {
     await page.locator('#edit_nome').clear();
     await page.locator('#edit_nome').fill(originalName);
     await page.click('#edit-genre-form button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
+    await page.waitForURL(/.*genres\/\d+.*/);
     await expect(page.locator('#genre-name-display')).toContainText(originalName);
   });
 
@@ -157,24 +157,24 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     await page.goto(`${BASE}/admin/genres/create`);
     await page.fill('input[name="nome"]', `CascRoot_${RUN}`);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const rootId = page.url().match(/generi\/(\d+)/)?.[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const rootId = page.url().match(/genres\/(\d+)/)?.[1];
     expect(rootId).toBeTruthy();
 
     // Create genre under root (L2)
     await page.goto(`${BASE}/admin/genres/${rootId}`);
     await page.fill('#nome_sottogenere', `CascGenre_${RUN}`);
     await page.click('form:has(input[name="parent_id"]) button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const genreId = page.url().match(/generi\/(\d+)/)?.[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const genreId = page.url().match(/genres\/(\d+)/)?.[1];
     expect(genreId).toBeTruthy();
 
     // Create subgenre under genre (L3)
     await page.goto(`${BASE}/admin/genres/${genreId}`);
     await page.fill('#nome_sottogenere', `CascSub_${RUN}`);
     await page.click('form:has(input[name="parent_id"]) button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const subId = page.url().match(/generi\/(\d+)/)?.[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const subId = page.url().match(/genres\/(\d+)/)?.[1];
     expect(subId).toBeTruthy();
 
     // ── Create book selecting all 3 levels ──
@@ -264,7 +264,7 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
       const df = page.locator('form[action*="/elimina"]');
       if (await df.isVisible({ timeout: 2000 }).catch(() => false)) {
         await df.locator('button[type="submit"]').click();
-        await page.waitForURL(/.*generi.*/, { timeout: 10000 });
+        await page.waitForURL(/.*genres.*/, { timeout: 10000 });
       }
     }
   });
