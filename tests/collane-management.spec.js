@@ -150,11 +150,10 @@ test.describe.serial('Collane Management', () => {
     await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(TEST_COLLANA)}`);
     await page.waitForLoadState('networkidle');
 
-    // Accept the confirm dialog
-    page.on('dialog', dialog => dialog.accept());
-
-    // Click delete button
+    // Click delete button and confirm via SweetAlert
     await page.click('button:has-text("Elimina collana")');
+    await page.waitForSelector('.swal2-popup', { timeout: 8000 });
+    await page.locator('.swal2-confirm').click();
     await page.waitForLoadState('networkidle');
 
     // Should redirect to collane list

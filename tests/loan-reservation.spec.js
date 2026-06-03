@@ -592,13 +592,14 @@ test.describe.serial('Loan / Reservation Lifecycle', () => {
 
     await expect(userPage.locator('text=Prenotazioni attive')).toBeVisible({ timeout: 5000 });
 
-    // Handle native confirm() dialog
-    userPage.once('dialog', (dialog) => dialog.accept());
-
     // Click the cancel button (form submit)
     const cancelBtn = userPage.locator('.btn-cancel').first();
     await expect(cancelBtn).toBeVisible({ timeout: 5000 });
     await cancelBtn.click();
+
+    // SweetAlert confirm (data-swal-confirm, not native dialog)
+    await userPage.waitForSelector('.swal2-popup', { timeout: 8000 });
+    await userPage.locator('.swal2-confirm').click();
 
     // Form submits → redirect
     await userPage.waitForURL(/prenotazioni/, { timeout: 15000 });

@@ -28,9 +28,9 @@ async function loginAsAdmin(page) {
  * Helper: handle save confirmation dialog if present.
  */
 async function handleConfirmDialog(page) {
-  const confirmBtn = page.locator('[role="dialog"] button, .modal button').last();
-  if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await confirmBtn.click();
+  const confirm = page.locator('.swal2-confirm');
+  if (await confirm.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await confirm.click();
   }
 }
 
@@ -257,7 +257,13 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     const delBookForm = page.locator('form[action*="/delete"]');
     if (await delBookForm.isVisible({ timeout: 2000 }).catch(() => false)) {
       await delBookForm.locator('button[type="submit"]').click();
-      await page.waitForURL(/.*libri.*/, { timeout: 10000 });
+      // The admin book-detail delete is guarded by confirmDeleteBook() → SweetAlert
+      // (window.Swal is present), so the form does not submit until the modal is confirmed.
+      const swalConfirm = page.locator('.swal2-confirm');
+      if (await swalConfirm.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await swalConfirm.click();
+      }
+      await page.waitForURL(/.*books.*/, { timeout: 10000 });
     }
     for (const gid of [subId, genreId, rootId]) {
       await page.goto(`${BASE}/admin/genres/${gid}`);
@@ -274,7 +280,7 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
 
     // Navigate to new book form, don't set genre, save
     await page.goto(`${BASE}/admin/books`);
-    const newBookLink = page.locator('a[href$="/libri/crea"], a[href$="/books/create"]').first();
+    const newBookLink = page.locator('a[href$="/books\/crea"], a[href$="/books/create"]').first();
     await expect(newBookLink).toBeVisible();
     await newBookLink.click();
     await page.waitForSelector('#radice_select');
@@ -415,7 +421,8 @@ test.describe('Issue #67: Genre Filter in Book List', () => {
     expect(childGenre).toBeTruthy();
 
     const genreFilter = page.locator('#filter_genere');
-    await genreFilter.fill(childGenre.nome);
+    await genreFilter.fill('');
+    await genreFilter.pressSequentially(childGenre.nome, { delay: 50 });
 
     const suggestions = page.locator('#filter_genere_suggest');
     await expect(suggestions).toBeVisible({ timeout: 5000 });

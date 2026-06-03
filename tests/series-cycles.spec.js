@@ -142,7 +142,7 @@ async function submitBookForm(page, expectedId = null) {
   await page.click('button[type="submit"]');
   await page.locator('.swal2-confirm').click();
   if (expectedId) {
-    await page.waitForURL(new RegExp(`/admin/books/${expectedId}$`), { timeout: 15000 });
+    await page.waitForURL(url => url.href.includes(`/admin/books/${expectedId}`), { timeout: 15000 });
     return expectedId;
   }
   await page.waitForURL(/\/admin\/books\/\d+$/, { timeout: 15000 });
@@ -442,11 +442,10 @@ test.describe.serial('Series groups and cycles', () => {
 
     const bookId = ids.get('happy1');
     await page.goto(`${BASE}/admin/series/detail?nome=${encodeURIComponent(HAPPY_SERIES)}`);
-    page.once('dialog', dialog => dialog.accept());
-    await Promise.all([
-      page.waitForURL(/\/admin\/series$/, { timeout: 10000 }),
-      page.click('button:has-text("Elimina collana")'),
-    ]);
+    await page.click('button:has-text("Elimina collana")');
+    await page.waitForSelector('.swal2-popup', { timeout: 8000 });
+    await page.locator('.swal2-confirm').click();
+    await page.waitForURL(/\/admin\/series$/, { timeout: 10000 });
 
     const row = dbQuery(`SELECT CONCAT_WS('|', titolo, IFNULL(collana, ''), IFNULL(numero_serie, '')) FROM libri WHERE id = ${bookId}`);
     expect(row).toBe(`${TAG} Happy volume 1||`);

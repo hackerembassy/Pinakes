@@ -194,7 +194,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
           <td class="px-4 py-3 text-sm text-gray-600"><?= HtmlHelper::e($b['autore'] ?? '') ?></td>
           <td class="px-4 py-3 text-sm text-gray-500"><?= HtmlHelper::e(($b['isbn13'] ?? '') ?: ($b['isbn10'] ?? '')) ?></td>
           <td class="px-4 py-3 text-right text-sm">
-            <form method="post" action="<?= htmlspecialchars(url('/admin/series/remove-book'), ENT_QUOTES, 'UTF-8') ?>" onsubmit='return confirm(<?= json_encode(__("Rimuovere questo libro dalla serie?"), JSON_HEX_TAG | JSON_HEX_APOS) ?>)'>
+            <form method="post" action="<?= htmlspecialchars(url('/admin/series/remove-book'), ENT_QUOTES, 'UTF-8') ?>" data-swal-confirm="<?= htmlspecialchars(__('Rimuovere questo libro dalla serie?'), ENT_QUOTES, 'UTF-8') ?>" data-swal-confirm-kind="action">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
               <input type="hidden" name="book_id" value="<?= (int) $b['id'] ?>">
               <input type="hidden" name="collana" value="<?= HtmlHelper::e($collana) ?>">
@@ -227,7 +227,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     <!-- Merge -->
     <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow">
       <h3 class="text-sm font-medium text-gray-700 mb-3"><i class="fas fa-compress-arrows-alt text-gray-400 mr-1"></i> <?= __("Unisci con altra collana") ?></h3>
-      <form method="post" action="<?= htmlspecialchars(url('/admin/series/merge'), ENT_QUOTES, 'UTF-8') ?>" onsubmit='return confirm(<?= json_encode(__("Sei sicuro? Tutti i libri verranno spostati nella collana di destinazione."), JSON_HEX_TAG | JSON_HEX_APOS) ?>)'>
+      <form method="post" action="<?= htmlspecialchars(url('/admin/series/merge'), ENT_QUOTES, 'UTF-8') ?>" data-swal-confirm="<?= htmlspecialchars(__('Sei sicuro? Tutti i libri verranno spostati nella collana di destinazione.'), ENT_QUOTES, 'UTF-8') ?>" data-swal-confirm-kind="action">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="source" value="<?= HtmlHelper::e($collana) ?>">
         <div class="relative">
@@ -262,7 +262,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow md:col-span-2">
       <h3 class="text-sm font-medium text-red-700 mb-1"><i class="fas fa-trash text-red-400 mr-1"></i> <?= __("Elimina collana") ?></h3>
       <p class="text-xs text-gray-500 mb-3"><?= __("Rimuove la collana da tutti i libri. I libri non verranno eliminati.") ?></p>
-      <form method="post" action="<?= htmlspecialchars(url('/admin/series/delete'), ENT_QUOTES, 'UTF-8') ?>" onsubmit='return confirm(<?= json_encode(__("Sei sicuro? La collana verrà rimossa da tutti i libri."), JSON_HEX_TAG | JSON_HEX_APOS) ?>)'>
+      <form method="post" action="<?= htmlspecialchars(url('/admin/series/delete'), ENT_QUOTES, 'UTF-8') ?>" data-swal-confirm="<?= htmlspecialchars(__('Sei sicuro? La collana verrà rimossa da tutti i libri.'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="nome" value="<?= HtmlHelper::e($collana) ?>">
         <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium text-sm">

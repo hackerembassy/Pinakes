@@ -259,10 +259,13 @@ test.describe.serial('Archives multi-document — upload, delete, interoperabili
         await page.goto(`${BASE}/admin/archives/${itemBId}`);
         await page.waitForLoadState('domcontentloaded');
         const deleteForm = page.locator(`form[action*="/admin/archives/${itemBId}/files/${firstFileId}/delete"]`);
-        page.once('dialog', dialog => dialog.accept());
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-            deleteForm.locator('button[type="submit"]').click(),
+            (async () => {
+                await deleteForm.locator('button[type="submit"]').click();
+                await page.waitForSelector('.swal2-popup', { timeout: 8000 });
+                await page.locator('.swal2-confirm').click();
+            })(),
         ]);
         await expect(page.locator('body')).not.toContainText('archive-upload-test-1.pdf');
         await expect(page.locator('body')).toContainText('archive-upload-test-2.pdf');
