@@ -201,6 +201,15 @@ class PrestitiController
             // Enforce max active loans per user (admin setting; 0 = no limit)
             $maxLoans = (int) ((new \App\Models\SettingsRepository($db))->get('loans', 'max_active_loans_per_user', '0') ?? 0);
             if ($maxLoans > 0) {
+                // Serialize concurrent same-user requests: the libri lock above only
+                // mutually-excludes requests for the SAME book, so two store() calls
+                // for the same user on different books could both read activeCount
+                // below the limit and both insert. Locking the user row prevents it.
+                $userLockStmt = $db->prepare("SELECT id FROM utenti WHERE id = ? FOR UPDATE");
+                $userLockStmt->bind_param('i', $utente_id);
+                $userLockStmt->execute();
+                $userLockStmt->close();
+
                 $cntStmt = $db->prepare("SELECT COUNT(*) FROM prestiti WHERE utente_id = ? AND attivo = 1 AND stato IN ('prenotato','da_ritirare','in_corso','in_ritardo')");
                 $cntStmt->bind_param('i', $utente_id);
                 $cntStmt->execute();
@@ -953,7 +962,18 @@ class PrestitiController
             $lockBookStmt = $db->prepare("SELECT id FROM libri WHERE id = ? AND deleted_at IS NULL FOR UPDATE");
             $lockBookStmt->bind_param('i', $libroId);
             $lockBookStmt->execute();
+            $lockedBook = $lockBookStmt->get_result()->fetch_assoc();
             $lockBookStmt->close();
+
+            // Soft-deleted or absent book: the FOR UPDATE returned no row. Stop
+            // before renewing a loan for a title removed from the catalogue
+            // (libri queries must honour deleted_at IS NULL).
+            if (!$lockedBook) {
+                $db->rollback();
+                $errorUrl = $redirectTo ?? url('/admin/prestiti');
+                $separator = strpos($errorUrl, '?') === false ? '?' : '&';
+                return $response->withHeader('Location', $errorUrl . $separator . 'error=book_not_found')->withStatus(302);
+            }
 
             // Lock the loan row to prevent concurrent renewals and re-validate under lock
             $lockLoanStmt = $db->prepare("

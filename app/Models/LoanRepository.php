@@ -6,6 +6,7 @@ namespace App\Models;
 use mysqli;
 use App\Controllers\ReservationManager;
 use App\Support\DataIntegrity;
+use App\Support\SecureLogger;
 
 class LoanRepository
 {
@@ -137,7 +138,15 @@ class LoanRepository
             $lockBook = $this->db->prepare('SELECT id FROM libri WHERE id=? AND deleted_at IS NULL FOR UPDATE');
             $lockBook->bind_param('i', $bookId);
             $lockBook->execute();
+            $bookLocked = $lockBook->get_result()->fetch_assoc();
             $lockBook->close();
+
+            // Libro soft-deleted o inesistente: il FOR UPDATE non ha restituito
+            // righe. Interrompi la chiusura (soft-delete guard, rule 2).
+            if (!$bookLocked) {
+                $this->db->rollback();
+                return false;
+            }
 
             // Poi lock della riga del prestito
             $stmt = $this->db->prepare('SELECT id FROM prestiti WHERE id=? FOR UPDATE');
@@ -185,7 +194,7 @@ class LoanRepository
             // Note: processBookAvailability returning false typically indicates no pending
             // reservation or a race condition - acceptable to continue, just log for observability
             if (!$reservationManager->processBookAvailability($bookId)) {
-                error_log("LoanRepository::close - No reservation processed for book ID: {$bookId}");
+                SecureLogger::debug("LoanRepository::close - No reservation processed for book ID: {$bookId}");
             }
 
             $this->db->commit();
@@ -200,7 +209,7 @@ class LoanRepository
         try {
             $reservationManager->flushDeferredNotifications();
         } catch (\Throwable $e) {
-            error_log('LoanRepository::close flush notifications warning: ' . $e->getMessage());
+            SecureLogger::warning('LoanRepository::close flush notifications warning', ['error' => $e->getMessage()]);
         }
 
         // validateAndUpdateLoan has its own transaction, call it after main transaction completes
@@ -208,7 +217,7 @@ class LoanRepository
             $integrity = new DataIntegrity($this->db);
             $integrity->validateAndUpdateLoan($id);
         } catch (\Throwable $e) {
-            error_log('DataIntegrity warning (validateAndUpdateLoan): ' . $e->getMessage());
+            SecureLogger::warning('DataIntegrity warning (validateAndUpdateLoan)', ['error' => $e->getMessage()]);
         }
 
         return true;

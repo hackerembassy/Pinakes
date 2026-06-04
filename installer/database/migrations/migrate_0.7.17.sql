@@ -17,6 +17,9 @@ INSERT IGNORE INTO `system_settings` (`category`, `setting_key`, `setting_value`
 INSERT IGNORE INTO `system_settings` (`category`, `setting_key`, `setting_value`, `description`) VALUES
 ('loans', 'max_renewals', '3', 'Numero massimo di rinnovi consentiti per prestito');
 
+INSERT IGNORE INTO `system_settings` (`category`, `setting_key`, `setting_value`, `description`) VALUES
+('loans', 'pickup_expiry_days', '3', 'Giorni per ritirare un prestito approvato prima che scada');
+
 -- Aggiorna i trigger di integrità prestito sulle copie alla definizione corrente
 -- (installer/database/triggers.sql): esclude anche 'in_restauro' e 'in_trasferimento'
 -- dalle copie prestabili e usa 'da_ritirare' (non 'pendente', che ha attivo=0) nel

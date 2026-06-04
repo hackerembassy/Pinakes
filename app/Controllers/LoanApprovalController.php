@@ -193,7 +193,20 @@ class LoanApprovalController
             $lockBookStmt = $db->prepare("SELECT id FROM libri WHERE id = ? AND deleted_at IS NULL FOR UPDATE");
             $lockBookStmt->bind_param('i', $libroId);
             $lockBookStmt->execute();
+            $lockedBook = $lockBookStmt->get_result()->fetch_assoc();
             $lockBookStmt->close();
+
+            // Libro soft-deleted o inesistente: il FOR UPDATE non ha restituito
+            // righe. Niente approvazione di un prestito per un titolo rimosso dal
+            // catalogo (le query su `libri` devono rispettare deleted_at IS NULL).
+            if (!$lockedBook) {
+                $db->rollback();
+                $response->getBody()->write(json_encode([
+                    'success' => false,
+                    'message' => __('Libro non trovato o non più disponibile')
+                ]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            }
 
             // Ora lock + ri-verifica del prestito pendente (FOR UPDATE impedisce
             // approvazioni concorrenti dello stesso prestito).
@@ -232,7 +245,10 @@ class LoanApprovalController
             $dupStmt = $db->prepare("
                 SELECT id FROM prestiti
                 WHERE libro_id = ? AND utente_id = ? AND id != ?
-                AND attivo = 1 AND stato IN ('prenotato', 'da_ritirare', 'in_corso', 'in_ritardo')
+                AND (
+                    (attivo = 1 AND stato IN ('prenotato', 'da_ritirare', 'in_corso', 'in_ritardo'))
+                    OR (attivo = 0 AND stato = 'pendente')
+                )
                 LIMIT 1
             ");
             $dupStmt->bind_param('iii', $libroId, $utenteId, $loanId);
@@ -274,6 +290,15 @@ class LoanApprovalController
             // quello in approvazione; il lock sulla riga libro sopra serializza.
             $maxLoans = (int) ((new \App\Models\SettingsRepository($db))->get('loans', 'max_active_loans_per_user', '0') ?? 0);
             if ($maxLoans > 0) {
+                // Serialize concurrent approvals for the SAME user on DIFFERENT books:
+                // the libri lock above only serializes this loan's book, so two
+                // parallel approvals could both read activeCount below the cap and
+                // both flip to active. Locking the user row prevents exceeding it.
+                $userLockStmt = $db->prepare("SELECT id FROM utenti WHERE id = ? FOR UPDATE");
+                $userLockStmt->bind_param('i', $utenteId);
+                $userLockStmt->execute();
+                $userLockStmt->close();
+
                 $cntStmt = $db->prepare("SELECT COUNT(*) AS c FROM prestiti WHERE utente_id = ? AND id != ? AND attivo = 1 AND stato IN ('prenotato','da_ritirare','in_corso','in_ritardo')");
                 $cntStmt->bind_param('ii', $utenteId, $loanId);
                 $cntStmt->execute();

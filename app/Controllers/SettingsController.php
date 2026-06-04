@@ -1006,8 +1006,11 @@ class SettingsController
 
         // Clamp to sane bounds on BOTH ends — a hand-crafted POST must not be
         // able to persist absurd durations/renewals (the UI min/max attributes
-        // are advisory; the server is the authority). 0 = "unlimited" where the
-        // feature allows it (max_renewals, max_active_loans_per_user).
+        // are advisory; the server is the authority). Note the two zeros differ:
+        // max_active_loans_per_user = 0 means "unlimited" (the check is gated by
+        // `if ($maxLoans > 0)`), whereas max_renewals = 0 means "no renewals
+        // allowed" (renew() blocks when currentRenewals >= maxRenewals, so 0
+        // blocks every renewal) — it is NOT "unlimited".
         $loanDurationDays = min(3650, max(1, (int) ($data['loan_duration_days'] ?? 30)));         // 1 day … 10 years
         $pickupExpiryDays = min(365,  max(1, (int) ($data['pickup_expiry_days'] ?? 3)));          // 1 … 365 days
         $maxRenewals      = min(100,  max(0, (int) ($data['max_renewals'] ?? 3)));                // 0 … 100
