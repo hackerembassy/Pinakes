@@ -692,30 +692,39 @@ class DataIntegrity {
         while ($row = $booksResult->fetch_assoc()) {
             $bookId = (int) $row['id'];
             $copyRows = (int) $row['copy_rows'];
+            // Capacity fallback for books with no per-copy rows mirrors
+            // ReservationsController::getBookTotalCopies: a legacy NULL copie_totali
+            // means "untracked" and defaults to 1 loanable copy, while an explicit 0
+            // stays 0 (AVAIL-007). Keeping the two readers aligned prevents a legacy
+            // book from showing capacity 0 here (→ spurious overbooked) while
+            // availability treats it as 1.
+            $legacyCapacity = $row['copie_totali'] === null ? 1 : max(0, (int) $row['copie_totali']);
             $capacityByBook[$bookId] = [
                 'title' => (string) $row['titolo'],
-                'capacity' => $copyRows > 0 ? (int) $row['loanable_copies'] : max(0, (int) $row['copie_totali']),
+                'capacity' => $copyRows > 0 ? (int) $row['loanable_copies'] : $legacyCapacity,
             ];
         }
         $stmt->close();
 
+        // Occupancy = the #157 canonical copy-holding set only: active loans plus
+        // reservation-conversion pendings that already hold a copy
+        // (attivo=0, stato='pendente', copia_id IS NOT NULL). Waitlist
+        // reservations (prenotazioni, stato='attiva') are intentionally a QUEUE
+        // that may exceed copy count and do NOT hold a copy until converted, so
+        // counting them as full-interval occupancy produced false-positive
+        // overbooked periods for popular low-copy books — they are excluded here.
         $eventsByBook = [];
         $stmt = $this->db->prepare("
             SELECT libro_id, 'prestito' AS source_type, id AS source_id,
                    DATE(data_prestito) AS start_date,
                    DATE(data_scadenza) AS end_date
             FROM prestiti
-            WHERE attivo = 1
-              AND stato IN ('prenotato', 'da_ritirare', 'in_corso', 'in_ritardo')
+            WHERE (
+                    (attivo = 1 AND stato IN ('prenotato', 'da_ritirare', 'in_corso', 'in_ritardo'))
+                    OR (attivo = 0 AND stato = 'pendente' AND copia_id IS NOT NULL)
+                  )
               AND data_prestito IS NOT NULL
               AND data_scadenza IS NOT NULL
-            UNION ALL
-            SELECT libro_id, 'prenotazione' AS source_type, id AS source_id,
-                   DATE(COALESCE(data_inizio_richiesta, data_prenotazione, data_scadenza_prenotazione)) AS start_date,
-                   DATE(COALESCE(data_fine_richiesta, data_scadenza_prenotazione, data_prenotazione, data_inizio_richiesta)) AS end_date
-            FROM prenotazioni
-            WHERE stato = 'attiva'
-              AND COALESCE(data_inizio_richiesta, data_prenotazione, data_scadenza_prenotazione) IS NOT NULL
         ");
         $stmt->execute();
         $intervalsResult = $stmt->get_result();

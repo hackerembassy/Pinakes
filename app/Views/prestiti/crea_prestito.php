@@ -57,6 +57,12 @@ $isItalian = str_starts_with($currentLocale, 'it');
         case 'duplicate_reservation':
           echo __('Questo utente ha già un prestito o una prenotazione attiva per questo libro.');
           break;
+        case 'book_not_found':
+          echo __('Libro non trovato o non più disponibile.');
+          break;
+        case 'max_loans_reached':
+          echo __('L\'utente ha raggiunto il numero massimo di prestiti attivi consentiti. Restituisci un libro prima di crearne un altro.');
+          break;
         default:
           echo __('Errore durante la creazione del prestito.');
       }

@@ -33,7 +33,7 @@ class CopyRepository
             -- #157: a copy is held by an active loan OR a reservation-conversion
             -- pending (attivo=0 with a copia_id); both must appear on the per-copy
             -- calendar so a pending pickup is visible.
-            LEFT JOIN prestiti p ON c.id = p.copia_id AND ((p.attivo = 1 AND p.stato IN ('prenotato', 'da_ritirare', 'in_corso', 'in_ritardo')) OR p.stato = 'pendente')
+            LEFT JOIN prestiti p ON c.id = p.copia_id AND ((p.attivo = 1 AND p.stato IN ('prenotato', 'da_ritirare', 'in_corso', 'in_ritardo')) OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL))
             LEFT JOIN utenti u ON p.utente_id = u.id
             WHERE c.libro_id = ?
             ORDER BY c.numero_inventario ASC
@@ -123,7 +123,7 @@ class CopyRepository
         $stmt = $this->db->prepare("
             SELECT c.*
             FROM copie c
-            LEFT JOIN prestiti p ON c.id = p.copia_id AND ((p.attivo = 1 AND p.stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')) OR p.stato = 'pendente')
+            LEFT JOIN prestiti p ON c.id = p.copia_id AND ((p.attivo = 1 AND p.stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')) OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL))
             WHERE c.libro_id = ?
             AND c.stato = 'disponibile'
             AND p.id IS NULL
@@ -188,7 +188,7 @@ class CopyRepository
         $stmt = $this->db->prepare("
             SELECT COUNT(*) as count
             FROM copie c
-            LEFT JOIN prestiti p ON c.id = p.copia_id AND ((p.attivo = 1 AND p.stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')) OR p.stato = 'pendente')
+            LEFT JOIN prestiti p ON c.id = p.copia_id AND ((p.attivo = 1 AND p.stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')) OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL))
             WHERE c.libro_id = ?
             AND c.stato = 'disponibile'
             AND p.id IS NULL

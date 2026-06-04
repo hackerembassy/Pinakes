@@ -507,11 +507,14 @@ class ReservationsController
             return (int) ($row['total'] ?? 0);
         }
 
-        // Fallback: if NO copies exist in copie table at all, use libri.copie_totali
-        // This handles legacy data where copies weren't tracked individually.
-        // NON forzare un minimo di 1 (AVAIL-007): un libro dichiarato con 0 copie
-        // non deve risultare prestabile — resta prenotabile tramite la coda.
-        $stmt = $this->db->prepare("SELECT IFNULL(copie_totali, 0) AS copie_totali FROM libri WHERE id = ? AND deleted_at IS NULL");
+        // Fallback: if NO copies exist in copie table at all, use libri.copie_totali.
+        // Distinguish two cases of "no copie rows":
+        //   - copie_totali IS NULL (legacy rows never migrated to per-copy tracking):
+        //     default to 1 loanable copy, so a legacy catalogue entry stays lendable.
+        //   - copie_totali = 0 (explicitly declared zero, AVAIL-007): keep 0 — not
+        //     lendable, only reservable via the queue.
+        // IFNULL replaces only NULL, so an explicit 0 is preserved.
+        $stmt = $this->db->prepare("SELECT IFNULL(copie_totali, 1) AS copie_totali FROM libri WHERE id = ? AND deleted_at IS NULL");
         $stmt->bind_param('i', $bookId);
         $stmt->execute();
         $result = $stmt->get_result();

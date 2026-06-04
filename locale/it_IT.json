@@ -5178,7 +5178,6 @@
   "Predefinito:": "Predefinito:",
   "Quanto tempo un utente resta connesso prima che la sessione scada per inattività.": "Quanto tempo un utente resta connesso prima che la sessione scada per inattività.",
   "Aumenta questo valore se durante catalogazioni lunghe (ad esempio digitando un indice esteso nelle note) ricevi l'errore «sessione scaduta» al salvataggio e perdi i dati inseriti. Il valore predefinito è 3 ore.": "Aumenta questo valore se durante catalogazioni lunghe (ad esempio digitando un indice esteso nelle note) ricevi l'errore «sessione scaduta» al salvataggio e perdi i dati inseriti. Il valore predefinito è 3 ore.",
-  "Prestiti": "Prestiti",
   "Durata predefinita prestito": "Durata predefinita prestito",
   "Numero di giorni di default assegnati a ogni prestito quando la data di scadenza non viene specificata manualmente.": "Numero di giorni di default assegnati a ogni prestito quando la data di scadenza non viene specificata manualmente.",
   "Questo valore viene usato nelle richieste di prestito utente, nella creazione admin e nell'approvazione delle prenotazioni.": "Questo valore viene usato nelle richieste di prestito utente, nella creazione admin e nell'approvazione delle prenotazioni.",
@@ -5205,5 +5204,13 @@
   "Impostazioni prestiti aggiornate correttamente.": "Impostazioni prestiti aggiornate correttamente.",
   "Hai raggiunto il numero massimo di prestiti attivi consentiti": "Hai raggiunto il numero massimo di prestiti attivi consentiti",
   "Capienza prenotazioni/prestiti superata": "Capienza prenotazioni/prestiti superata",
-  "Richiesta duplicata utente/libro": "Richiesta duplicata utente/libro"
+  "Richiesta duplicata utente/libro": "Richiesta duplicata utente/libro",
+  "Libro non trovato o non più disponibile.": "Libro non trovato o non più disponibile.",
+  "L'utente ha raggiunto il numero massimo di prestiti attivi consentiti. Restituisci un libro prima di crearne un altro.": "L'utente ha raggiunto il numero massimo di prestiti attivi consentiti. Restituisci un libro prima di crearne un altro.",
+  "Il prestito non è più attivo.": "Il prestito non è più attivo.",
+  "Impossibile rinnovare: il prestito è in ritardo.": "Impossibile rinnovare: il prestito è in ritardo.",
+  "Impossibile rinnovare: il prestito non è ancora stato ritirato.": "Impossibile rinnovare: il prestito non è ancora stato ritirato.",
+  "Numero massimo di rinnovi raggiunto per questo prestito.": "Numero massimo di rinnovi raggiunto per questo prestito.",
+  "Impossibile rinnovare: un altro prestito o prenotazione occupa il periodo richiesto.": "Impossibile rinnovare: un altro prestito o prenotazione occupa il periodo richiesto.",
+  "Operazione non riuscita. Riprova.": "Operazione non riuscita. Riprova."
 }

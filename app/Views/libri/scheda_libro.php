@@ -37,6 +37,36 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
   </div>
   <?php unset($_SESSION['success_message']); ?>
 <?php endif; ?>
+<?php if (isset($_GET['error']) && $_GET['error'] !== ''): ?>
+  <div class="mb-6 p-4 rounded-xl border border-red-200 bg-red-50 text-red-700" role="alert">
+    <i class="fas fa-exclamation-circle mr-2"></i>
+    <?php
+    // Errori del rinnovo prestito (redirect da /admin/prestiti/rinnova con ?error=...).
+    switch ((string) $_GET['error']) {
+        case 'book_not_found':
+            echo __('Libro non trovato o non più disponibile.');
+            break;
+        case 'loan_not_active':
+            echo __('Il prestito non è più attivo.');
+            break;
+        case 'loan_overdue':
+            echo __('Impossibile rinnovare: il prestito è in ritardo.');
+            break;
+        case 'loan_not_picked_up':
+            echo __('Impossibile rinnovare: il prestito non è ancora stato ritirato.');
+            break;
+        case 'max_renewals':
+            echo __('Numero massimo di rinnovi raggiunto per questo prestito.');
+            break;
+        case 'renewal_conflict':
+            echo __('Impossibile rinnovare: un altro prestito o prenotazione occupa il periodo richiesto.');
+            break;
+        default:
+            echo __('Operazione non riuscita. Riprova.');
+    }
+    ?>
+  </div>
+<?php endif; ?>
 
 <!-- Hero Section with Breadcrumb -->
 <div class="mb-6">
