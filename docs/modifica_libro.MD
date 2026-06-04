@@ -513,9 +513,11 @@ Dopo: Scaffale C, Mensola 1, Posizione 5
 **Come fare**:
 1. Modifica → Sezione "Dettagli Fisici"
 2. Copie Totali: 1 → 3
-3. Copie Disponibili: 1 → 3
-4. Salva
-5.  Fatto in 30 secondi
+3. Salva
+4.  Fatto in 30 secondi
+
+> Le **Copie Disponibili** non si impostano a mano: il sistema le ricalcola in
+> automatico in base a prestiti/prenotazioni attive (vedi Passo 7).
 
 ---
 

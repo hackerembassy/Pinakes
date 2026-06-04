@@ -206,7 +206,7 @@ CREATE INDEX idx_name ON table_name(column_name);
 - [ ] Update `installer/database/schema.sql` with any new tables/columns
 - [ ] Update `installer/classes/Installer.php` EXPECTED_TABLES if new tables
 - [ ] Update `installer/database/triggers.sql` AND a trigger migration if loan/copy triggers change
-- [ ] Add EN + DE translations to all 4 locale JSONs for any new `__()` string
+- [ ] Add translations for any new `__()` string to all 4 locale JSONs (it_IT is the source; also fill en_US, de_DE, fr_FR)
 - [ ] Update `app/Support/BundledPlugins::LIST` if plugins added/removed/renamed
 - [ ] Test the migration on a copy of production database
 - [ ] Commit all changes and push to `main`

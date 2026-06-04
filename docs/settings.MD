@@ -108,7 +108,7 @@ Chiedi i dati al tuo amministratore IT (se lavori in una scuola/ente).
 2. Se  **Verde**: Perfetto! Email funzioneranno
 3. Se  **Rosso**: Controlla i dati e riprova
 
-> **Dettagli tecnici**: il driver (`mail_driver`) può valere `mail`, `smtp` o `phpmailer`; la cifratura SMTP (`smtp_encryption`) può essere `tls`, `ssl` o `none`. La password SMTP è cifrata prima di essere salvata (`SettingsEncryption`). Nello **stesso form** è presente il toggle **"Richiedi approvazione admin"** per le registrazioni (setting `registration.require_admin_approval`).
+> **Dettagli tecnici**: il driver email (campo del form `mail_driver`, salvato come setting `email.driver_mode`) può valere `mail`, `smtp` o `phpmailer`; la cifratura SMTP (campo del form `smtp_encryption`, salvato come setting `email.smtp_security`) può essere `tls`, `ssl` o `none`. La password SMTP è cifrata prima di essere salvata (`SettingsEncryption`). Nello **stesso form** è presente il toggle **"Richiedi approvazione admin"** per le registrazioni (setting `registration.require_admin_approval`).
 
 ---
 
@@ -523,23 +523,23 @@ class SettingsRepository
 #### Email Multi-Provider Configuration
 
 ```php
-// Gmail SMTP
-$settings->set('email', 'driver', 'smtp');
-$settings->set('email', 'host', 'smtp.gmail.com');
-$settings->set('email', 'port', '587');
-$settings->set('email', 'username', 'tua-email@gmail.com');
-$settings->set('email', 'password', 'app-password-generata');
-$settings->set('email', 'encryption', 'tls');
+// Gmail SMTP — chiavi reali usate da SettingsController::updateEmailSettings()
+$settings->set('email', 'driver_mode', 'smtp');
+$settings->set('email', 'smtp_host', 'smtp.gmail.com');
+$settings->set('email', 'smtp_port', '587');
+$settings->set('email', 'smtp_username', 'tua-email@gmail.com');
+$settings->set('email', 'smtp_password', 'app-password-generata');
+$settings->set('email', 'smtp_security', 'tls');
 
 // Outlook SMTP
-$settings->set('email', 'host', 'smtp-mail.outlook.com');
-$settings->set('email', 'port', '587');
-$settings->set('email', 'encryption', 'tls');
+$settings->set('email', 'smtp_host', 'smtp-mail.outlook.com');
+$settings->set('email', 'smtp_port', '587');
+$settings->set('email', 'smtp_security', 'tls');
 
 // PEC Aruba
-$settings->set('email', 'host', 'smtps.pec.aruba.it');
-$settings->set('email', 'port', '465');
-$settings->set('email', 'encryption', 'ssl');
+$settings->set('email', 'smtp_host', 'smtps.pec.aruba.it');
+$settings->set('email', 'smtp_port', '465');
+$settings->set('email', 'smtp_security', 'ssl');
 ```
 
 #### Label Dimensions Configuration

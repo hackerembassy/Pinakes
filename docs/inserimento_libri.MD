@@ -216,9 +216,9 @@ Quando clicchi "Importa Dati", ecco cosa succede nei 3-5 secondi di attesa:
    - Rimuove automaticamente spazi, trattini e caratteri non necessari
    - Verifica che non sia già presente nel database
 
-2. **Connessione Prima Fonte** (1-2 secondi)
-   - Si connette a Libreria Universitaria
-   - Cerca il libro nel loro catalogo
+2. **Connessione Fonti Built-in** (1-2 secondi)
+   - Senza plugin, interroga le due fonti built-in (Google Books, Open Library)
+   - Cerca il libro nei loro cataloghi per ISBN
    - Se trovato, scarica tutti i dati disponibili
 
 3. **Integrazione Fonti Secondarie** (1-2 secondi)
