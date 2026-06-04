@@ -8,6 +8,40 @@ I problemi più critici riguardano la gestione delle transazioni MySQL: in due p
 
 Il sistema di calcolo della disponibilità multi-copia è strutturalmente corretto ma contiene incoerenze di conteggio (`copie_totali` include copie perse/danneggiate), un endpoint legacy con aritmetica difettosa (`/api/libri/{id}/disponibilita`), e un fallback `GREATEST(...,1)` che può rendere prenotabile un libro senza copie fisiche. Quattro parametri operativi rilevanti (`pickup_expiry_days`, `loan_duration_days`, `max_renewals`, `max_active_loans_per_user`) sono hardcoded o non esposti nell'UI admin.
 
+> **Nota sullo stato finale**: i 4 parametri sopra sono stati resi configurabili
+> (gruppo `settings.loans`, tab admin **Impostazioni → Prestiti**,
+> `POST /admin/settings/loans`) con clamping lato server; vedi sezione "Stato
+> implementazione".
+
+---
+
+## Modello unificato di occupazione copia (#157, "model A-refined")
+
+L'intera analisi multi-copia poggia su un'invariante esplicita, codificata sia
+nell'applicazione sia nei trigger DB:
+
+> Una **copia** è occupata in una finestra di date se e solo se, sovrapposta a
+> quella finestra, esiste un **prestito attivo**
+> (`attivo = 1 AND stato IN ('in_corso','in_ritardo','da_ritirare','prenotato')`)
+> **oppure** una **conversione prenotazione→prestito pendente**
+> (`stato = 'pendente' AND copia_id IS NOT NULL`, `attivo = 0`,
+> `origine = 'prenotazione'`).
+>
+> Una **richiesta pendente "nuda"** (`stato = 'pendente' AND copia_id IS NULL`)
+> **non** riduce la disponibilità finché l'admin non le assegna una copia.
+
+Punti di applicazione:
+
+| Livello | File / funzione | Clausola |
+|---------|-----------------|----------|
+| Calcolo calendario | `ReservationsController::calculateAvailability()` (e i due SELECT che la alimentano) | salta i `pendente` con `copia_id` vuoto; conta gli altri stati per-giorno/per-copia |
+| Selezione copia in conversione | `ReservationManager::createLoanFromReservation()` | esclude copie tenute da prestiti attivi o da `pendente` con copia |
+| Difesa DB | `trg_check_active_prestito_before_insert` / `_before_update` (`installer/database/triggers.sql`) | `SIGNAL 45000` su copia non utilizzabile o overlap, stesso predicato del modello |
+
+I trigger sono ridondanti rispetto ai controlli applicativi (lock `libri`-first +
+overlap check) e fungono da backstop a livello database. Distribuiti via
+`migrate_0.7.17` (runner DELIMITER-aware).
+
 ---
 
 ## Finding confermati
