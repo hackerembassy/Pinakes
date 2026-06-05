@@ -2936,6 +2936,16 @@ class Updater
                 }
             }
 
+            // Re-apply the canonical loan-integrity triggers now that migrations
+            // have succeeded. Trigger bodies use DELIMITER / BEGIN…END blocks that
+            // pre-0.7.17 migration runners cannot execute, so they are NOT shipped
+            // inside migration files (which run under the *starting* version's
+            // runner during an upgrade). Re-applying here — from the freshly
+            // installed triggers.sql, with the DELIMITER-aware splitter — keeps
+            // upgraded installs' triggers current on every upgrade run by 0.7.17+
+            // code. Idempotent and non-fatal.
+            $this->reapplyTriggers();
+
             return [
                 'success' => true,
                 'executed' => $executed,
@@ -2953,6 +2963,45 @@ class Updater
                 'error' => $e->getMessage()
             ];
         }
+    }
+
+    /**
+     * Re-apply installer/database/triggers.sql using the DELIMITER-aware
+     * splitter. Called after a successful migration run so that loan-integrity
+     * triggers are kept current on upgrades (they cannot live inside migration
+     * files because those run under the starting version's non-DELIMITER-aware
+     * runner). Idempotent (triggers.sql is DROP + CREATE) and non-fatal — a
+     * missing TRIGGER privilege only logs a warning; the same overlap rules are
+     * enforced at the application layer.
+     */
+    private function reapplyTriggers(): void
+    {
+        $triggersFile = $this->rootPath . '/installer/database/triggers.sql';
+        if (!is_file($triggersFile)) {
+            $this->debugLog('INFO', 'triggers.sql non trovato — skip re-apply trigger', ['path' => $triggersFile]);
+            return;
+        }
+        $sql = file_get_contents($triggersFile);
+        if ($sql === false || trim($sql) === '') {
+            return;
+        }
+
+        $applied = 0;
+        foreach ($this->splitSqlWithDelimiters($sql) as $statement) {
+            $statement = trim($statement);
+            if ($statement === '') {
+                continue;
+            }
+            if ($this->db->query($statement)) {
+                $applied++;
+            } else {
+                $this->debugLog('WARNING', 'Re-apply trigger non riuscito (non fatale)', [
+                    'errno' => $this->db->errno,
+                    'error' => $this->db->error,
+                ]);
+            }
+        }
+        $this->debugLog('INFO', 'Trigger ri-applicati da triggers.sql', ['applied' => $applied]);
     }
 
     /**
