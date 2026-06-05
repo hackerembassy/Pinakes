@@ -331,7 +331,13 @@ test.describe.serial('Code Quality — 15 static analysis tests', () => {
             const v = f.replace('migrate_', '').replace('.sql', '');
             if (!versionLte('0.5.0', v)) continue; // skip pre-0.5.0 legacy files
 
-            const upper = fs.readFileSync(path.join(migrDir, f), 'utf-8').toUpperCase();
+            // Strip SQL comments first: DDL keywords mentioned in prose
+            // (e.g. a comment "no CREATE TABLE here") must not trip the
+            // substring check. Only real, uncommented DDL counts.
+            const stripped = fs.readFileSync(path.join(migrDir, f), 'utf-8')
+                .replace(/\/\*[\s\S]*?\*\//g, ' ')  // block comments
+                .replace(/^\s*--.*$/gm, ' ');       // line comments
+            const upper = stripped.toUpperCase();
             const hasDDL = upper.includes('ALTER TABLE') || upper.includes('CREATE TABLE');
             const isIdempotent = upper.includes('IF NOT EXISTS')
                 || upper.includes('SET @SQL')
