@@ -2,11 +2,10 @@
 /** @var string $activeTab */
 /** @var string $csrfToken */
 /** @var array $loansSettings */
-use App\Support\HtmlHelper;
 ?>
 <section data-settings-panel="loans" class="settings-panel <?php echo $activeTab === 'loans' ? 'block' : 'hidden'; ?>">
   <form action="<?= htmlspecialchars(url('/admin/settings/loans'), ENT_QUOTES, 'UTF-8') ?>" method="post" class="space-y-6">
-    <input type="hidden" name="csrf_token" value="<?php echo HtmlHelper::e($csrfToken); ?>">
+    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
 
     <!-- Loan duration -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">

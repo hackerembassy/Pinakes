@@ -324,7 +324,9 @@ class LoanApprovalController
             if (!$isFutureLoan) {
                 $settingsRepo = new \App\Models\SettingsRepository($db);
                 $pickupDays = (int) ($settingsRepo->get('loans', 'pickup_expiry_days', '3') ?? 3);
-                $pickupDeadline = date('Y-m-d', strtotime("+{$pickupDays} days"));
+                // Base su $today (timezone applicativo) per coerenza con la
+                // classificazione immediato/futuro a cavallo della mezzanotte.
+                $pickupDeadline = date('Y-m-d', strtotime("{$today} +{$pickupDays} days"));
             }
 
             // Step 1: Try to use pre-assigned copy first (avoids false rejection when slots are at capacity)
@@ -1015,15 +1017,14 @@ class LoanApprovalController
             }
 
             // Reassign returned copy to next waiting reservation
+            // Niente catch locale: la riassegnazione condivide questa transazione e
+            // un errore deve propagare al catch esterno per il rollback completo,
+            // evitando il commit di uno stato parziale (CRITICAL #157).
             $reassignmentService = null;
             if ($copiaId && $copyAvailable) {
-                try {
-                    $reassignmentService = new \App\Services\ReservationReassignmentService($db);
-                    $reassignmentService->setExternalTransaction(true);
-                    $reassignmentService->reassignOnReturn($copiaId);
-                } catch (\Throwable $e) {
-                    \App\Support\SecureLogger::warning("[returnLoan] Reassignment error for copy {$copiaId}: " . $e->getMessage());
-                }
+                $reassignmentService = new \App\Services\ReservationReassignmentService($db);
+                $reassignmentService->setExternalTransaction(true);
+                $reassignmentService->reassignOnReturn($copiaId);
             }
 
             // Recalculate availability AFTER reassignment

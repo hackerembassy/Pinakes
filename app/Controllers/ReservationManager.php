@@ -227,6 +227,15 @@ class ReservationManager
 
         } catch (\Throwable $e) {
             $this->rollbackIfOwned($ownTransaction);
+            // Con una transazione del CHIAMANTE (external) non possiamo assorbire
+            // l'errore ritornando false: il chiamante farebbe comunque commit() di
+            // uno stato parziale (es. prestito creato ma prenotazione ancora
+            // 'attiva'). Rilanciamo così è il proprietario a fare rollback. Quando
+            // possediamo noi la transazione l'abbiamo già annullata sopra: logghiamo
+            // e ritorniamo false come prima (CRITICAL #157).
+            if ($this->externalTransaction) {
+                throw $e;
+            }
             \App\Support\SecureLogger::error('processBookAvailability error', ['error' => $e->getMessage()]);
             return false;
         }
@@ -425,6 +434,11 @@ class ReservationManager
 
         } catch (\Throwable $e) {
             $this->rollbackIfOwned($ownTransaction);
+            // In transazione esterna rilanciamo: assorbire qui lascerebbe il
+            // chiamante a fare commit() di un INSERT prestiti parziale (CRITICAL #157).
+            if ($this->externalTransaction) {
+                throw $e;
+            }
             error_log("Failed to create loan from reservation: " . $e->getMessage());
             return false;
         }

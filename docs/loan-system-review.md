@@ -2,7 +2,7 @@
 
 ## Sintesi esecutiva
 
-L'analisi ha coperto le quattro dimensioni funzionali del sistema: gestione delle transazioni DB, calcolo della disponibilità multi-copia, condizioni di gara su overlap e trigger, e configurabilità dei parametri operativi. Sono stati identificati **20 finding confermati** e **10 falsi positivi** rigettati dopo verifica avversariale sul codice reale.
+L'analisi ha coperto le quattro dimensioni funzionali del sistema: gestione delle transazioni DB, calcolo della disponibilità multi-copia, condizioni di gara su overlap e trigger, e configurabilità dei parametri operativi. Sono stati identificati **21 finding confermati** e **10 falsi positivi** rigettati dopo verifica avversariale sul codice reale.
 
 I problemi più critici riguardano la gestione delle transazioni MySQL: in due percorsi di codice attivi (`processReturn` e `renew`) si verifica un `begin_transaction()` annidato non protetto che causa un **commit implicito silenzioso** — le modifiche vengono persistite prima che il chiamante possa fare rollback in caso di errore. Immediatamente sotto per priorità stanno due lacune email P1: nessuna conferma di restituzione viene inviata all'utente (`loan_returned`) e nessuna notifica viene spedita alla scadenza automatica di una prenotazione (`reservation_expired`).
 

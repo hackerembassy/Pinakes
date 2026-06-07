@@ -459,10 +459,12 @@ class PrestitiController
                     // User must come to pick up the book
                     $stato_prestito = 'da_ritirare';
                     $copyStatus = 'prenotato';
-                    // Calculate pickup deadline from settings
+                    // Calculate pickup deadline from settings, basata su $today
+                    // (timezone applicativo) per coerenza con la classificazione
+                    // immediato/futuro ed evitare lo scarto di un giorno a mezzanotte.
                     $settingsRepo = new \App\Models\SettingsRepository($db);
                     $pickupDays = (int) ($settingsRepo->get('loans', 'pickup_expiry_days', '3') ?? 3);
-                    $pickupDeadline = date('Y-m-d', strtotime("+{$pickupDays} days"));
+                    $pickupDeadline = date('Y-m-d', strtotime("{$today} +{$pickupDays} days"));
                 }
             } else {
                 // Future loan - user will pick up when loan period starts
@@ -739,14 +741,13 @@ class PrestitiController
                 $notifyWishlistForLibroId = $libro_id;
 
                 // Case 3: Reassign returned copy to next waiting reservation (NEW SYSTEM - prestiti table)
-                $reassignmentService = null;
-                try {
-                    $reassignmentService = new \App\Services\ReservationReassignmentService($db);
-                    $reassignmentService->setExternalTransaction(true);
-                    $reassignmentService->reassignOnReturn($copia_id);
-                } catch (\Throwable $e) {
-                    SecureLogger::error(__('Riassegnazione copia fallita'), ['copia_id' => $copia_id, 'error' => $e->getMessage()]);
-                }
+                // Niente catch locale qui: una riassegnazione fallita condivide questa
+                // transazione e deve propagare al catch esterno per il rollback
+                // dell'intera restituzione, evitando il commit di uno stato parziale
+                // (CRITICAL #157). Il servizio rilancia in transazione esterna.
+                $reassignmentService = new \App\Services\ReservationReassignmentService($db);
+                $reassignmentService->setExternalTransaction(true);
+                $reassignmentService->reassignOnReturn($copia_id);
 
                 // Processa prenotazioni attive per questo libro (Future/Scheduled reservations)
                 $reservationManager = new \App\Controllers\ReservationManager($db);

@@ -329,8 +329,14 @@ class ReservationsAdminController
         }
 
         if (empty($dataScadenza)) {
-            $dataScadenza = date('Y-m-d H:i:s', strtotime('+30 days'));
-            $dataScadenzaDate = date('Y-m-d', strtotime('+30 days'));
+            // Durata di default allineata all'impostazione admin loan_duration_days
+            // (stesso valore mostrato dalla view), non più 30 giorni hardcoded.
+            $loanDays = (int) ((new \App\Models\SettingsRepository($db))->get('loans', 'loan_duration_days', '30') ?? 30);
+            if ($loanDays < 1) {
+                $loanDays = 30;
+            }
+            $dataScadenza = date('Y-m-d H:i:s', strtotime("+{$loanDays} days"));
+            $dataScadenzaDate = date('Y-m-d', strtotime("+{$loanDays} days"));
         } else {
             $dataScadenzaDate = $dataScadenza; // Keep date only for loan period
             $dataScadenza = $dataScadenza . ' 23:59:59';

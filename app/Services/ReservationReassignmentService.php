@@ -205,6 +205,12 @@ class ReservationReassignmentService
 
         } catch (\Throwable $e) {
             $this->rollbackIfOwned($ownTransaction);
+            // In transazione esterna rilanciamo: altrimenti il proprietario farebbe
+            // commit() di uno stato parziale (es. copia_id aggiornato ma stato copia
+            // non impostato a 'prenotato') (CRITICAL #157).
+            if ($this->externalTransaction) {
+                throw $e;
+            }
             SecureLogger::error(__('Errore riassegnazione copia'), [
                 'libro_id' => $libroId,
                 'copia_id' => $newCopiaId,
@@ -289,6 +295,13 @@ class ReservationReassignmentService
 
             } catch (\Throwable $e) {
                 $this->rollbackIfOwned($ownTransaction);
+                // In transazione esterna un'eccezione genuina (la race "copia non
+                // più disponibile" usa 'continue', non il catch) avvelena la
+                // transazione del chiamante: rilanciamo invece di proseguire i
+                // tentativi, così il proprietario fa rollback (CRITICAL #157).
+                if ($this->externalTransaction) {
+                    throw $e;
+                }
                 SecureLogger::error(__('Errore riassegnazione copia persa'), [
                     'copia_id' => $copiaId,
                     'reservation_id' => $reservationId,
@@ -339,6 +352,11 @@ class ReservationReassignmentService
 
         } catch (\Throwable $e) {
             $this->rollbackIfOwned($ownTransaction);
+            // In transazione esterna rilanciamo per non far committare al chiamante
+            // un copia_id azzerato a metà (CRITICAL #157).
+            if ($this->externalTransaction) {
+                throw $e;
+            }
             SecureLogger::error(__('Errore gestione copia non disponibile'), [
                 'reservation_id' => $reservationId,
                 'error' => $e->getMessage()

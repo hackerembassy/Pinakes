@@ -10,7 +10,8 @@ INSERT INTO `system_settings` (`category`, `setting_key`, `setting_value`, `desc
 ('system', 'catalogue_mode', '0', 'Modalità solo catalogo - disabilita prestiti, prenotazioni e wishlist');
 
 INSERT INTO `system_settings` (`category`, `setting_key`, `setting_value`, `description`) VALUES
-('loans', 'pickup_expiry_days', '3', 'Giorni per ritirare un prestito approvato prima che scada');
+('loans', 'pickup_expiry_days', '3', 'Giorni per ritirare un prestito approvato prima che scada')
+ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), description = VALUES(description), updated_at = NOW();
 
 INSERT INTO `system_settings` (`category`, `setting_key`, `setting_value`, `description`) VALUES
 ('loans', 'loan_duration_days', '30', 'Durata predefinita di un prestito in giorni')

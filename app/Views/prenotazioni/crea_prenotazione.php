@@ -234,11 +234,13 @@ document.getElementById('data_prenotazione').addEventListener('change', function
         // Set minimum scadenza date to prenotazione date
         scadenzaInput.min = prenotazioneDate;
 
-        // If current scadenza is before prenotazione, update it
+        // If current scadenza is before prenotazione, update it using the
+        // admin-configured default loan duration (coerente col backend),
+        // non più un fisso +1 mese.
         if (scadenzaInput.value && scadenzaInput.value < prenotazioneDate) {
-            const nextMonth = new Date(prenotazioneDate);
-            nextMonth.setMonth(nextMonth.getMonth() + 1);
-            scadenzaInput.value = nextMonth.toISOString().split('T')[0];
+            const newScadenza = new Date(prenotazioneDate);
+            newScadenza.setDate(newScadenza.getDate() + <?= (int)($defaultLoanDays ?? 30) ?>);
+            scadenzaInput.value = newScadenza.toISOString().split('T')[0];
         }
     }
 });
