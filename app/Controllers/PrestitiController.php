@@ -208,7 +208,16 @@ class PrestitiController
                 $userLockStmt = $db->prepare("SELECT id FROM utenti WHERE id = ? FOR UPDATE");
                 $userLockStmt->bind_param('i', $utente_id);
                 $userLockStmt->execute();
+                // Verify the user actually exists after taking the lock: a
+                // positive-but-unknown utente_id would otherwise pass the earlier
+                // (> 0) check, count 0 active loans and reach the INSERT only to
+                // fail on the FK. Bail cleanly instead.
+                $userExists = $userLockStmt->get_result()->fetch_assoc();
                 $userLockStmt->close();
+                if (!$userExists) {
+                    $db->rollback();
+                    return $response->withHeader('Location', url('/admin/prestiti/crea') . '?error=missing_fields')->withStatus(302);
+                }
 
                 $cntStmt = $db->prepare("SELECT COUNT(*) FROM prestiti WHERE utente_id = ? AND attivo = 1 AND stato IN ('prenotato','da_ritirare','in_corso','in_ritardo')");
                 $cntStmt->bind_param('i', $utente_id);

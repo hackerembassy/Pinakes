@@ -229,7 +229,7 @@ Dopo: 3 copie totali, 3 disponibili
 2. **Copie disponibili**: viene gestito dal sistema in base a prestiti/prenotazioni attive (ricalcolo della disponibilità), non va impostato manualmente come differenza fissa
 3. **Copie fisiche**: per aggiungere/eliminare le singole copie usa le azioni dalla scheda libro (`POST /admin/libri/copie/{id}/update` e `/delete`), oppure l'endpoint `POST /api/libri/{id}/increase-copies`
 
->  **Attenzione**: se ci sono copie in prestito, alcune operazioni di riduzione sono limitate.
+> **Attenzione**: se ci sono copie in prestito, alcune operazioni di riduzione sono limitate.
 
 ### Passo 8: Gestione Copertina
 

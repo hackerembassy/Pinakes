@@ -531,11 +531,19 @@ class ReservationReassignmentService
         // Eseguito in modo differito (questo metodo è chiamato da
         // flushDeferredNotifications dopo il commit), quindi nessuna I/O in transazione.
         try {
-            $this->notificationService->sendCopyUnavailableNotification($data['email'], [
+            // sendCopyUnavailableNotification reports soft failures by returning
+            // false (not only by throwing): handle that case too, otherwise a
+            // silently undelivered email leaves no operational trace.
+            $sent = $this->notificationService->sendCopyUnavailableNotification($data['email'], [
                 'utente_nome' => $data['utente_nome'],
                 'libro_titolo' => $data['libro_titolo'],
                 'motivo' => $reasonText,
             ]);
+            if ($sent === false) {
+                SecureLogger::warning(__('Email copia non disponibile non inviata'), [
+                    'prestito_id' => $prestitoId,
+                ]);
+            }
         } catch (\Throwable $e) {
             SecureLogger::warning(__('Email copia non disponibile fallita'), [
                 'prestito_id' => $prestitoId,

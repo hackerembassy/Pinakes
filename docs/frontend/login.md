@@ -82,7 +82,7 @@ Campo: Password
 
 **4. (Opzionale) Ricordami**
 
-```
+```text
 ☑️ Ricordami
 Spunta per restare loggato oltre la durata della sessione.
 Crea un token persistente lato server (cookie remember-me).

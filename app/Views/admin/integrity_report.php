@@ -168,7 +168,7 @@
                             'missing_due_date' => 'fas fa-calendar-times text-purple-500',
                             'status_mismatch' => 'fas fa-exclamation-triangle text-blue-500',
                             'overbooked_circulation_period' => 'fas fa-calendar-minus text-red-500',
-                            'duplicate_user_circulation_request' => 'fas fa-calendar-exclamation text-orange-500',
+                            'duplicate_user_circulation_request' => 'fas fa-clone text-orange-500',
                             'expired_reservation' => 'fas fa-clock text-yellow-600',
                             'queue_position_gap' => 'fas fa-sort-numeric-up text-indigo-500',
                             'stale_pending_loan' => 'fas fa-hourglass-half text-amber-500',

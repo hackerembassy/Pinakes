@@ -29,6 +29,8 @@ const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
 const ADMIN_PASS  = process.env.E2E_ADMIN_PASS  || '';
 const DB_USER     = process.env.E2E_DB_USER   || '';
 const DB_PASS     = process.env.E2E_DB_PASS   || '';
+const DB_HOST     = process.env.E2E_DB_HOST   || '';
+const DB_PORT     = process.env.E2E_DB_PORT   || '';
 const DB_SOCKET   = process.env.E2E_DB_SOCKET || '';
 const DB_NAME     = process.env.E2E_DB_NAME   || '';
 
@@ -38,7 +40,9 @@ const TAG = 'E2E_OVERLAP_' + Date.now();
 
 function dbQuery(sql) {
   const args = [];
-  if (DB_SOCKET) args.push('-S', DB_SOCKET);
+  // Prefer host/port (CI exposes TCP, not a local socket); fall back to socket.
+  if (DB_HOST) { args.push('-h', DB_HOST); if (DB_PORT) args.push('-P', DB_PORT); }
+  else if (DB_SOCKET) { args.push('-S', DB_SOCKET); }
   args.push('-u', DB_USER, DB_NAME, '-N', '-B', '-e', sql);
   return execFileSync('mysql', args, { encoding: 'utf-8', timeout: 10000, env: { ...process.env, MYSQL_PWD: DB_PASS } }).trim();
 }

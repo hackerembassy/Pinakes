@@ -1,14 +1,24 @@
 <?php
 declare(strict_types=1);
 
+// Single, intentional exit point: any assertion failure throws, and this
+// handler reports it to STDERR and exits non-zero for CI. Keeps exit() out of
+// the helpers (PHPMD ExitExpression) while preserving the fail-fast behaviour.
+set_exception_handler(static function (\Throwable $e): void {
+    fwrite(STDERR, $e->getMessage() . "\n");
+    exit(1);
+});
+
 $root = dirname(__DIR__);
 
 function readFileOrFail(string $path): string
 {
     $contents = file_get_contents($path);
     if ($contents === false) {
-        fwrite(STDERR, "Cannot read {$path}\n");
-        exit(1);
+        // Throw instead of exit(): exit() in helpers trips static quality gates
+        // (PHPMD ExitExpression) and makes the helpers non-composable. The
+        // top-level catch turns this into a non-zero exit for CI.
+        throw new \RuntimeException("Cannot read {$path}");
     }
 
     return $contents;
@@ -17,16 +27,14 @@ function readFileOrFail(string $path): string
 function assertContainsText(string $needle, string $haystack, string $message): void
 {
     if (!str_contains($haystack, $needle)) {
-        fwrite(STDERR, "FAIL: {$message}\nMissing: {$needle}\n");
-        exit(1);
+        throw new \RuntimeException("FAIL: {$message} (missing: {$needle})");
     }
 }
 
 function assertNotContainsText(string $needle, string $haystack, string $message): void
 {
     if (str_contains($haystack, $needle)) {
-        fwrite(STDERR, "FAIL: {$message}\nUnexpected: {$needle}\n");
-        exit(1);
+        throw new \RuntimeException("FAIL: {$message} (unexpected: {$needle})");
     }
 }
 
@@ -78,8 +86,7 @@ assertContainsText('expired_waitlist_reservations', $maintenance, 'MaintenanceSe
 $cancelPos = strpos($maintenance, 'cancelExpiredReservations');
 $processPos = strpos($maintenance, 'processScheduledReservations');
 if ($cancelPos === false || $processPos === false || $cancelPos > $processPos) {
-    fwrite(STDERR, "FAIL: MaintenanceService must cancel expired waitlist reservations before converting scheduled reservations\n");
-    exit(1);
+    throw new \RuntimeException('FAIL: MaintenanceService must cancel expired waitlist reservations before converting scheduled reservations');
 }
 
 echo "Loan/reservation consistency unit checks passed.\n";
