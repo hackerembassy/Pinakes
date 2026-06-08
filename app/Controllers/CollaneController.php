@@ -69,7 +69,7 @@ class CollaneController
     {
         $collana = trim((string) ($request->getQueryParams()['nome'] ?? ''));
         if ($collana === '') {
-            return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
         }
 
         $seriesRepo = new SeriesRepository($db);
@@ -143,7 +143,7 @@ class CollaneController
 
         if ($nome === '') {
             $_SESSION['error_message'] = __('Nome collana non valido');
-            return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
         }
 
         (new SeriesRepository($db))->ensureCollana($nome, [
@@ -155,7 +155,7 @@ class CollaneController
         ]);
 
         $_SESSION['success_message'] = sprintf(__('Collana "%s" creata'), $nome);
-        return $response->withHeader('Location', url('/admin/collane/dettaglio?nome=' . urlencode($nome)))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/series/detail?nome=' . urlencode($nome)))->withStatus(302);
     }
 
     /**
@@ -168,7 +168,7 @@ class CollaneController
 
         if ($nome === '') {
             $_SESSION['error_message'] = __('Nome collana non valido');
-            return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
         }
 
         // CRUD-8 (review): count children before delete so the success
@@ -206,7 +206,7 @@ class CollaneController
             \App\Support\SecureLogger::error('CollaneController::delete failed', ['error' => $e->getMessage()]);
             $_SESSION['error_message'] = __('Errore database');
         }
-        return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
     }
 
     /**
@@ -229,12 +229,12 @@ class CollaneController
 
         if ($nome === '') {
             $_SESSION['error_message'] = __('Nome collana non valido');
-            return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
         }
 
         if (!$seriesRepo->hasCollaneTable()) {
             $_SESSION['error_message'] = __('Errore database');
-            return $response->withHeader('Location', url('/admin/collane/dettaglio?nome=' . urlencode($nome)))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series/detail?nome=' . urlencode($nome)))->withStatus(302);
         }
         $seriesRepo->ensureCollana($nome, [
             'descrizione' => $descrizione,
@@ -246,7 +246,7 @@ class CollaneController
         ]);
 
         $_SESSION['success_message'] = __('Descrizione salvata');
-        return $response->withHeader('Location', url('/admin/collane/dettaglio?nome=' . urlencode($nome)))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/series/detail?nome=' . urlencode($nome)))->withStatus(302);
     }
 
     /**
@@ -260,7 +260,7 @@ class CollaneController
 
         if ($oldName === '' || $newName === '') {
             $_SESSION['error_message'] = __('Nome collana non valido');
-            return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
         }
 
         $db->begin_transaction();
@@ -275,7 +275,7 @@ class CollaneController
             $_SESSION['error_message'] = __('Errore database');
         }
 
-        return $response->withHeader('Location', url('/admin/collane/dettaglio?nome=' . urlencode($newName)))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/series/detail?nome=' . urlencode($newName)))->withStatus(302);
     }
 
     /**
@@ -289,7 +289,7 @@ class CollaneController
 
         if ($source === '' || $target === '' || $source === $target) {
             $_SESSION['error_message'] = __('Parametri non validi per l\'unione');
-            return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
         }
 
         $db->begin_transaction();
@@ -304,7 +304,7 @@ class CollaneController
             $_SESSION['error_message'] = __('Errore database');
         }
 
-        return $response->withHeader('Location', url('/admin/collane?dettaglio=' . urlencode($target)))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/series?dettaglio=' . urlencode($target)))->withStatus(302);
     }
 
     /**
@@ -421,12 +421,12 @@ class CollaneController
 
         if ($bookId <= 0 || $collana === '') {
             $_SESSION['error_message'] = __('Parametri non validi');
-            return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
         }
 
         (new SeriesRepository($db))->removeBookFromSeries($bookId, $collana);
         $_SESSION['success_message'] = __('Libro rimosso dalla serie');
-        return $response->withHeader('Location', url('/admin/collane/dettaglio?nome=' . urlencode($collana)))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/series/detail?nome=' . urlencode($collana)))->withStatus(302);
     }
 
     /**
@@ -496,7 +496,7 @@ class CollaneController
 
         if ($collana === '' || $parentTitle === '') {
             $_SESSION['error_message'] = __('Parametri non validi');
-            return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
         }
 
         // SEC1-1 (review) + CR R8 #4: require the collana to actually have
@@ -518,7 +518,7 @@ class CollaneController
             $countStmt->close();
             if ((int) ($countRow['n'] ?? 0) < 1) {
                 $_SESSION['error_message'] = __('Nessun libro nella collana');
-                return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+                return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
             }
         }
 
@@ -526,7 +526,7 @@ class CollaneController
         $stmt = $db->prepare("INSERT INTO libri (titolo, collana, copie_totali, copie_disponibili, created_at, updated_at) VALUES (?, ?, 0, 0, NOW(), NOW())");
         if (!$stmt) {
             $_SESSION['error_message'] = __('Errore database');
-            return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
         }
         $stmt->bind_param('ss', $parentTitle, $collana);
         $stmt->execute();
@@ -538,7 +538,7 @@ class CollaneController
         // mutation and the early-return was dead code.
         if ($parentId <= 0) {
             $_SESSION['error_message'] = __('Errore nella creazione dell\'opera');
-            return $response->withHeader('Location', url('/admin/collane'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/series'))->withStatus(302);
         }
 
         $seriesRepo = new SeriesRepository($db);
@@ -588,6 +588,6 @@ class CollaneController
         }
 
         $_SESSION['success_message'] = sprintf(__('Opera "%s" creata con %d volumi'), $parentTitle, $linkedCount);
-        return $response->withHeader('Location', url('/admin/libri/' . $parentId))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/books/' . $parentId))->withStatus(302);
     }
 }

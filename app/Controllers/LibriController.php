@@ -661,7 +661,7 @@ class LibriController
         $data = $this->parseRequestBody($request);
         if ($data === null) {
             $_SESSION['error_message'] = __('Impossibile leggere i dati del modulo. Riprova.');
-            return $response->withHeader('Location', url('/admin/libri/crea'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/books/create'))->withStatus(302);
         }
         // CSRF validated by CsrfMiddleware
 
@@ -796,7 +796,7 @@ class LibriController
                 $fields['issn'] = $this->normalizeIssn($fields['issn']);
             } catch (\InvalidArgumentException $e) {
                 $_SESSION['error_message'] = __('ISSN non valido. Il formato corretto è XXXX-XXXX (8 cifre, l\'ultima può essere X).');
-                return $response->withHeader('Location', url('/admin/libri/crea'))->withStatus(302);
+                return $response->withHeader('Location', url('/admin/books/create'))->withStatus(302);
             }
         }
 
@@ -1167,7 +1167,7 @@ class LibriController
             // Set a success message in the session
             $_SESSION['success_message'] = __('Libro aggiunto con successo!');
 
-            return $response->withHeader('Location', url('/admin/libri/' . $id))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/books/' . $id))->withStatus(302);
 
         } finally {
             // Release advisory lock
@@ -1216,7 +1216,7 @@ class LibriController
         $data = $this->parseRequestBody($request);
         if ($data === null) {
             $_SESSION['error_message'] = __('Impossibile leggere i dati del modulo. Riprova.');
-            return $response->withHeader('Location', url('/admin/libri/modifica/' . $id))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/books/edit/' . $id))->withStatus(302);
         }
         // CSRF validated by CsrfMiddleware
         $repo = new \App\Models\BookRepository($db);
@@ -1303,7 +1303,7 @@ class LibriController
                 $fields['issn'] = $this->normalizeIssn($fields['issn']);
             } catch (\InvalidArgumentException $e) {
                 $_SESSION['error_message'] = __('ISSN non valido. Il formato corretto è XXXX-XXXX (8 cifre, l\'ultima può essere X).');
-                return $response->withHeader('Location', url('/admin/libri/modifica/' . $id))->withStatus(302);
+                return $response->withHeader('Location', url('/admin/books/edit/' . $id))->withStatus(302);
             }
         }
 
@@ -1387,7 +1387,7 @@ class LibriController
                     $nonRemovableCopies,
                     $nonRemovableCopies
                 );
-                return $response->withHeader('Location', url('/admin/libri/modifica/' . $id))->withStatus(302);
+                return $response->withHeader('Location', url('/admin/books/edit/' . $id))->withStatus(302);
             }
         }
 
@@ -1474,7 +1474,7 @@ class LibriController
             $lockStmt = $db->prepare("SELECT GET_LOCK(?, 10)");
             if (!$lockStmt) {
                 $_SESSION['error_message'] = __('Errore del server. Riprova.');
-                return $response->withHeader('Location', url('/admin/libri/modifica/' . $id))->withStatus(302);
+                return $response->withHeader('Location', url('/admin/books/edit/' . $id))->withStatus(302);
             }
             $lockStmt->bind_param('s', $lockKey);
             $lockStmt->execute();
@@ -1485,7 +1485,7 @@ class LibriController
             if (!$locked) {
                 // Failed to acquire lock (timeout or error)
                 $_SESSION['error_message'] = __('Impossibile acquisire il lock. Riprova tra qualche secondo.');
-                return $response->withHeader('Location', url('/admin/libri/modifica/' . $id))->withStatus(302);
+                return $response->withHeader('Location', url('/admin/books/edit/' . $id))->withStatus(302);
             }
         }
 
@@ -1789,7 +1789,7 @@ class LibriController
             // Set a success message in the session
             $_SESSION['success_message'] = __('Libro aggiornato con successo!');
 
-            return $response->withHeader('Location', url('/admin/libri/' . $id))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/books/' . $id))->withStatus(302);
 
         } finally {
             // Release advisory lock
@@ -2192,16 +2192,16 @@ class LibriController
 
         if ($prestitiCount > 0 || $prenotazioniCount > 0) {
             $_SESSION['error_message'] = __('Impossibile eliminare il libro: ci sono prestiti o prenotazioni attive. Termina prima i prestiti/prenotazioni.');
-            return $response->withHeader('Location', url('/admin/libri/' . $id))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/books/' . $id))->withStatus(302);
         }
 
         $repo = new \App\Models\BookRepository($db);
         $deleted = $repo->delete($id);
         if (!$deleted) {
             $_SESSION['error_message'] = __('Errore durante l\'eliminazione del libro. Riprova.');
-            return $response->withHeader('Location', url('/admin/libri/' . $id))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/books/' . $id))->withStatus(302);
         }
-        return $response->withHeader('Location', url('/admin/libri'))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/books'))->withStatus(302);
     }
 
     /**

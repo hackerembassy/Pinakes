@@ -45,7 +45,7 @@ class CollocazioneController
         $ordine = (int) ($data['ordine'] ?? 0);
         if ($codice === '') {
             $_SESSION['error_message'] = __('Codice scaffale obbligatorio');
-            return $response->withHeader('Location', url('/admin/collocazione'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/placement'))->withStatus(302);
         }
         try {
             (new \App\Models\CollocationRepository($db))->createScaffale(['codice' => $codice, 'nome' => $nome, 'ordine' => $ordine]);
@@ -65,7 +65,7 @@ class CollocazioneController
             $_SESSION['error_message'] = __('Impossibile creare lo scaffale. Riprova più tardi.');
             \App\Support\SecureLogger::error("Scaffale creation failed: " . $e->getMessage());
         }
-        return $response->withHeader('Location', url('/admin/collocazione'))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/placement'))->withStatus(302);
     }
 
     public function createMensola(Request $request, Response $response, mysqli $db): Response
@@ -78,7 +78,7 @@ class CollocazioneController
         $genera_n = max(0, (int) ($data['genera_posizioni'] ?? 0));
         if ($scaffale_id <= 0) {
             $_SESSION['error_message'] = __('Scaffale obbligatorio');
-            return $response->withHeader('Location', url('/admin/collocazione'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/placement'))->withStatus(302);
         }
         try {
             $repo = new \App\Models\CollocationRepository($db);
@@ -101,7 +101,7 @@ class CollocazioneController
             $_SESSION['error_message'] = __('Impossibile creare la mensola. Riprova più tardi.');
             \App\Support\SecureLogger::error("Mensola creation failed: " . $e->getMessage());
         }
-        return $response->withHeader('Location', url('/admin/collocazione'))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/placement'))->withStatus(302);
     }
 
     public function deleteScaffale(Request $request, Response $response, mysqli $db, int $id): Response
@@ -116,7 +116,7 @@ class CollocazioneController
 
         if ((int) $row['cnt'] > 0) {
             $_SESSION['error_message'] = __('Impossibile eliminare: lo scaffale contiene mensole');
-            return $response->withHeader('Location', url('/admin/collocazione'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/placement'))->withStatus(302);
         }
 
         // Check if scaffale has books (excluding soft-deleted)
@@ -128,7 +128,7 @@ class CollocazioneController
 
         if ((int) $row['cnt'] > 0) {
             $_SESSION['error_message'] = __('Impossibile eliminare: lo scaffale contiene libri');
-            return $response->withHeader('Location', url('/admin/collocazione'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/placement'))->withStatus(302);
         }
 
         // Delete scaffale
@@ -137,7 +137,7 @@ class CollocazioneController
         $stmt->execute();
 
         $_SESSION['success_message'] = __('Scaffale eliminato');
-        return $response->withHeader('Location', url('/admin/collocazione'))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/placement'))->withStatus(302);
     }
 
     public function deleteMensola(Request $request, Response $response, mysqli $db, int $id): Response
@@ -152,7 +152,7 @@ class CollocazioneController
 
         if ((int) $row['cnt'] > 0) {
             $_SESSION['error_message'] = __('Impossibile eliminare: la mensola contiene libri');
-            return $response->withHeader('Location', url('/admin/collocazione'))->withStatus(302);
+            return $response->withHeader('Location', url('/admin/placement'))->withStatus(302);
         }
 
         // Delete mensola
@@ -161,7 +161,7 @@ class CollocazioneController
         $stmt->execute();
 
         $_SESSION['success_message'] = __('Mensola eliminata');
-        return $response->withHeader('Location', url('/admin/collocazione'))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/placement'))->withStatus(302);
     }
 
     public function sort(Request $request, Response $response, mysqli $db): Response

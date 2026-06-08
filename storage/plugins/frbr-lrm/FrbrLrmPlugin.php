@@ -127,7 +127,7 @@ class FrbrLrmPlugin
         })->add($csrfMiddleware)->add($adminMiddleware);
 
         // ── Admin: attach a book to an opera (from the book edit form) ──
-        $app->post('/admin/libri/{id:[0-9]+}/attach-opera', function (ServerRequestInterface $req, ResponseInterface $res, array $args) use ($plugin): ResponseInterface {
+        $app->post('/admin/books/{id:[0-9]+}/attach-opera', function (ServerRequestInterface $req, ResponseInterface $res, array $args) use ($plugin): ResponseInterface {
             return $plugin->attachBookToOperaAction($req, $res, (int) $args['id']);
         })->add($csrfMiddleware)->add($adminMiddleware);
 
@@ -436,7 +436,7 @@ class FrbrLrmPlugin
         $stmt->bind_param('ii', $operaId, $libroId);
         $stmt->execute();
         $stmt->close();
-        return $this->redirect($response, '/admin/libri/' . $libroId);
+        return $this->redirect($response, '/admin/books/' . $libroId);
     }
 
     /** Opera autocomplete JSON for the attach UI. */

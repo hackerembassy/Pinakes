@@ -25,7 +25,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     <ol class="flex items-center space-x-2 text-sm">
       <li><a href="<?= htmlspecialchars(url('/admin/dashboard'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors"><i class="fas fa-home mr-1"></i>Home</a></li>
       <li><i class="fas fa-chevron-right text-gray-400 text-xs"></i></li>
-      <li><a href="<?= htmlspecialchars(url('/admin/collane'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors"><?= __("Collane") ?></a></li>
+      <li><a href="<?= htmlspecialchars(url('/admin/series'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors"><?= __("Collane") ?></a></li>
       <li><i class="fas fa-chevron-right text-gray-400 text-xs"></i></li>
       <li class="text-gray-900 font-medium"><?= HtmlHelper::e($collana) ?></li>
     </ol>
@@ -55,7 +55,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
   <!-- Description and series hierarchy -->
   <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow">
     <h3 class="text-sm font-medium text-gray-700 mb-3"><i class="fas fa-sitemap text-gray-400 mr-1"></i> <?= __("Metadati serie") ?></h3>
-    <form method="post" action="<?= htmlspecialchars(url('/admin/collane/descrizione'), ENT_QUOTES, 'UTF-8') ?>">
+    <form method="post" action="<?= htmlspecialchars(url('/admin/series/description'), ENT_QUOTES, 'UTF-8') ?>">
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
       <input type="hidden" name="nome" value="<?= HtmlHelper::e($collana) ?>">
       <?php if (!empty($supportsHierarchy)): ?>
@@ -122,7 +122,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     </div>
     <div class="divide-y divide-gray-200">
       <?php foreach ($relatedParents as $related): ?>
-      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/collane/dettaglio?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
+      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/series/detail?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
         <span class="font-medium text-gray-900"><?= HtmlHelper::e($related['nome']) ?></span>
         <span class="text-sm text-gray-500">(<?= (int) $related['book_count'] ?> <?= __("libri") ?>)</span>
       </a>
@@ -138,7 +138,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     </div>
     <div class="divide-y divide-gray-200">
       <?php foreach ($relatedSiblings as $related): ?>
-      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/collane/dettaglio?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
+      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/series/detail?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
         <span class="font-medium text-gray-900"><?= HtmlHelper::e($related['nome']) ?></span>
         <span class="text-sm text-gray-500">
           <?php if (!empty($related['ciclo'])): ?>
@@ -162,7 +162,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     </div>
     <div class="divide-y divide-gray-200">
       <?php foreach ($relatedChildren as $related): ?>
-      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/collane/dettaglio?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
+      <a class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" href="<?= htmlspecialchars(url('/admin/series/detail?nome=' . urlencode($related['nome'])), ENT_QUOTES, 'UTF-8') ?>">
         <span class="font-medium text-gray-900"><?= HtmlHelper::e($related['nome']) ?></span>
         <span class="text-sm text-gray-500">(<?= (int) $related['book_count'] ?> <?= __("libri") ?>)</span>
       </a>
@@ -189,12 +189,12 @@ if ($seriesType === '') { $seriesType = 'serie'; }
         <tr class="hover:bg-gray-50">
           <td class="px-4 py-3 text-sm font-medium text-gray-900"><?= HtmlHelper::e($b['numero_serie'] ?? '') ?></td>
           <td class="px-4 py-3 text-sm">
-            <a href="<?= htmlspecialchars(url('/admin/libri/' . (int)$b['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-gray-700 font-medium"><?= HtmlHelper::e($b['titolo']) ?></a>
+            <a href="<?= htmlspecialchars(url('/admin/books/' . (int)$b['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-gray-700 font-medium"><?= HtmlHelper::e($b['titolo']) ?></a>
           </td>
           <td class="px-4 py-3 text-sm text-gray-600"><?= HtmlHelper::e($b['autore'] ?? '') ?></td>
           <td class="px-4 py-3 text-sm text-gray-500"><?= HtmlHelper::e(($b['isbn13'] ?? '') ?: ($b['isbn10'] ?? '')) ?></td>
           <td class="px-4 py-3 text-right text-sm">
-            <form method="post" action="<?= htmlspecialchars(url('/admin/collane/rimuovi-libro'), ENT_QUOTES, 'UTF-8') ?>" onsubmit='return confirm(<?= json_encode(__("Rimuovere questo libro dalla serie?"), JSON_HEX_TAG | JSON_HEX_APOS) ?>)'>
+            <form method="post" action="<?= htmlspecialchars(url('/admin/series/remove-book'), ENT_QUOTES, 'UTF-8') ?>" data-swal-confirm="<?= htmlspecialchars(__('Rimuovere questo libro dalla serie?'), ENT_QUOTES, 'UTF-8') ?>" data-swal-confirm-kind="action">
               <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
               <input type="hidden" name="book_id" value="<?= (int) $b['id'] ?>">
               <input type="hidden" name="collana" value="<?= HtmlHelper::e($collana) ?>">
@@ -214,7 +214,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     <!-- Rename -->
     <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow">
       <h3 class="text-sm font-medium text-gray-700 mb-3"><i class="fas fa-pen text-gray-400 mr-1"></i> <?= __("Rinomina collana") ?></h3>
-      <form method="post" action="<?= htmlspecialchars(url('/admin/collane/rinomina'), ENT_QUOTES, 'UTF-8') ?>">
+      <form method="post" action="<?= htmlspecialchars(url('/admin/series/rename'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="old_name" value="<?= HtmlHelper::e($collana) ?>">
         <input type="text" name="new_name" value="<?= HtmlHelper::e($collana) ?>" class="mt-1 block w-full rounded-lg border border-gray-300 px-4 py-2 mb-3" required>
@@ -227,7 +227,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     <!-- Merge -->
     <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow">
       <h3 class="text-sm font-medium text-gray-700 mb-3"><i class="fas fa-compress-arrows-alt text-gray-400 mr-1"></i> <?= __("Unisci con altra collana") ?></h3>
-      <form method="post" action="<?= htmlspecialchars(url('/admin/collane/unisci'), ENT_QUOTES, 'UTF-8') ?>" onsubmit='return confirm(<?= json_encode(__("Sei sicuro? Tutti i libri verranno spostati nella collana di destinazione."), JSON_HEX_TAG | JSON_HEX_APOS) ?>)'>
+      <form method="post" action="<?= htmlspecialchars(url('/admin/series/merge'), ENT_QUOTES, 'UTF-8') ?>" data-swal-confirm="<?= htmlspecialchars(__('Sei sicuro? Tutti i libri verranno spostati nella collana di destinazione.'), ENT_QUOTES, 'UTF-8') ?>" data-swal-confirm-kind="action">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="source" value="<?= HtmlHelper::e($collana) ?>">
         <div class="relative">
@@ -245,7 +245,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow md:col-span-2">
       <h3 class="text-sm font-medium text-gray-700 mb-1"><i class="fas fa-book-open text-gray-400 mr-1"></i> <?= __("Crea opera multi-volume") ?></h3>
       <p class="text-xs text-gray-500 mb-3"><?= __("Crea un libro padre che raccoglie tutti i volumi di questa collana.") ?></p>
-      <form method="post" action="<?= htmlspecialchars(url('/admin/collane/crea-opera'), ENT_QUOTES, 'UTF-8') ?>">
+      <form method="post" action="<?= htmlspecialchars(url('/admin/series/create-opera'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="collana" value="<?= HtmlHelper::e($collana) ?>">
         <div class="flex gap-2">
@@ -262,7 +262,7 @@ if ($seriesType === '') { $seriesType = 'serie'; }
     <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow md:col-span-2">
       <h3 class="text-sm font-medium text-red-700 mb-1"><i class="fas fa-trash text-red-400 mr-1"></i> <?= __("Elimina collana") ?></h3>
       <p class="text-xs text-gray-500 mb-3"><?= __("Rimuove la collana da tutti i libri. I libri non verranno eliminati.") ?></p>
-      <form method="post" action="<?= htmlspecialchars(url('/admin/collane/elimina'), ENT_QUOTES, 'UTF-8') ?>" onsubmit='return confirm(<?= json_encode(__("Sei sicuro? La collana verrà rimossa da tutti i libri."), JSON_HEX_TAG | JSON_HEX_APOS) ?>)'>
+      <form method="post" action="<?= htmlspecialchars(url('/admin/series/delete'), ENT_QUOTES, 'UTF-8') ?>" data-swal-confirm="<?= htmlspecialchars(__('Sei sicuro? La collana verrà rimossa da tutti i libri.'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="nome" value="<?= HtmlHelper::e($collana) ?>">
         <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium text-sm">

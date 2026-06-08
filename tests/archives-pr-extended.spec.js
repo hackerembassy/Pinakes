@@ -498,10 +498,13 @@ test.describe.serial('Archives PR extended — v0.7.4 (35 tests)', () => {
             test.skip(true, 'No remove-asset form on page');
             return;
         }
-        page.once('dialog', dialog => dialog.accept());
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-            removeForm.locator('button[type="submit"]').click(),
+            (async () => {
+                await removeForm.locator('button[type="submit"]').click();
+                await page.waitForSelector('.swal2-popup', { timeout: 8000 });
+                await page.locator('.swal2-confirm').click();
+            })(),
         ]);
 
         const pathAfter = dbQuery(

@@ -95,7 +95,7 @@ class AutoriController
             'biografia' => $biografia,
             'sito_web' => $sitoWeb,
         ]);
-        return $response->withHeader('Location', url('/admin/autori'))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/authors'))->withStatus(302);
     }
 
     public function editForm(Request $request, Response $response, mysqli $db, int $id): Response
@@ -145,7 +145,7 @@ class AutoriController
             'biografia' => $biografia,
             'sito_web' => $sitoWeb,
         ]);
-        return $response->withHeader('Location', url('/admin/autori'))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/authors'))->withStatus(302);
     }
     public function delete(Request $request, Response $response, mysqli $db, int $id): Response
     {
@@ -157,7 +157,7 @@ class AutoriController
             }
             $_SESSION['error_message'] = __('Impossibile eliminare l\'autore: sono presenti libri associati.');
             $referer = $request->getHeaderLine('Referer');
-            $target = str_contains($referer, '/admin/autori') ? $referer : '/admin/autori';
+            $target = str_contains($referer, '/admin/authors') ? $referer : '/admin/authors';
             return $response->withHeader('Location', $target)->withStatus(302);
         }
 
@@ -166,6 +166,6 @@ class AutoriController
             session_start();
         }
         $_SESSION['success_message'] = __('Autore eliminato con successo.');
-        return $response->withHeader('Location', url('/admin/autori'))->withStatus(302);
+        return $response->withHeader('Location', url('/admin/authors'))->withStatus(302);
     }
 }

@@ -45,7 +45,7 @@ function getStatusBadge($status) {
           <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
         </li>
         <li class="text-gray-900 font-medium">
-          <a href="<?= htmlspecialchars(url('/admin/prestiti'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-gray-900">
+          <a href="<?= htmlspecialchars(url('/admin/loans'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-gray-900">
             <i class="fas fa-handshake mr-1"></i><?= __("Prestiti") ?>
           </a>
         </li>
@@ -72,7 +72,7 @@ function getStatusBadge($status) {
           <i class="fas fa-check-circle"></i>
           <span><?= __("Prestito creato con successo!") ?></span>
           <?php if($pdfIdForDownload > 0): ?>
-            <a href="<?= htmlspecialchars(url('/admin/prestiti/' . $pdfIdForDownload . '/pdf'), ENT_QUOTES, 'UTF-8') ?>" class="ml-auto inline-flex items-center px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg transition-colors">
+            <a href="<?= htmlspecialchars(url('/admin/loans/' . $pdfIdForDownload . '/pdf'), ENT_QUOTES, 'UTF-8') ?>" class="ml-auto inline-flex items-center px-3 py-1 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg transition-colors">
               <i class="fas fa-file-pdf mr-1"></i><?= __("Scarica PDF") ?>
             </a>
           <?php endif; ?>
@@ -93,11 +93,11 @@ function getStatusBadge($status) {
       if (pdfId > 0) {
         var iframe = document.createElement('iframe');
         iframe.style.display = 'none';
-        iframe.src = window.BASE_PATH + '/admin/prestiti/' + pdfId + '/pdf';
+        iframe.src = window.BASE_PATH + '/admin/loans/' + pdfId + '/pdf';
         document.body.appendChild(iframe);
         // Clean up URL params after download triggers
         if (window.history && window.history.replaceState) {
-          window.history.replaceState({}, '', window.BASE_PATH + '/admin/prestiti');
+          window.history.replaceState({}, '', window.BASE_PATH + '/admin/loans');
         }
       }
     })();
@@ -119,7 +119,7 @@ function getStatusBadge($status) {
             <i class="fas fa-file-csv mr-2"></i>
             <?= __("Esporta CSV") ?>
           </button>
-          <a href="<?= htmlspecialchars(url('/admin/prestiti/crea'), ENT_QUOTES, 'UTF-8') ?>" class="hidden md:inline-flex btn-primary items-center">
+          <a href="<?= htmlspecialchars(url('/admin/loans/create'), ENT_QUOTES, 'UTF-8') ?>" class="hidden md:inline-flex btn-primary items-center">
             <i class="fas fa-plus mr-2"></i>
             <?= __("Nuovo Prestito") ?>
           </a>
@@ -128,7 +128,7 @@ function getStatusBadge($status) {
       <div class="flex md:hidden mb-3 gap-2">
         <button type="button" onclick="showExportDialog()" class="flex-1 btn-secondary inline-flex items-center justify-center">
           <i class="fas fa-file-csv mr-2"></i><?= __("CSV") ?></button>
-        <a href="<?= htmlspecialchars(url('/admin/prestiti/crea'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1 btn-primary inline-flex items-center justify-center">
+        <a href="<?= htmlspecialchars(url('/admin/loans/create'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1 btn-primary inline-flex items-center justify-center">
           <i class="fas fa-plus mr-2"></i><?= __("Nuovo Prestito") ?></a>
       </div>
     </div>
@@ -203,7 +203,7 @@ function getStatusBadge($status) {
         </h2>
       </div>
       <div class="card-body" id="filters-container">
-        <form method="get" action="<?= htmlspecialchars(url('/admin/prestiti'), ENT_QUOTES, 'UTF-8') ?>">
+        <form method="get" action="<?= htmlspecialchars(url('/admin/loans'), ENT_QUOTES, 'UTF-8') ?>">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <div>
                 <label class="form-label"><?= __("Cerca Utente") ?></label>
@@ -224,7 +224,7 @@ function getStatusBadge($status) {
             </div>
 
             <div class="flex justify-between items-center pt-4 border-t border-gray-200">
-              <a href="<?= htmlspecialchars(url('/admin/prestiti'), ENT_QUOTES, 'UTF-8') ?>" class="text-sm text-gray-600 hover:text-gray-800">
+              <a href="<?= htmlspecialchars(url('/admin/loans'), ENT_QUOTES, 'UTF-8') ?>" class="text-sm text-gray-600 hover:text-gray-800">
                 <i class="fas fa-times mr-2"></i>
                 <?= __("Cancella filtri") ?>
               </a>
@@ -296,7 +296,7 @@ function getStatusBadge($status) {
                                     <?php echo getStatusBadge($prestito['stato']); ?>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-center">
-                                    <a href="<?= htmlspecialchars(url('/admin/prestiti/' . (int)$prestito['id'] . '/pdf'), ENT_QUOTES, 'UTF-8') ?>"
+                                    <a href="<?= htmlspecialchars(url('/admin/loans/' . (int)$prestito['id'] . '/pdf'), ENT_QUOTES, 'UTF-8') ?>"
                                        class="inline-flex items-center px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg transition-colors"
                                        title="<?= __('Scarica PDF') ?>">
                                         <i class="fas fa-file-pdf mr-2"></i>
@@ -305,11 +305,11 @@ function getStatusBadge($status) {
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-right">
                                     <div class="flex items-center justify-end space-x-2">
-                                        <a href="<?= htmlspecialchars(url('/admin/prestiti/dettagli/' . (int)$prestito['id']), ENT_QUOTES, 'UTF-8') ?>" class="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" title="<?= __("Dettagli") ?>">
+                                        <a href="<?= htmlspecialchars(url('/admin/loans/details/' . (int)$prestito['id']), ENT_QUOTES, 'UTF-8') ?>" class="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" title="<?= __("Dettagli") ?>">
                                             <i class="fas fa-eye w-4 h-4"></i>
                                         </a>
                                         <?php if ($prestito['attivo']): ?>
-                                            <a href="<?= htmlspecialchars(url('/admin/prestiti/restituito/' . (int)$prestito['id']), ENT_QUOTES, 'UTF-8') ?>" class="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors" title="<?= __("Registra Restituzione") ?>">
+                                            <a href="<?= htmlspecialchars(url('/admin/loans/returned/' . (int)$prestito['id']), ENT_QUOTES, 'UTF-8') ?>" class="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors" title="<?= __("Registra Restituzione") ?>">
                                                 <i class="fas fa-undo-alt w-4 h-4"></i>
                                             </a>
                                         <?php endif; ?>
@@ -429,7 +429,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 className: 'text-center',
                 orderable: false,
                 render: function(data, type, row) {
-                    return `<a href="${window.BASE_PATH}/admin/prestiti/${parseInt(row.id, 10)}/pdf" class="inline-flex items-center px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg transition-colors" title="${window.__('Scarica PDF')}"><i class="fas fa-file-pdf mr-2"></i>${window.__('PDF')}</a>`;
+                    return `<a href="${window.BASE_PATH}/admin/loans/${parseInt(row.id, 10)}/pdf" class="inline-flex items-center px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm rounded-lg transition-colors" title="${window.__('Scarica PDF')}"><i class="fas fa-file-pdf mr-2"></i>${window.__('PDF')}</a>`;
                 }
             },
             {
@@ -439,7 +439,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 render: function(data, type, row) {
                     const safeId = parseInt(row.id, 10);
                     let actions = `<div class="flex items-center justify-end space-x-2">
-                        <a href="${window.BASE_PATH}/admin/prestiti/dettagli/${safeId}" class="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" title="<?= __("Dettagli") ?>">
+                        <a href="${window.BASE_PATH}/admin/loans/details/${safeId}" class="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition-colors" title="<?= __("Dettagli") ?>">
                             <i class="fas fa-eye w-4 h-4"></i>
                         </a>`;
                     // Show "Conferma Ritiro" button for da_ritirare OR prenotato with today's date
@@ -456,7 +456,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </button>`;
                     }
                     if (row.attivo === 1 && row.stato === 'in_corso') {
-                        actions += `<a href="${window.BASE_PATH}/admin/prestiti/restituito/${safeId}" class="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors" title="${window.__('Registra Restituzione')}">
+                        actions += `<a href="${window.BASE_PATH}/admin/loans/returned/${safeId}" class="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors" title="${window.__('Registra Restituzione')}">
                             <i class="fas fa-undo-alt w-4 h-4"></i>
                         </a>`;
                     }
@@ -663,7 +663,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }).then((result) => {
             if (result.isConfirmed) {
                 const statuses = result.value;
-                const url = window.BASE_PATH + '/admin/prestiti/export-csv?stati=' + encodeURIComponent(statuses.join(','));
+                const url = window.BASE_PATH + '/admin/loans/export-csv?stati=' + encodeURIComponent(statuses.join(','));
                 window.location.href = url;
             }
         });

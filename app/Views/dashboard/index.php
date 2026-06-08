@@ -476,7 +476,7 @@ $isCatalogueMode = ConfigStore::isCatalogueMode();
         </div>
         <div class="flex items-center gap-3">
           <span class="bg-red-500 text-white text-sm font-bold px-3 py-1 rounded-full"><?= count($overdue) ?></span>
-          <a href="<?= htmlspecialchars(url('/admin/prestiti'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors duration-200 whitespace-nowrap font-medium">
+          <a href="<?= htmlspecialchars(url('/admin/loans'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors duration-200 whitespace-nowrap font-medium">
             <i class="fas fa-external-link-alt mr-1"></i>
             <?= __("Gestisci") ?>
           </a>
@@ -534,7 +534,7 @@ $isCatalogueMode = ConfigStore::isCatalogueMode();
         </div>
         <div class="flex items-center gap-3">
           <span class="bg-purple-500 text-white text-sm font-bold px-3 py-1 rounded-full"><?= count($reservations) ?></span>
-          <a href="<?= htmlspecialchars(url('/admin/prenotazioni'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 text-sm bg-purple-600 text-white hover:bg-purple-700 rounded-lg transition-colors duration-200 whitespace-nowrap font-medium">
+          <a href="<?= htmlspecialchars(url('/admin/reservations'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 text-sm bg-purple-600 text-white hover:bg-purple-700 rounded-lg transition-colors duration-200 whitespace-nowrap font-medium">
             <i class="fas fa-external-link-alt mr-1"></i>
             <?= __("Gestisci tutte") ?>
           </a>
@@ -618,7 +618,7 @@ $isCatalogueMode = ConfigStore::isCatalogueMode();
         </div>
         <div class="flex items-center gap-3">
           <span class="bg-green-500 text-white text-sm font-bold px-3 py-1 rounded-full"><?= count($active) ?></span>
-          <a href="<?= htmlspecialchars(url('/admin/prestiti'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 text-sm bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors duration-200 whitespace-nowrap font-medium">
+          <a href="<?= htmlspecialchars(url('/admin/loans'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 text-sm bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors duration-200 whitespace-nowrap font-medium">
             <i class="fas fa-eye mr-1"></i>
             <?= __("Vedi tutti") ?>
           </a>
@@ -640,7 +640,7 @@ $isCatalogueMode = ConfigStore::isCatalogueMode();
               <?php foreach ($active as $p): ?>
                 <tr class="hover:bg-gray-50">
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    <a href="<?= htmlspecialchars(url('/admin/libri/' . (int)($p['libro_id'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>" class="hover:text-blue-600 hover:underline transition-colors">
+                    <a href="<?= htmlspecialchars(url('/admin/books/' . (int)($p['libro_id'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>" class="hover:text-blue-600 hover:underline transition-colors">
                       <?php echo App\Support\HtmlHelper::e($p['titolo'] ?? ''); ?>
                     </a>
                   </td>
@@ -694,7 +694,7 @@ $isCatalogueMode = ConfigStore::isCatalogueMode();
             <p class="text-sm text-gray-500"><?= __("Aggiunti di recente al catalogo") ?></p>
           </div>
         </div>
-        <a href="<?= htmlspecialchars(url('/admin/libri'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors duration-200 font-medium">
+        <a href="<?= htmlspecialchars(url('/admin/books'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors duration-200 font-medium">
           <i class="fas fa-eye mr-1"></i>
           <?= __("Vedi tutti") ?>
         </a>
@@ -708,7 +708,7 @@ $isCatalogueMode = ConfigStore::isCatalogueMode();
         <?php else: ?>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <?php foreach ($lastBooks as $libro): ?>
-              <a href="<?= htmlspecialchars(url('/admin/libri/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>" class="group h-full">
+              <a href="<?= htmlspecialchars(url('/admin/books/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>" class="group h-full">
                 <div class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-200 h-full flex flex-col">
                   <?php $coverUrl = !empty($libro['copertina_url']) ? url($libro['copertina_url']) : url('/uploads/copertine/placeholder.jpg'); ?>
                   <img src="<?php echo htmlspecialchars($coverUrl, ENT_QUOTES, 'UTF-8'); ?>"

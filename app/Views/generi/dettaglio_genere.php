@@ -22,7 +22,7 @@ $genereName = $genere['nome'] ?? 'Genere';
           <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
         </li>
         <li>
-          <a href="<?= htmlspecialchars(url('/admin/generi'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors">
+          <a href="<?= htmlspecialchars(url('/admin/genres'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-500 hover:text-gray-700 transition-colors">
             <i class="fas fa-tags mr-1"></i>Generi
           </a>
         </li>
@@ -56,7 +56,7 @@ $genereName = $genere['nome'] ?? 'Genere';
         </div>
 
         <!-- Inline edit form (hidden by default) -->
-        <form id="edit-genre-form" method="post" action="<?= htmlspecialchars(url("/admin/generi/{$genereId}/modifica"), ENT_QUOTES, 'UTF-8') ?>" class="mt-4 hidden">
+        <form id="edit-genre-form" method="post" action="<?= htmlspecialchars(url("/admin/genres/{$genereId}/edit"), ENT_QUOTES, 'UTF-8') ?>" class="mt-4 hidden">
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
           <div class="space-y-3">
             <div>
@@ -104,7 +104,7 @@ $genereName = $genere['nome'] ?? 'Genere';
           <?php else: ?>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <?php foreach ($children as $c): ?>
-                <a href="<?= htmlspecialchars(url('/admin/generi/' . (int)$c['id']), ENT_QUOTES, 'UTF-8') ?>" class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition">
+                <a href="<?= htmlspecialchars(url('/admin/genres/' . (int)$c['id']), ENT_QUOTES, 'UTF-8') ?>" class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md transition">
                   <span class="text-sm font-medium text-gray-900 dark:text-gray-100"><?= HtmlHelper::e($c['nome']) ?></span>
                   <i class="fas fa-chevron-right text-gray-400"></i>
                 </a>
@@ -122,7 +122,7 @@ $genereName = $genere['nome'] ?? 'Genere';
             <?= __("Aggiungi Sottogenere") ?>
           </h2>
         </div>
-        <form method="post" action="<?= htmlspecialchars(url('/admin/generi/crea'), ENT_QUOTES, 'UTF-8') ?>" class="p-6 space-y-4">
+        <form method="post" action="<?= htmlspecialchars(url('/admin/genres/create'), ENT_QUOTES, 'UTF-8') ?>" class="p-6 space-y-4">
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
           <input type="hidden" name="parent_id" value="<?= $genereId ?>">
           <div>
@@ -143,7 +143,7 @@ $genereName = $genere['nome'] ?? 'Genere';
             <?= __("Unisci con altro genere") ?>
           </h2>
           <p class="text-sm text-gray-600 dark:text-gray-400 mb-4"><?= __("Sposta tutti i libri e sottogeneri di questo genere nel genere selezionato, poi elimina questo genere.") ?></p>
-          <form id="merge-genre-form" method="post" action="<?= htmlspecialchars(url("/admin/generi/{$genereId}/unisci"), ENT_QUOTES, 'UTF-8') ?>">
+          <form id="merge-genre-form" method="post" action="<?= htmlspecialchars(url("/admin/genres/{$genereId}/merge"), ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
             <div class="flex items-end gap-3">
               <div class="flex-1">
@@ -229,7 +229,7 @@ $genereName = $genere['nome'] ?? 'Genere';
             <?= __("Elimina genere") ?>
           </h2>
           <p class="text-sm text-gray-600 dark:text-gray-400 mb-4"><?= __("Questa azione elimina il genere in modo permanente. Possibile solo se non ha sottogeneri e non è usato da nessun libro.") ?></p>
-          <form method="post" action="<?= htmlspecialchars(url("/admin/generi/{$genereId}/elimina"), ENT_QUOTES, 'UTF-8') ?>"
+          <form method="post" action="<?= htmlspecialchars(url("/admin/genres/{$genereId}/delete"), ENT_QUOTES, 'UTF-8') ?>"
                 data-swal-confirm="<?= htmlspecialchars(__('Sei sicuro di voler eliminare questo genere?'), ENT_QUOTES, 'UTF-8') ?>"
                 data-swal-confirm-button="<?= htmlspecialchars(__('Elimina'), ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">

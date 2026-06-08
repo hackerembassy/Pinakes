@@ -292,7 +292,7 @@ class SearchController
                 'identifier' => $identifier,
                 'isbn' => $isbn,
                 'type' => 'book',
-                'url' => url('/admin/libri/' . (int)$row['id'])
+                'url' => url('/admin/books/' . (int)$row['id'])
             ];
         }
 
@@ -322,7 +322,7 @@ class SearchController
                 'id' => $row['id'],
                 'label' => HtmlHelper::decode($row['label']),
                 'type' => 'author',
-                'url' => url('/admin/autori/' . (int)$row['id'])
+                'url' => url('/admin/authors/' . (int)$row['id'])
             ];
         }
         
@@ -352,7 +352,7 @@ class SearchController
                 'id' => $row['id'],
                 'label' => HtmlHelper::decode($row['label']),
                 'type' => 'publisher',
-                'url' => url('/admin/editori/' . (int)$row['id'])
+                'url' => url('/admin/publishers/' . (int)$row['id'])
             ];
         }
         

@@ -157,7 +157,7 @@ class ReservationsAdminController
         $lookupResult = $lookupStmt->get_result()->fetch_assoc();
         $lookupStmt->close();
         if (!$lookupResult) {
-            return $response->withHeader('Location', url('/admin/prenotazioni') . '?error=not_found')->withStatus(302);
+            return $response->withHeader('Location', url('/admin/reservations') . '?error=not_found')->withStatus(302);
         }
 
         $libroId = (int) $lookupResult['libro_id'];
@@ -171,7 +171,7 @@ class ReservationsAdminController
             $lockStmt->close();
             if (!$bookExists) {
                 $db->rollback();
-                return $response->withHeader('Location', url('/admin/prenotazioni') . '?error=book_not_found')->withStatus(302);
+                return $response->withHeader('Location', url('/admin/reservations') . '?error=book_not_found')->withStatus(302);
             }
 
             $libroStmt = $db->prepare("SELECT libro_id, utente_id, stato FROM prenotazioni WHERE id = ? FOR UPDATE");
@@ -181,7 +181,7 @@ class ReservationsAdminController
             $libroStmt->close();
             if (!$libroResult || (int) $libroResult['libro_id'] !== $libroId) {
                 $db->rollback();
-                return $response->withHeader('Location', url('/admin/prenotazioni') . '?error=not_found')->withStatus(302);
+                return $response->withHeader('Location', url('/admin/reservations') . '?error=not_found')->withStatus(302);
             }
 
             $utenteId = (int) $libroResult['utente_id'];
@@ -200,7 +200,7 @@ class ReservationsAdminController
                 if ($dupReservationStmt->get_result()->fetch_assoc()) {
                     $dupReservationStmt->close();
                     $db->rollback();
-                    return $response->withHeader('Location', url('/admin/prenotazioni/modifica/' . $id) . '?error=duplicate')->withStatus(302);
+                    return $response->withHeader('Location', url('/admin/reservations/edit/' . $id) . '?error=duplicate')->withStatus(302);
                 }
                 $dupReservationStmt->close();
 
@@ -219,7 +219,7 @@ class ReservationsAdminController
                 if ($dupLoanStmt->get_result()->fetch_assoc()) {
                     $dupLoanStmt->close();
                     $db->rollback();
-                    return $response->withHeader('Location', url('/admin/prenotazioni/modifica/' . $id) . '?error=duplicate')->withStatus(302);
+                    return $response->withHeader('Location', url('/admin/reservations/edit/' . $id) . '?error=duplicate')->withStatus(302);
                 }
                 $dupLoanStmt->close();
             }
@@ -239,11 +239,11 @@ class ReservationsAdminController
             $integrity->recalculateBookAvailability($libroId, insideTransaction: true);
 
             $db->commit();
-            return $response->withHeader('Location', url('/admin/prenotazioni') . '?updated=1')->withStatus(302);
+            return $response->withHeader('Location', url('/admin/reservations') . '?updated=1')->withStatus(302);
 
         } catch (\Throwable $e) {
             $db->rollback();
-            return $response->withHeader('Location', url('/admin/prenotazioni/modifica/' . $id) . '?error=update_failed')->withStatus(302);
+            return $response->withHeader('Location', url('/admin/reservations/edit/' . $id) . '?error=update_failed')->withStatus(302);
         }
     }
 
@@ -302,7 +302,7 @@ class ReservationsAdminController
 
         // Validation
         if ($libroId <= 0 || $utenteId <= 0) {
-            return $response->withHeader('Location', url('/admin/prenotazioni/crea') . '?error=missing_data')->withStatus(302);
+            return $response->withHeader('Location', url('/admin/reservations/create') . '?error=missing_data')->withStatus(302);
         }
 
         // Validate date formats (reset to empty if invalid format)
@@ -367,7 +367,7 @@ class ReservationsAdminController
             $lockStmt->close();
             if (!$bookExists) {
                 $db->rollback();
-                return $response->withHeader('Location', url('/admin/prenotazioni/crea') . '?error=book_not_found')->withStatus(302);
+                return $response->withHeader('Location', url('/admin/reservations/create') . '?error=book_not_found')->withStatus(302);
             }
 
             $dupReservationStmt = $db->prepare("
@@ -382,7 +382,7 @@ class ReservationsAdminController
             if ($dupReservationStmt->get_result()->fetch_assoc()) {
                 $dupReservationStmt->close();
                 $db->rollback();
-                return $response->withHeader('Location', url('/admin/prenotazioni/crea') . '?error=duplicate')->withStatus(302);
+                return $response->withHeader('Location', url('/admin/reservations/create') . '?error=duplicate')->withStatus(302);
             }
             $dupReservationStmt->close();
 
@@ -401,7 +401,7 @@ class ReservationsAdminController
             if ($dupLoanStmt->get_result()->fetch_assoc()) {
                 $dupLoanStmt->close();
                 $db->rollback();
-                return $response->withHeader('Location', url('/admin/prenotazioni/crea') . '?error=duplicate')->withStatus(302);
+                return $response->withHeader('Location', url('/admin/reservations/create') . '?error=duplicate')->withStatus(302);
             }
             $dupLoanStmt->close();
 
@@ -423,11 +423,11 @@ class ReservationsAdminController
             $integrity->recalculateBookAvailability($libroId, insideTransaction: true);
 
             $db->commit();
-            return $response->withHeader('Location', url('/admin/prenotazioni') . '?created=1')->withStatus(302);
+            return $response->withHeader('Location', url('/admin/reservations') . '?created=1')->withStatus(302);
 
         } catch (\Throwable $e) {
             $db->rollback();
-            return $response->withHeader('Location', url('/admin/prenotazioni/crea') . '?error=save_failed')->withStatus(302);
+            return $response->withHeader('Location', url('/admin/reservations/create') . '?error=save_failed')->withStatus(302);
         }
     }
 

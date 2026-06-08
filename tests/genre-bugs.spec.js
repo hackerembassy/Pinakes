@@ -28,9 +28,9 @@ async function loginAsAdmin(page) {
  * Helper: handle save confirmation dialog if present.
  */
 async function handleConfirmDialog(page) {
-  const confirmBtn = page.locator('[role="dialog"] button, .modal button').last();
-  if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await confirmBtn.click();
+  const confirm = page.locator('.swal2-confirm');
+  if (await confirm.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await confirm.click();
   }
 }
 
@@ -48,7 +48,7 @@ test.describe('Issue #64: Genre Edit/Update', () => {
     expect(genres.length).toBeGreaterThan(0);
     const genre = genres[0];
 
-    await page.goto(`${BASE}/admin/generi/${genre.id}`);
+    await page.goto(`${BASE}/admin/genres/${genre.id}`);
 
     // Edit button should exist
     const editBtn = page.locator('#btn-edit-genre');
@@ -78,7 +78,7 @@ test.describe('Issue #64: Genre Edit/Update', () => {
     const childGenre = genres.find(g => g.parent_id !== null);
     expect(childGenre).toBeTruthy();
 
-    await page.goto(`${BASE}/admin/generi/${childGenre.id}`);
+    await page.goto(`${BASE}/admin/genres/${childGenre.id}`);
 
     const nameDisplay = page.locator('#genre-name-display');
     const originalName = (await nameDisplay.textContent())?.trim() || '';
@@ -92,7 +92,7 @@ test.describe('Issue #64: Genre Edit/Update', () => {
     await nameInput.fill(newName);
     await page.click('#edit-genre-form button[type="submit"]');
 
-    await page.waitForURL(/.*generi\/\d+.*/);
+    await page.waitForURL(/.*genres\/\d+.*/);
     await expect(page.locator('#genre-name-display')).toContainText('(test)');
 
     // Restore original name
@@ -100,7 +100,7 @@ test.describe('Issue #64: Genre Edit/Update', () => {
     await page.locator('#edit_nome').clear();
     await page.locator('#edit_nome').fill(originalName);
     await page.click('#edit-genre-form button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
+    await page.waitForURL(/.*genres\/\d+.*/);
     await expect(page.locator('#genre-name-display')).toContainText(originalName);
   });
 
@@ -122,9 +122,9 @@ test.describe('Issue #64: Genre Edit/Update', () => {
     const roots = await rootResp.json();
     const rootWithChildren = roots.find(g => g.children_count > 0);
     if (rootWithChildren) {
-      await page.goto(`${BASE}/admin/generi/${rootWithChildren.id}`);
+      await page.goto(`${BASE}/admin/genres/${rootWithChildren.id}`);
       // Delete button should NOT be visible for genres with children
-      const deleteForm = page.locator('form[action*="/elimina"]');
+      const deleteForm = page.locator('form[action*="/delete"]');
       await expect(deleteForm).toBeHidden();
     }
 
@@ -133,8 +133,8 @@ test.describe('Issue #64: Genre Edit/Update', () => {
     const allGenres = await allResp.json();
     const leafGenre = allGenres.find(g => g.children_count === 0);
     if (leafGenre) {
-      await page.goto(`${BASE}/admin/generi/${leafGenre.id}`);
-      const deleteForm = page.locator('form[action*="/elimina"]');
+      await page.goto(`${BASE}/admin/genres/${leafGenre.id}`);
+      const deleteForm = page.locator('form[action*="/delete"]');
       await expect(deleteForm).toBeVisible();
     }
   });
@@ -154,31 +154,31 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     const RUN = Date.now().toString(36);
 
     // Create root genre (L1)
-    await page.goto(`${BASE}/admin/generi/crea`);
+    await page.goto(`${BASE}/admin/genres/create`);
     await page.fill('input[name="nome"]', `CascRoot_${RUN}`);
     await page.click('button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const rootId = page.url().match(/generi\/(\d+)/)?.[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const rootId = page.url().match(/genres\/(\d+)/)?.[1];
     expect(rootId).toBeTruthy();
 
     // Create genre under root (L2)
-    await page.goto(`${BASE}/admin/generi/${rootId}`);
+    await page.goto(`${BASE}/admin/genres/${rootId}`);
     await page.fill('#nome_sottogenere', `CascGenre_${RUN}`);
     await page.click('form:has(input[name="parent_id"]) button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const genreId = page.url().match(/generi\/(\d+)/)?.[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const genreId = page.url().match(/genres\/(\d+)/)?.[1];
     expect(genreId).toBeTruthy();
 
     // Create subgenre under genre (L3)
-    await page.goto(`${BASE}/admin/generi/${genreId}`);
+    await page.goto(`${BASE}/admin/genres/${genreId}`);
     await page.fill('#nome_sottogenere', `CascSub_${RUN}`);
     await page.click('form:has(input[name="parent_id"]) button[type="submit"]');
-    await page.waitForURL(/.*generi\/\d+.*/);
-    const subId = page.url().match(/generi\/(\d+)/)?.[1];
+    await page.waitForURL(/.*genres\/\d+.*/);
+    const subId = page.url().match(/genres\/(\d+)/)?.[1];
     expect(subId).toBeTruthy();
 
     // ── Create book selecting all 3 levels ──
-    await page.goto(`${BASE}/admin/libri/crea`);
+    await page.goto(`${BASE}/admin/books/create`);
     await page.waitForSelector('#radice_select');
     await page.fill('input[name="titolo"]', `CascBook_${RUN}`);
 
@@ -208,13 +208,13 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     // Submit the form
     await page.click('button[type="submit"]');
     await handleConfirmDialog(page);
-    await page.waitForURL(/.*libri\/\d+.*/, { timeout: 30000 });
+    await page.waitForURL(/.*books\/\d+.*/, { timeout: 30000 });
 
-    const testBookId = page.url().match(/libri\/(\d+)/)?.[1];
+    const testBookId = page.url().match(/books\/(\d+)/)?.[1];
     expect(testBookId).toBeTruthy();
 
     // ── Edit: verify cascade pre-populates all 3 levels ──
-    await page.goto(`${BASE}/admin/libri/modifica/${testBookId}`);
+    await page.goto(`${BASE}/admin/books/edit/${testBookId}`);
     await page.waitForSelector('#radice_select');
 
     // Radice pre-selected
@@ -238,10 +238,10 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     // ── Re-save: verify genres persist after save without changes ──
     await page.click('button[type="submit"]');
     await handleConfirmDialog(page);
-    await page.waitForURL(/.*libri\/\d+.*/, { timeout: 30000 });
+    await page.waitForURL(/.*books\/\d+.*/, { timeout: 30000 });
 
     // Re-edit and verify all 3 levels survived
-    await page.goto(`${BASE}/admin/libri/modifica/${testBookId}`);
+    await page.goto(`${BASE}/admin/books/edit/${testBookId}`);
     await page.waitForSelector('#radice_select');
     await page.waitForFunction((rid) => {
       const sel = document.getElementById('radice_select');
@@ -253,18 +253,24 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     }, genreId, { timeout: 15000 });
 
     // ── Cleanup: delete book, then genres (leaf first) ──
-    await page.goto(`${BASE}/admin/libri/${testBookId}`);
+    await page.goto(`${BASE}/admin/books/${testBookId}`);
     const delBookForm = page.locator('form[action*="/delete"]');
     if (await delBookForm.isVisible({ timeout: 2000 }).catch(() => false)) {
       await delBookForm.locator('button[type="submit"]').click();
-      await page.waitForURL(/.*libri.*/, { timeout: 10000 });
+      // The admin book-detail delete is guarded by confirmDeleteBook() → SweetAlert
+      // (window.Swal is present), so the form does not submit until the modal is confirmed.
+      const swalConfirm = page.locator('.swal2-confirm');
+      if (await swalConfirm.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await swalConfirm.click();
+      }
+      await page.waitForURL(/.*books.*/, { timeout: 10000 });
     }
     for (const gid of [subId, genreId, rootId]) {
-      await page.goto(`${BASE}/admin/generi/${gid}`);
-      const df = page.locator('form[action*="/elimina"]');
+      await page.goto(`${BASE}/admin/genres/${gid}`);
+      const df = page.locator('form[action*="/delete"]');
       if (await df.isVisible({ timeout: 2000 }).catch(() => false)) {
         await df.locator('button[type="submit"]').click();
-        await page.waitForURL(/.*generi.*/, { timeout: 10000 });
+        await page.waitForURL(/.*genres.*/, { timeout: 10000 });
       }
     }
   });
@@ -273,8 +279,8 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     await loginAsAdmin(page);
 
     // Navigate to new book form, don't set genre, save
-    await page.goto(`${BASE}/admin/libri`);
-    const newBookLink = page.locator('a[href$="/libri/crea"], a[href$="/books/create"]').first();
+    await page.goto(`${BASE}/admin/books`);
+    const newBookLink = page.locator('a[href$="/books\/crea"], a[href$="/books/create"]').first();
     await expect(newBookLink).toBeVisible();
     await newBookLink.click();
     await page.waitForSelector('#radice_select');
@@ -283,15 +289,15 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
 
     await page.click('button[type="submit"]');
     await handleConfirmDialog(page);
-    await page.waitForURL(/.*libri\/\d+.*/, { timeout: 30000 });
+    await page.waitForURL(/.*books\/\d+.*/, { timeout: 30000 });
 
     const url = page.url();
-    const match = url.match(/libri\/(\d+)/);
+    const match = url.match(/books\/(\d+)/);
     const bookId = match ? match[1] : null;
     expect(bookId).toBeTruthy();
 
     // Edit this book — dropdowns should still load (just empty)
-    await page.goto(`${BASE}/admin/libri/modifica/${bookId}`);
+    await page.goto(`${BASE}/admin/books/edit/${bookId}`);
     await page.waitForSelector('#radice_select');
 
     // Radice should have options but value=0
@@ -308,7 +314,7 @@ test.describe('Issue #63: Genre Pre-population on Edit', () => {
     // include it as form data on the POST.
     const csrfToken = await page.locator('meta[name="csrf-token"]').getAttribute('content')
       ?? await page.locator('input[name="csrf_token"]').first().getAttribute('value');
-    const cleanupResp = await page.request.post(`${BASE}/admin/libri/delete/${bookId}`, {
+    const cleanupResp = await page.request.post(`${BASE}/admin/books/delete/${bookId}`, {
       form: { csrf_token: csrfToken ?? '' },
     });
     expect([200, 204, 302]).toContain(cleanupResp.status());
@@ -405,7 +411,7 @@ test.describe('Issue #67: Genre Filter in Book List', () => {
   test('genre autocomplete in admin book list works for subgenres', async ({ page }) => {
     await loginAsAdmin(page);
 
-    await page.goto(`${BASE}/admin/libri`);
+    await page.goto(`${BASE}/admin/books`);
     await page.waitForSelector('#filter_genere');
 
     // Get a child genre name from API (avoid hardcoding)
@@ -415,7 +421,8 @@ test.describe('Issue #67: Genre Filter in Book List', () => {
     expect(childGenre).toBeTruthy();
 
     const genreFilter = page.locator('#filter_genere');
-    await genreFilter.fill(childGenre.nome);
+    await genreFilter.fill('');
+    await genreFilter.pressSequentially(childGenre.nome, { delay: 50 });
 
     const suggestions = page.locator('#filter_genere_suggest');
     await expect(suggestions).toBeVisible({ timeout: 5000 });

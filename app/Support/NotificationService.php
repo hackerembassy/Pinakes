@@ -73,7 +73,7 @@ class NotificationService {
                 'email' => $user['email'],
                 'codice_tessera' => $user['codice_tessera'],
                 'data_registrazione' => $this->formatEmailDate($user['created_at'], true),
-                'admin_users_url' => absoluteUrl('/admin/utenti')
+                'admin_users_url' => absoluteUrl('/admin/users')
             ];
 
             // Send to admins
@@ -344,7 +344,7 @@ class NotificationService {
                 format_date($loan['data_prestito'], false, '/'),
                 format_date($loan['data_scadenza'], false, '/')
             );
-            $notificationLink = '/admin/prestiti';
+            $notificationLink = '/admin/loans';
 
             $this->createNotification(
                 'new_loan_request',
@@ -425,7 +425,7 @@ class NotificationService {
                         'general',
                         'Prestito in scadenza',
                         sprintf('"%s" prestato a %s scade fra %d giorni', $loan['libro_titolo'], $loan['utente_nome'], (int)$loan['giorni_rimasti']),
-                        '/admin/prestiti',
+                        '/admin/loans',
                         (int)$loan['id']
                     );
                     $sentCount++;
@@ -1472,7 +1472,7 @@ class NotificationService {
             'new_user',
             __('Nuova registrazione utente'),
             sprintf(__('Utente %s (%s) si è registrato'), $username, $email),
-            '/admin/utenti',
+            '/admin/users',
             $userId
         );
     }
@@ -1486,7 +1486,7 @@ class NotificationService {
             'new_reservation',
             __('Nuova prenotazione'),
             sprintf(__('%s ha prenotato "%s"'), $username, $bookTitle),
-            '/admin/prenotazioni',
+            '/admin/reservations',
             $reservationId
         );
     }
@@ -1500,7 +1500,7 @@ class NotificationService {
             'overdue_loan',
             __('Prestito in ritardo'),
             sprintf(__('"%s" prestato a %s è in ritardo di %d giorni'), $bookTitle, $username, $daysOverdue),
-            '/admin/prestiti',
+            '/admin/loans',
             $loanId
         );
     }
@@ -1536,7 +1536,7 @@ class NotificationService {
                 'titolo_recensione' => $review['titolo'] ?? '',
                 'descrizione_recensione' => $review['descrizione'] ?? '',
                 'data_recensione' => $this->formatEmailDate($review['created_at'], true),
-                'link_approvazione' => absoluteUrl('/admin/recensioni')
+                'link_approvazione' => absoluteUrl('/admin/reviews')
             ];
 
             // Send email to admins
@@ -1551,7 +1551,7 @@ class NotificationService {
                 $review['utente_nome'],
                 $stelle_text
             );
-            $notificationLink = '/admin/recensioni';
+            $notificationLink = '/admin/reviews';
 
             $this->createNotification(
                 'new_review',

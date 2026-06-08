@@ -180,7 +180,7 @@
           <div class="p-6">
 
             <!-- Add Form -->
-            <form method="post" action="<?= htmlspecialchars(url('/admin/collocazione/scaffali'), ENT_QUOTES, 'UTF-8') ?>" class="mb-6">
+            <form method="post" action="<?= htmlspecialchars(url('/admin/placement/shelving-units'), ENT_QUOTES, 'UTF-8') ?>" class="mb-6">
               <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(App\Support\Csrf::ensureToken(), ENT_QUOTES, 'UTF-8'); ?>">
               <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
@@ -221,7 +221,7 @@
                         </div>
                         <div class="flex items-center gap-2">
                           <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded"><?= __("Ordine:") ?> <span class="order-label"><?php echo isset($s['ordine']) ? (int)$s['ordine'] : 0; ?></span></span>
-                          <form method="post" action="<?= htmlspecialchars(url('/admin/collocazione/scaffali/' . (int)$s['id'] . '/delete'), ENT_QUOTES, 'UTF-8') ?>" class="inline"
+                          <form method="post" action="<?= htmlspecialchars(url('/admin/placement/shelving-units/' . (int)$s['id'] . '/delete'), ENT_QUOTES, 'UTF-8') ?>" class="inline"
                                 data-swal-confirm="<?= htmlspecialchars(__("Eliminare questo scaffale? (Solo se vuoto)"), ENT_QUOTES, 'UTF-8') ?>"
                                 data-swal-confirm-button="<?= htmlspecialchars(__('Elimina'), ENT_QUOTES, 'UTF-8') ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(App\Support\Csrf::ensureToken(), ENT_QUOTES, 'UTF-8'); ?>">
@@ -255,7 +255,7 @@
           <div class="p-6">
 
             <!-- Add Form -->
-            <form method="post" action="<?= htmlspecialchars(url('/admin/collocazione/mensole'), ENT_QUOTES, 'UTF-8') ?>" class="mb-6">
+            <form method="post" action="<?= htmlspecialchars(url('/admin/placement/shelves'), ENT_QUOTES, 'UTF-8') ?>" class="mb-6">
               <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(App\Support\Csrf::ensureToken(), ENT_QUOTES, 'UTF-8'); ?>">
               <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="md:col-span-2">
@@ -323,7 +323,7 @@
                       </div>
                       <div class="flex items-center gap-2">
                         <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded mensola-order-label"><?= __("Ordine:") ?> <span class="order-value"><?php echo (int)($m['ordine'] ?? 0); ?></span></span>
-                        <form method="post" action="<?= htmlspecialchars(url('/admin/collocazione/mensole/' . (int)$m['id'] . '/delete'), ENT_QUOTES, 'UTF-8') ?>" class="inline"
+                        <form method="post" action="<?= htmlspecialchars(url('/admin/placement/shelves/' . (int)$m['id'] . '/delete'), ENT_QUOTES, 'UTF-8') ?>" class="inline"
                               data-swal-confirm="<?= htmlspecialchars(__("Eliminare questa mensola? (Solo se vuota)"), ENT_QUOTES, 'UTF-8') ?>"
                               data-swal-confirm-button="<?= htmlspecialchars(__('Elimina'), ENT_QUOTES, 'UTF-8') ?>">
                           <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(App\Support\Csrf::ensureToken(), ENT_QUOTES, 'UTF-8'); ?>">
@@ -636,7 +636,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const bookId = parseInt(book.id, 10);
       // Validate book ID to prevent invalid URLs
       const editLink = Number.isFinite(bookId) && bookId > 0
-        ? `<a href="${window.BASE_PATH}/admin/libri/modifica/${bookId}" class="text-gray-600 hover:text-gray-900" title="${editLabel}"><i class="fas fa-edit"></i></a>`
+        ? `<a href="${window.BASE_PATH}/admin/books/edit/${bookId}" class="text-gray-600 hover:text-gray-900" title="${editLabel}"><i class="fas fa-edit"></i></a>`
         : `<span class="text-gray-400" title="${invalidIdLabel}"><i class="fas fa-edit"></i></span>`;
 
       return `

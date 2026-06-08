@@ -300,7 +300,7 @@ $id = (int) $row['id'];
                          alt="<?= $e((string) $row['constructed_title']) ?>"
                          class="max-w-xs rounded-md border border-gray-200 mb-3">
                     <form method="POST" action="<?= $e(url('/admin/archives/' . $id . '/remove-asset')) ?>"
-                          class="inline" onsubmit="return confirm('<?= $e(__("Rimuovere la copertina?")) ?>');">
+                          class="inline" data-swal-confirm="<?= $e(__("Rimuovere la copertina?")) ?>">
                         <input type="hidden" name="csrf_token" value="<?= $e(\App\Support\Csrf::ensureToken()) ?>">
                         <input type="hidden" name="type" value="cover">
                         <button type="submit" class="text-xs text-red-600 hover:underline">
@@ -350,7 +350,7 @@ $id = (int) $row['id'];
                                 <form method="POST"
                                       action="<?= $e(url('/admin/archives/' . $id . '/files/' . (int) $uf['id'] . '/delete')) ?>"
                                       class="inline flex-shrink-0"
-                                      onsubmit="return confirm(<?= $jsAttr(__("Rimuovere questo file?")) ?>);">
+                                      data-swal-confirm="<?= $e(__("Rimuovere questo file?")) ?>">
                                     <input type="hidden" name="csrf_token" value="<?= $e(\App\Support\Csrf::ensureToken()) ?>">
                                     <button type="submit" class="text-xs text-red-600 hover:underline">
                                         <?= __("Rimuovi") ?>

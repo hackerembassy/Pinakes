@@ -179,7 +179,7 @@
                              onerror="this.onerror=null;this.src=(window.BASE_PATH||'')+'/uploads/copertine/placeholder.jpg'">
                       <?php endif; ?>
                       <div>
-                        <a href="<?= htmlspecialchars(url('/admin/libri/' . (int)$book['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors">
+                        <a href="<?= htmlspecialchars(url('/admin/books/' . (int)$book['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors">
                           <?php echo App\Support\HtmlHelper::e($book['titolo']); ?>
                         </a>
                       </div>
@@ -247,7 +247,7 @@
                   </td>
                   <td class="px-6 py-4">
                     <div>
-                      <a href="<?= htmlspecialchars(url('/admin/utenti/' . (int)$reader['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors">
+                      <a href="<?= htmlspecialchars(url('/admin/users/' . (int)$reader['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors">
                         <?php echo App\Support\HtmlHelper::e($reader['nome'] . ' ' . $reader['cognome']); ?>
                       </a>
                       <div class="text-xs text-gray-500"><?php echo App\Support\HtmlHelper::e($reader['email']); ?></div>

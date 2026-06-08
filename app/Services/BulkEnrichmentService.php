@@ -420,7 +420,7 @@ class BulkEnrichmentService
                 // REG-1 (review): if we just populated a series name, sync the
                 // collane / libri_collane rows so admin views and detail-page
                 // hierarchy queries find the book. Pre-fix, bulk-enrich landed
-                // orphan series invisible to /admin/collane.
+                // orphan series invisible to /admin/series.
                 if (in_array('collana', $fieldsUpdated, true) && !empty($series)) {
                     (new \App\Models\SeriesRepository($this->db))->syncBookMemberships(
                         $bookId,

@@ -257,17 +257,17 @@ $expectedFields = $status['expected_fields'] ?? 24;
             <?php if ($installed): ?>
                 <div class="mt-6 pt-6 border-t border-gray-200">
                     <div class="flex gap-3">
-                        <a href="<?= htmlspecialchars(url('/admin/libri/import/librarything'), ENT_QUOTES, 'UTF-8') ?>"
+                        <a href="<?= htmlspecialchars(url('/admin/books/import/librarything'), ENT_QUOTES, 'UTF-8') ?>"
                            class="px-4 py-2 bg-gray-800 text-white hover:bg-black rounded-lg transition-colors inline-flex items-center text-sm">
                             <i class="fas fa-cloud-upload-alt mr-2"></i>
                             <?= __("Import da LibraryThing") ?>
                         </a>
-                        <a href="<?= htmlspecialchars(url('/admin/libri/export/librarything'), ENT_QUOTES, 'UTF-8') ?>"
+                        <a href="<?= htmlspecialchars(url('/admin/books/export/librarything'), ENT_QUOTES, 'UTF-8') ?>"
                            class="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors inline-flex items-center text-sm">
                             <i class="fas fa-cloud-download-alt mr-2"></i>
                             <?= __("Export per LibraryThing") ?>
                         </a>
-                        <a href="<?= htmlspecialchars(url('/admin/libri'), ENT_QUOTES, 'UTF-8') ?>"
+                        <a href="<?= htmlspecialchars(url('/admin/books'), ENT_QUOTES, 'UTF-8') ?>"
                            class="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded-lg transition-colors inline-flex items-center text-sm">
                             <i class="fas fa-book mr-2"></i>
                             <?= __("Gestione Libri") ?>

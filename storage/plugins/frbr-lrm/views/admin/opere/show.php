@@ -51,7 +51,7 @@
         <ul class="divide-y divide-gray-100">
           <?php foreach ($edizioni as $ed): ?>
             <li class="py-2 flex items-center justify-between">
-              <a href="<?= htmlspecialchars(url('/admin/libri/' . (int) $ed['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-primary">
+              <a href="<?= htmlspecialchars(url('/admin/books/' . (int) $ed['id']), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-primary">
                 <?= htmlspecialchars((string) $ed['titolo'], ENT_QUOTES, 'UTF-8') ?>
                 <?php if (!empty($ed['anno_pubblicazione'])): ?><span class="text-gray-400">(<?= (int) $ed['anno_pubblicazione'] ?>)</span><?php endif; ?>
               </a>
@@ -85,7 +85,7 @@
 
     <!-- Danger zone -->
     <form method="POST" action="<?= htmlspecialchars(url('/admin/opere/' . (int) $opera['id'] . '/delete'), ENT_QUOTES, 'UTF-8') ?>"
-          onsubmit="return confirm('<?= htmlspecialchars(__("Eliminare questa opera? Le edizioni collegate verranno scollegate ma NON eliminate."), ENT_QUOTES, 'UTF-8') ?>');">
+          data-swal-confirm="<?= htmlspecialchars(__("Eliminare questa opera? Le edizioni collegate verranno scollegate ma NON eliminate."), ENT_QUOTES, 'UTF-8') ?>">
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(\App\Support\Csrf::ensureToken(), ENT_QUOTES, 'UTF-8') ?>">
       <button type="submit" class="px-4 py-2 text-sm text-red-700 bg-red-50 hover:bg-red-100 rounded-lg">
         <i class="fas fa-trash mr-2"></i><?= __("Elimina Opera") ?>

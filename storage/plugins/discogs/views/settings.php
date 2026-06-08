@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_discogs_setting
 $currentSettings = $plugin->getSettings();
 $hasToken = !empty($currentSettings['api_token']);
 $csrfToken = \App\Support\Csrf::ensureToken();
-$pluginsRoute = htmlspecialchars(route_path('plugins'), ENT_QUOTES, 'UTF-8');
+$pluginsRoute = htmlspecialchars(url('/admin/plugins'), ENT_QUOTES, 'UTF-8');
 ?>
 
 <div class="max-w-4xl mx-auto py-6 px-4">

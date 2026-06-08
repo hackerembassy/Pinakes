@@ -13,7 +13,7 @@
           <i class="fas fa-chevron-right text-gray-400 text-xs"></i>
         </li>
         <li class="text-gray-900 font-medium">
-          <a href="<?= htmlspecialchars(url('/admin/utenti'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-gray-700">
+          <a href="<?= htmlspecialchars(url('/admin/users'), ENT_QUOTES, 'UTF-8') ?>" class="text-gray-900 hover:text-gray-700">
             <i class="fas fa-users mr-1"></i>Utenti
           </a>
         </li>
@@ -30,14 +30,14 @@
           <p class="text-gray-600"><?= __("Esplora e gestisci gli utenti registrati alla biblioteca") ?></p>
         </div>
         <div class="hidden md:flex items-center gap-3">
-          <a href="<?= htmlspecialchars(url('/admin/utenti/crea'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center">
+          <a href="<?= htmlspecialchars(url('/admin/users/create'), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center">
             <i class="fas fa-user-plus mr-2"></i>
             <?= __("Nuovo Utente") ?>
           </a>
         </div>
       </div>
       <div class="flex md:hidden mb-4">
-        <a href="<?= htmlspecialchars(url('/admin/utenti/crea'), ENT_QUOTES, 'UTF-8') ?>" class="w-full px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center justify-center">
+        <a href="<?= htmlspecialchars(url('/admin/users/create'), ENT_QUOTES, 'UTF-8') ?>" class="w-full px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center justify-center">
           <i class="fas fa-user-plus mr-2"></i>
           <?= __("Nuovo Utente") ?>
         </a>
@@ -86,7 +86,7 @@
                       <i class="fas fa-id-card mr-1"></i><?= \App\Support\HtmlHelper::e($user['codice_tessera'] ?? 'N/A') ?>
                     </p>
                   </div>
-                  <a href="<?= htmlspecialchars(url('/admin/utenti/dettagli/' . (int)$user['id']), ENT_QUOTES, 'UTF-8') ?>"
+                  <a href="<?= htmlspecialchars(url('/admin/users/details/' . (int)$user['id']), ENT_QUOTES, 'UTF-8') ?>"
                      class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                      title="<?= __("Visualizza dettagli") ?>">
                     <i class="fas fa-external-link-alt text-sm"></i>
@@ -114,14 +114,14 @@
               </div>
 
               <div class="mt-4 flex flex-col sm:flex-row gap-2">
-                <form method="POST" action="<?= htmlspecialchars(url('/admin/utenti/' . (int)$user['id'] . '/approve-and-send-activation'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1">
+                <form method="POST" action="<?= htmlspecialchars(url('/admin/users/' . (int)$user['id'] . '/approve-and-send-activation'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1">
                   <input type="hidden" name="csrf_token" value="<?= \App\Support\Csrf::ensureToken() ?>">
                   <button type="submit" class="w-full bg-gray-900 hover:bg-gray-700 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm inline-flex items-center justify-center gap-2">
                     <i class="fas fa-envelope"></i>
                     <span><?= __("Invia Email") ?></span>
                   </button>
                 </form>
-                <form method="POST" action="<?= htmlspecialchars(url('/admin/utenti/' . (int)$user['id'] . '/activate-directly'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1"
+                <form method="POST" action="<?= htmlspecialchars(url('/admin/users/' . (int)$user['id'] . '/activate-directly'), ENT_QUOTES, 'UTF-8') ?>" class="flex-1"
                       data-swal-confirm="<?= htmlspecialchars(__('Confermi di voler attivare direttamente questo utente?'), ENT_QUOTES, 'UTF-8') ?>"
                       data-swal-confirm-title="<?= htmlspecialchars(__('Conferma attivazione'), ENT_QUOTES, 'UTF-8') ?>"
                       data-swal-confirm-button="<?= htmlspecialchars(__('Attiva utente'), ENT_QUOTES, 'UTF-8') ?>"
@@ -353,7 +353,7 @@ document.addEventListener('DOMContentLoaded', function() {
           const userId = encodeURIComponent(String(row.id ?? ''));
 
           return `
-            <a href="${window.BASE_PATH || ''}/admin/utenti/dettagli/${userId}"
+            <a href="${window.BASE_PATH || ''}/admin/users/details/${userId}"
                class="block hover:bg-blue-50 -m-2 p-2 rounded transition-colors duration-200">
               <div class="font-semibold text-gray-900 text-base">
                 ${nomeCompleto}
@@ -432,12 +432,12 @@ document.addEventListener('DOMContentLoaded', function() {
           const id = encodeURIComponent(String(data ?? ''));
           return `
             <div class="flex items-center gap-1">
-              <a href="${window.BASE_PATH || ''}/admin/utenti/dettagli/${id}"
+              <a href="${window.BASE_PATH || ''}/admin/users/details/${id}"
                  class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-200"
                  title="${i18nViewDetails}">
                 <i class="fas fa-eye text-sm"></i>
               </a>
-              <a href="${window.BASE_PATH || ''}/admin/utenti/modifica/${id}"
+              <a href="${window.BASE_PATH || ''}/admin/users/edit/${id}"
                  class="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
                  title="${i18nEdit}">
                 <i class="fas fa-edit text-sm"></i>
@@ -567,7 +567,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }).then((result) => {
       if (!result.isConfirmed) return;
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      fetch(`${window.BASE_PATH || ''}/admin/utenti/delete/${userId}`, {
+      fetch(`${window.BASE_PATH || ''}/admin/users/delete/${userId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -657,7 +657,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       // Redirect to server-side export endpoint with filters
-      const url = (window.BASE_PATH || '') + '/admin/utenti/export/csv' + (params.toString() ? '?' + params.toString() : '');
+      const url = (window.BASE_PATH || '') + '/admin/users/export/csv' + (params.toString() ? '?' + params.toString() : '');
       window.location.href = url;
     });
 

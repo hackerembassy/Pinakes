@@ -143,7 +143,7 @@ $htmlLang = substr($currentLocale, 0, 2);
           <div class="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider"><?= __("Azioni Rapide") ?>
           </div>
           <div class="space-y-2 mt-3">
-            <a href="<?= htmlspecialchars(url('/admin/libri/crea'), ENT_QUOTES, 'UTF-8') ?>"
+            <a href="<?= htmlspecialchars(url('/admin/books/create'), ENT_QUOTES, 'UTF-8') ?>"
               class="group flex items-center px-4 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all duration-200">
               <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-200">
                 <i class="fas fa-plus text-sm text-gray-600"></i>
@@ -155,7 +155,7 @@ $htmlLang = substr($currentLocale, 0, 2);
             </a>
 
             <?php if (!$isCatalogueMode): ?>
-              <a href="<?= htmlspecialchars(url('/admin/prestiti/crea'), ENT_QUOTES, 'UTF-8') ?>"
+              <a href="<?= htmlspecialchars(url('/admin/loans/create'), ENT_QUOTES, 'UTF-8') ?>"
                 class="group flex items-center px-4 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all duration-200">
                 <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-200">
                   <i class="fas fa-handshake text-sm text-gray-600"></i>
@@ -235,7 +235,7 @@ $htmlLang = substr($currentLocale, 0, 2);
           </a>
 
           <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-            href="<?= htmlspecialchars(url('/admin/libri'), ENT_QUOTES, 'UTF-8') ?>">
+            href="<?= htmlspecialchars(url('/admin/books'), ENT_QUOTES, 'UTF-8') ?>">
             <div
               class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
               <i class="fas fa-book text-gray-600"></i>
@@ -247,7 +247,7 @@ $htmlLang = substr($currentLocale, 0, 2);
           </a>
 
           <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-            href="<?= htmlspecialchars(url('/admin/autori'), ENT_QUOTES, 'UTF-8') ?>">
+            href="<?= htmlspecialchars(url('/admin/authors'), ENT_QUOTES, 'UTF-8') ?>">
             <div
               class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
               <i class="fas fa-user-edit text-gray-600"></i>
@@ -259,7 +259,7 @@ $htmlLang = substr($currentLocale, 0, 2);
           </a>
 
           <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-            href="<?= htmlspecialchars(url('/admin/editori'), ENT_QUOTES, 'UTF-8') ?>">
+            href="<?= htmlspecialchars(url('/admin/publishers'), ENT_QUOTES, 'UTF-8') ?>">
             <div
               class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
               <i class="fas fa-building text-gray-600"></i>
@@ -271,7 +271,7 @@ $htmlLang = substr($currentLocale, 0, 2);
           </a>
 
           <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-            href="<?= htmlspecialchars(url('/admin/generi'), ENT_QUOTES, 'UTF-8') ?>">
+            href="<?= htmlspecialchars(url('/admin/genres'), ENT_QUOTES, 'UTF-8') ?>">
             <div
               class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
               <i class="fas fa-tags text-gray-600"></i>
@@ -283,7 +283,7 @@ $htmlLang = substr($currentLocale, 0, 2);
           </a>
 
           <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-            href="<?= htmlspecialchars(url('/admin/collane'), ENT_QUOTES, 'UTF-8') ?>">
+            href="<?= htmlspecialchars(url('/admin/series'), ENT_QUOTES, 'UTF-8') ?>">
             <div
               class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
               <i class="fas fa-layer-group text-gray-600"></i>
@@ -296,7 +296,7 @@ $htmlLang = substr($currentLocale, 0, 2);
 
           <?php if (!$isCatalogueMode): ?>
             <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-              href="<?= htmlspecialchars(url('/admin/prestiti'), ENT_QUOTES, 'UTF-8') ?>">
+              href="<?= htmlspecialchars(url('/admin/loans'), ENT_QUOTES, 'UTF-8') ?>">
               <div
                 class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
                 <i class="fas fa-handshake text-gray-600"></i>
@@ -309,7 +309,7 @@ $htmlLang = substr($currentLocale, 0, 2);
           <?php endif; ?>
 
           <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-            href="<?= htmlspecialchars(url('/admin/collocazione'), ENT_QUOTES, 'UTF-8') ?>">
+            href="<?= htmlspecialchars(url('/admin/placement'), ENT_QUOTES, 'UTF-8') ?>">
             <div
               class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
               <i class="fas fa-warehouse text-gray-600"></i>
@@ -333,7 +333,7 @@ $htmlLang = substr($currentLocale, 0, 2);
           ?>
 
           <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-            href="<?= htmlspecialchars(url('/admin/utenti'), ENT_QUOTES, 'UTF-8') ?>">
+            href="<?= htmlspecialchars(url('/admin/users'), ENT_QUOTES, 'UTF-8') ?>">
             <div
               class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
               <i class="fas fa-users text-gray-600"></i>
@@ -345,7 +345,7 @@ $htmlLang = substr($currentLocale, 0, 2);
           </a>
 
           <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-            href="<?= htmlspecialchars(url('/admin/statistiche'), ENT_QUOTES, 'UTF-8') ?>">
+            href="<?= htmlspecialchars(url('/admin/statistics'), ENT_QUOTES, 'UTF-8') ?>">
             <div
               class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
               <i class="fas fa-chart-bar text-gray-600"></i>
@@ -357,7 +357,7 @@ $htmlLang = substr($currentLocale, 0, 2);
           </a>
 
           <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-            href="<?= htmlspecialchars(url('/admin/recensioni'), ENT_QUOTES, 'UTF-8') ?>">
+            href="<?= htmlspecialchars(url('/admin/reviews'), ENT_QUOTES, 'UTF-8') ?>">
             <div
               class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
               <i class="fas fa-star text-gray-600"></i>
@@ -394,7 +394,7 @@ $htmlLang = substr($currentLocale, 0, 2);
             </a>
 
             <a class="nav-link group flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-gray-100 text-gray-700 hover:text-gray-900"
-              href="<?= htmlspecialchars(url('/admin/libri/bulk-enrich'), ENT_QUOTES, 'UTF-8') ?>">
+              href="<?= htmlspecialchars(url('/admin/books/bulk-enrich'), ENT_QUOTES, 'UTF-8') ?>">
               <div
                 class="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-all duration-200">
                 <i class="fas fa-magic text-gray-600"></i>
@@ -1483,17 +1483,17 @@ $htmlLang = substr($currentLocale, 0, 2);
       // G-prefix navigation map
       var gNavMap = {
         d: basePath + '/admin/dashboard',
-        b: basePath + '/admin/libri',
-        a: basePath + '/admin/autori',
-        e: basePath + '/admin/editori',
-        p: basePath + '/admin/prestiti',
-        u: basePath + '/admin/utenti',
+        b: basePath + '/admin/books',
+        a: basePath + '/admin/authors',
+        e: basePath + '/admin/publishers',
+        p: basePath + '/admin/loans',
+        u: basePath + '/admin/users',
         s: basePath + '/admin/settings'
       };
 
       // Show/hide books-only shortcuts section based on current page
       var booksSection = document.getElementById('shortcuts-books-section');
-      if (booksSection && window.location.pathname.indexOf('/admin/libri') !== -1) {
+      if (booksSection && window.location.pathname.indexOf('/admin/books') !== -1) {
         booksSection.classList.remove('hidden');
       }
 
