@@ -38,7 +38,10 @@ async function deleteGenre(page, genreId) {
   if (await confirm.isVisible({ timeout: 5000 }).catch(() => false)) {
     await confirm.click();
   }
-  await page.waitForURL(/\/admin\/genres(\?|$|\/)/, { timeout: 10000 }).catch(() => {});
+  // Wait for the LIST page only (GeneriController redirects a successful delete
+  // to /admin/genres). The old regex also matched /admin/genres/{id}, so the
+  // wait could resolve while still on the detail page and leak the row.
+  await page.waitForURL((url) => url.pathname === '/admin/genres', { timeout: 10000 }).catch(() => {});
 }
 
 // ────────────────────────────────────────────────────────────────────────

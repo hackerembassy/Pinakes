@@ -163,14 +163,16 @@ test.describe.serial('SweetAlert — settings-admin-tools cluster', () => {
   // collocazione/index.php
   // ════════════════════════════════════════════════════════════════════
 
-  // collocazione/index.php:225 — delete a scaffale (confirm-destructive)
-  // NOTE: deleted LAST among collocazione because deleting a scaffale that
-  // still has a mensola is blocked. We delete the mensola first (next test).
+  // collocazione/index.php:327 — delete a mensola (confirm-destructive)
+  // NOTE: the mensola is deleted FIRST, before its scaffale: deleting a
+  // scaffale that still has a mensola is blocked by the FK constraint.
   test('collocazione:327 delete mensola — confirm-destructive', async () => {
     await page.goto(`${BASE}/admin/placement`);
-    await page.waitForSelector(`li[data-id="${mensolaId}"]`, { timeout: 15000 });
-    // mensola rows are hidden until a scaffale filter is chosen; the delete
-    // form is still in the DOM and submittable.
+    // mensola rows are hidden until a scaffale filter is chosen, so wait for the
+    // row to be ATTACHED (in the DOM) rather than visible — the default
+    // 'visible' state would time out on the hidden row. The delete form is still
+    // in the DOM and submittable.
+    await page.waitForSelector(`li[data-id="${mensolaId}"]`, { state: 'attached', timeout: 15000 });
     const form = page.locator(`form[action$="/admin/placement/shelves/${mensolaId}/delete"]`);
     // The submit button is hidden until a scaffale filter is chosen, but the
     // data-swal-confirm interceptor fires on the form's submit event —
