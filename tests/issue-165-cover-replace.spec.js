@@ -107,4 +107,28 @@ test.describe('#165 — replace a book cover in one step', () => {
     await submitBook();
     expect(cover(id)).toBe('');           // cover removed
   });
+
+  test('4. Remove wins over a stale scraped_cover_url (#F007 regression)', async () => {
+    // Reproduces the F007 bug: after the store()/update() reorder, a "Rimuovi"
+    // could be silently undone when scraped_cover_url was still populated from an
+    // earlier ISBN scrape in the same session — handleCoverUrl() ran last and
+    // re-added the cover. WITHOUT the backend remove_cover guard this test fails
+    // (the cover comes back); WITH it the removal stays durable.
+    const id = await createWithCover(`C165d_${Date.now().toString(36)}`, coverA);
+    const saved = cover(id);
+    expect(saved.length).toBeGreaterThan(0);
+    await page.goto(`${BASE}/admin/books/edit/${id}`);
+    await expect(page.locator('#titolo')).toBeVisible({ timeout: 10000 });
+    // Simulate "scrape populated scraped_cover_url, then user clicks Rimuovi":
+    // feed the book's own saved local cover path back as the scraped URL (local,
+    // deterministic — no external fetch) and drive the remove fields.
+    await page.evaluate((scrapedUrl) => {
+      const sc = document.getElementById('scraped_cover_url');
+      if (sc) sc.value = scrapedUrl;
+      document.getElementById('remove_cover').value = '1';
+      document.getElementById('copertina_url').value = '';
+    }, saved);
+    await submitBook();
+    expect(cover(id)).toBe('');           // removal wins; cover NOT re-added
+  });
 });
