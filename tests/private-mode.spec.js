@@ -3,6 +3,9 @@
 // public site to authenticated users. Off by default.
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:8081';
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
@@ -24,7 +27,22 @@ function dbQuery(sql) {
   if (DB_HOST) { args.push('-h', DB_HOST); if (DB_PORT) args.push('-P', DB_PORT); }
   else if (DB_SOCKET) { args.push('-S', DB_SOCKET); }
   args.push('-u', DB_USER, DB_NAME, '-N', '-B', '-e', sql);
-  return execFileSync('mysql', args, { encoding: 'utf-8', timeout: 10000, env: { ...process.env, MYSQL_PWD: DB_PASS } }).trim();
+  // Pass the password via a private 0600 defaults-file rather than MYSQL_PWD
+  // (deprecated, can leak through the environment) or -p<pass> (visible in
+  // `ps`). The temp file is always removed in finally.
+  const cnf = path.join(os.tmpdir(), `pinakes-e2e-${process.pid}-${Date.now()}.cnf`);
+  fs.writeFileSync(cnf, `[client]\npassword="${DB_PASS}"\n`, { mode: 0o600 });
+  try {
+    return execFileSync('mysql', [`--defaults-extra-file=${cnf}`, ...args], {
+      encoding: 'utf-8', timeout: 10000,
+    }).trim();
+  } catch (err) {
+    // Surface a clear, actionable error instead of an opaque execFileSync throw.
+    const detail = (err && (err.stderr || err.message)) || String(err);
+    throw new Error(`dbQuery failed: ${detail}\n  SQL: ${sql}`);
+  } finally {
+    try { fs.unlinkSync(cnf); } catch { /* best effort cleanup */ }
+  }
 }
 
 function setPrivateMode(on) {
