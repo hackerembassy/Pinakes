@@ -346,6 +346,10 @@ class UpdateController
      */
     public function saveBackupSettings(Request $request, Response $response, mysqli $db): Response
     {
+        if (($_SESSION['user']['tipo_utente'] ?? '') !== 'admin') {
+            return $this->jsonResponse($response, ['error' => __('Operazione riservata agli amministratori')], 403);
+        }
+
         $data = (array) $request->getParsedBody();
         if (!Csrf::validate($data['csrf_token'] ?? '')) {
             return $this->jsonResponse($response, ['error' => __('Token CSRF non valido')], 403);

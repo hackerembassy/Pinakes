@@ -1835,10 +1835,12 @@ class Updater
                 ->get('backup', 'pre_update_include_files', '0') === '1';
             $scope = $includeFiles ? 'full' : 'db';
 
-            $logId = $this->logUpdateStart($this->getCurrentVersion(), 'backup', $this->backupPath);
-
             $this->debugLog('INFO', 'Inizio backup', ['scope' => $scope]);
             $result = (new \App\Support\BackupManager($this->db, $this->rootPath))->createBackup($scope);
+
+            // Record the history row against the actual backup file path (or the
+            // backups dir on failure, where path is null).
+            $logId = $this->logUpdateStart($this->getCurrentVersion(), 'backup', (string) ($result['path'] ?? $this->backupPath));
 
             if (!$result['success']) {
                 $this->debugLog('ERROR', 'Backup fallito', ['error' => $result['error']]);

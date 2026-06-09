@@ -5249,5 +5249,8 @@
   "Database mancante nel backup": "Database missing from the backup",
   "Dump del database vuoto o illeggibile": "Database dump empty or unreadable",
   "Errore durante il ripristino del database": "Error while restoring the database",
-  "connessione al database non riuscita": "database connection failed"
+  "connessione al database non riuscita": "database connection failed",
+  "Errore durante il ripristino dei file": "Error restoring the files",
+  "Errore durante il ripristino": "Error during the restore",
+  "Impossibile salvare l'impostazione": "Could not save the setting"
 }

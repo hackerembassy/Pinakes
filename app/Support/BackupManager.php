@@ -65,8 +65,10 @@ class BackupManager
                 throw new \RuntimeException(__('Impossibile creare directory di backup'));
             }
 
+            // A random suffix avoids collisions when two backups land in the
+            // same second (e.g. a manual backup + the pre-restore safety backup).
             $timestamp = date('Y-m-d_His');
-            $name = 'backup_' . $timestamp . '.zip';
+            $name = 'backup_' . $timestamp . '_' . bin2hex(random_bytes(3)) . '.zip';
             $zipPath = $this->backupPath . '/' . $name;
 
             // 1. Dump the database to a temp file.
@@ -286,6 +288,14 @@ class BackupManager
             $zip = new ZipArchive();
             if ($zip->open($zipPath) !== true) {
                 throw new \RuntimeException(__('Impossibile aprire l\'archivio di backup'));
+            }
+
+            // Validate the manifest before touching the live system.
+            $manifestRaw = $zip->getFromName('manifest.json');
+            $manifest = $manifestRaw !== false ? json_decode($manifestRaw, true) : null;
+            if (!is_array($manifest) || ($manifest['app'] ?? '') !== 'Pinakes') {
+                $zip->close();
+                throw new \RuntimeException(__('Archivio di backup non valido'));
             }
 
             // 2. Restore the database from database.sql.
@@ -508,34 +518,43 @@ class BackupManager
                 continue;
             }
             $target = $this->rootPath . '/' . $relative;
-            $parent = dirname($target);
-            if (!is_dir($parent) && !@mkdir($parent, 0755, true) && !is_dir($parent)) {
+            // Never follow a pre-existing symlink at the target: fopen('w') would
+            // write through it to an arbitrary path outside the allowed roots.
+            if (is_link($target)) {
                 continue;
+            }
+            $parent = dirname($target);
+            // Real I/O failures (mkdir/realpath/getStream/fopen) must FAIL the
+            // restore, not be silently skipped — otherwise a partial filesystem
+            // restore would still report success. Security skips (out-of-root,
+            // symlink) intentionally `continue`.
+            if (!is_dir($parent) && !@mkdir($parent, 0755, true) && !is_dir($parent)) {
+                throw new \RuntimeException(__('Errore durante il ripristino dei file') . ': ' . $relative);
             }
             $realParent = realpath($parent);
             if ($realParent === false) {
-                continue;
+                throw new \RuntimeException(__('Errore durante il ripristino dei file') . ': ' . $relative);
             }
             $realParent = str_replace('\\', '/', $realParent);
             // The resolved parent must live inside one of the allowed upload roots.
-            $ok = false;
+            $inAllowedRoot = false;
             foreach ($allowed as $root) {
                 if ($realParent === $root || str_starts_with($realParent, $root . '/')) {
-                    $ok = true;
+                    $inAllowedRoot = true;
                     break;
                 }
             }
-            if (!$ok) {
-                continue;
+            if (!$inAllowedRoot) {
+                continue; // security: entry resolves outside the allowed roots
             }
             $stream = $zip->getStream($name);
             if ($stream === false) {
-                continue;
+                throw new \RuntimeException(__('Errore durante il ripristino dei file') . ': ' . $relative);
             }
             $out = fopen($target, 'w');
             if ($out === false) {
                 fclose($stream);
-                continue;
+                throw new \RuntimeException(__('Errore durante il ripristino dei file') . ': ' . $relative);
             }
             stream_copy_to_stream($stream, $out);
             fclose($stream);

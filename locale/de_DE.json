@@ -5249,5 +5249,8 @@
   "Database mancante nel backup": "Datenbank fehlt im Backup",
   "Dump del database vuoto o illeggibile": "Datenbank-Dump leer oder nicht lesbar",
   "Errore durante il ripristino del database": "Fehler beim Wiederherstellen der Datenbank",
-  "connessione al database non riuscita": "Datenbankverbindung fehlgeschlagen"
+  "connessione al database non riuscita": "Datenbankverbindung fehlgeschlagen",
+  "Errore durante il ripristino dei file": "Fehler beim Wiederherstellen der Dateien",
+  "Errore durante il ripristino": "Fehler bei der Wiederherstellung",
+  "Impossibile salvare l'impostazione": "Einstellung konnte nicht gespeichert werden"
 }

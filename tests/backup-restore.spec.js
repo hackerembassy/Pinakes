@@ -19,6 +19,10 @@ const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '';
 const DB_USER = process.env.E2E_DB_USER || '', DB_PASS = process.env.E2E_DB_PASS || '';
 const DB_SOCKET = process.env.E2E_DB_SOCKET || '', DB_HOST = process.env.E2E_DB_HOST || '';
 const DB_PORT = process.env.E2E_DB_PORT || '', DB_NAME = process.env.E2E_DB_NAME || '';
+// Credentials come from the E2E wrapper (/tmp/run-e2e.sh / ci-e2e.yml), which
+// exports the E2E_* env this reads — that IS the project's bootstrap. The skip
+// only fires when the suite is run outside that wrapper (same pattern as the
+// other specs); under CI/the wrapper the env is always present, so it runs.
 test.skip(!ADMIN_EMAIL || !DB_USER || !DB_NAME, 'creds not configured');
 
 const ROOT = path.resolve(__dirname, '..');

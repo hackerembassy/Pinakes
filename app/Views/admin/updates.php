@@ -225,11 +225,13 @@ $hasGithubToken ??= false;
                                 <p class="text-sm text-blue-700 mt-1">
                                     <?= __("Prima di ogni aggiornamento viene creato automaticamente un backup.") ?>
                                 </p>
+<?php if (($_SESSION['user']['tipo_utente'] ?? '') === 'admin'): ?>
                                 <label class="mt-3 flex items-center gap-2 text-sm text-blue-800 cursor-pointer">
                                     <input type="checkbox" id="preUpdateIncludeFiles" onchange="saveBackupSetting()" <?= !empty($backupIncludeFiles) ? 'checked' : '' ?>
                                         class="rounded border-blue-300 text-blue-600 focus:ring-blue-500">
                                     <?= __("Includi i file caricati nel backup pre-aggiornamento") ?>
                                 </label>
+<?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -558,7 +560,7 @@ $hasGithubToken ??= false;
 
 <script>
 const csrfToken = <?= json_encode(Csrf::ensureToken(), JSON_HEX_TAG) ?>;
-const IS_ADMIN = <?= (($_SESSION['user']['tipo_utente'] ?? '') === 'admin') ? 'true' : 'false' ?>;
+const IS_ADMIN = <?= json_encode(($_SESSION['user']['tipo_utente'] ?? '') === 'admin') ?>;
 // formatDateLocale and appLocale are defined globally in layout.php
 
 async function postTokenRequest(tokenValue) {
@@ -1145,8 +1147,9 @@ async function runRestore(url, body, isFormData) {
         const opts = { method: 'POST', body };
         if (!isFormData) opts.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
         const response = await fetch(url, opts);
-        const data = await response.json();
-        if (data.success) {
+        let data = null;
+        try { data = await response.json(); } catch (e) { data = null; }
+        if (data && data.success) {
             await Swal.fire({
                 icon: 'success',
                 title: <?= json_encode(__("Ripristino completato"), JSON_HEX_TAG) ?>,
@@ -1156,24 +1159,41 @@ async function runRestore(url, body, isFormData) {
             });
             loadBackups();
         } else {
-            Swal.fire({ icon: 'error', title: <?= json_encode(__("Errore"), JSON_HEX_TAG) ?>, text: data.error });
+            // A non-JSON body (PHP fatal, timeout, gateway error) leaves data null.
+            const msg = (data && data.error) ? data.error
+                : (<?= json_encode(__("Errore durante il ripristino"), JSON_HEX_TAG) ?> + ' (HTTP ' + response.status + ')');
+            Swal.fire({ icon: 'error', title: <?= json_encode(__("Errore"), JSON_HEX_TAG) ?>, text: msg });
         }
     } catch (error) {
         Swal.fire({ icon: 'error', title: <?= json_encode(__("Errore"), JSON_HEX_TAG) ?>, text: error.message });
     }
 }
 
-// Persist the "include files in pre-update backup" setting.
+// Persist the "include files in pre-update backup" setting. On failure, revert
+// the checkbox so its state never diverges from what was actually saved.
 async function saveBackupSetting() {
     const checkbox = document.getElementById('preUpdateIncludeFiles');
     if (!checkbox) return;
+    const desired = checkbox.checked;
+    let ok = false;
     try {
-        await fetch(window.BASE_PATH + '/admin/updates/backup/settings', {
+        const response = await fetch(window.BASE_PATH + '/admin/updates/backup/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `csrf_token=${encodeURIComponent(csrfToken)}&include_files=${checkbox.checked ? '1' : '0'}`
+            body: `csrf_token=${encodeURIComponent(csrfToken)}&include_files=${desired ? '1' : '0'}`
         });
-    } catch (error) { /* non-blocking */ }
+        let data = null;
+        try { data = await response.json(); } catch (e) { data = null; }
+        ok = response.ok && !!(data && data.success);
+    } catch (error) { ok = false; }
+    if (!ok) {
+        checkbox.checked = !desired; // revert
+        Swal.fire({
+            icon: 'error',
+            title: <?= json_encode(__("Errore"), JSON_HEX_TAG) ?>,
+            text: <?= json_encode(__("Impossibile salvare l'impostazione"), JSON_HEX_TAG) ?>
+        });
+    }
 }
 
 function formatBytes(bytes) {
