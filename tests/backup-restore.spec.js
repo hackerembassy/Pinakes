@@ -98,16 +98,18 @@ test.describe('#162 — complete backup + restore', () => {
     expect(entries.some((e) => e === '.env' || e.endsWith('/.env'))).toBe(false);
   });
 
-  test('2. Download serves a non-empty ZIP', async () => {
+  test('2. Download serves a real ZIP (PK magic), not just bytes', async () => {
     const name = createdBackups[0];
     const r = await page.evaluate(async (u) => {
       const resp = await fetch(u);
       const buf = await resp.arrayBuffer();
-      return { status: resp.status, type: resp.headers.get('content-type'), len: buf.byteLength };
+      const head = Array.from(new Uint8Array(buf.slice(0, 4))).map((b) => b.toString(16).padStart(2, '0')).join('');
+      return { status: resp.status, type: resp.headers.get('content-type'), len: buf.byteLength, magic: head };
     }, `${BASE}/admin/updates/backup/download?backup=${encodeURIComponent(name)}`);
     expect(r.status).toBe(200);
     expect(r.type).toContain('zip');
     expect(r.len).toBeGreaterThan(0);
+    expect(r.magic).toBe('504b0304'); // local-file-header signature → an actual ZIP, not an error page
   });
 
   test('3. Restore brings back a deleted row AND a deleted cover file (+ safety backup)', async () => {
@@ -144,7 +146,53 @@ test.describe('#162 — complete backup + restore', () => {
     expect(backupsAfter).toBeGreaterThan(backupsBefore);
   });
 
-  test('4. Restore is admin-only — a staff session is rejected (403)', async ({ browser }) => {
+  test('4. A downloaded backup re-uploaded restores the data (upload-restore path)', async () => {
+    // Proves the *downloaded* artifact is a valid, restorable backup — and
+    // exercises the "Ripristina da file" upload path (restoreFromUploadedZip).
+    const tag2 = TAG + 'up';
+    const cover2 = path.join(COVERS_DIR, `${tag2}.txt`); // nosemgrep -- controlled test tag, not user input
+    dbQuery(`INSERT INTO libri (titolo, copie_totali, copie_disponibili) VALUES ('${tag2} libro', 1, 1)`);
+    fs.writeFileSync(cover2, 'UPLOAD-' + TAG);
+
+    const snap = await apiPost(page, '/admin/updates/backup', { scope: 'full' });
+    expect(snap.json?.success).toBeTruthy();
+    createdBackups.push(snap.json.name);
+
+    // Dirty state, then download the backup and re-upload it to /restore-upload —
+    // the whole download→upload→restore cycle runs in the browser (cookies + CSRF).
+    dbQuery(`DELETE FROM libri WHERE titolo='${tag2} libro'`);
+    fs.unlinkSync(cover2);
+    expect(Number(dbQuery(`SELECT COUNT(*) FROM libri WHERE titolo='${tag2} libro'`))).toBe(0);
+
+    const res = await page.evaluate(async ({ dlUrl, upUrl }) => {
+      const dl = await fetch(dlUrl);
+      const blob = await dl.blob();
+      const fd = new FormData();
+      fd.append('csrf_token', csrfToken);
+      fd.append('backup_file', new File([blob], 'restore.zip', { type: 'application/zip' }));
+      const r = await fetch(upUrl, { method: 'POST', body: fd });
+      let j = null; try { j = await r.json(); } catch (e) {}
+      return { status: r.status, json: j, dlBytes: blob.size };
+    }, {
+      dlUrl: `${BASE}/admin/updates/backup/download?backup=${encodeURIComponent(snap.json.name)}`,
+      upUrl: `${BASE}/admin/updates/backup/restore-upload`,
+    });
+
+    expect(res.dlBytes).toBeGreaterThan(0);
+    expect(res.status).toBe(200);
+    expect(res.json?.success).toBeTruthy();
+    if (res.json?.safety_backup) createdBackups.push(res.json.safety_backup);
+
+    // The row and the cover file are back — restored from the downloaded artifact.
+    expect(Number(dbQuery(`SELECT COUNT(*) FROM libri WHERE titolo='${tag2} libro'`))).toBe(1);
+    expect(fs.existsSync(cover2)).toBe(true);
+    expect(fs.readFileSync(cover2, 'utf-8')).toBe('UPLOAD-' + TAG);
+
+    dbQuery(`DELETE FROM libri WHERE titolo='${tag2} libro'`);
+    try { if (fs.existsSync(cover2)) fs.unlinkSync(cover2); } catch {}
+  });
+
+  test('5. Restore is admin-only — a staff session is rejected (403)', async ({ browser }) => {
     // Create a staff user with a known password.
     const hash = execFileSync('php', ['-r', 'echo password_hash("Test1234!", PASSWORD_DEFAULT);'], { encoding: 'utf-8' }).trim();
     staffEmail = `${TAG.toLowerCase()}.staff@local.test`;
@@ -164,7 +212,7 @@ test.describe('#162 — complete backup + restore', () => {
     }
   });
 
-  test('5. Delete removes the backup', async () => {
+  test('6. Delete removes the backup', async () => {
     const name = createdBackups[0];
     const res = await apiPost(page, '/admin/updates/backup/delete', { backup: name });
     expect(res.json?.success).toBeTruthy();
