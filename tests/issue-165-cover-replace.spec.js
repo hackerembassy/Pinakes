@@ -97,9 +97,10 @@ test.describe('#165 — replace a book cover in one step', () => {
     expect(cover(id).length).toBeGreaterThan(0);
     await page.goto(`${BASE}/admin/books/edit/${id}`);
     await expect(page.locator('#titolo')).toBeVisible({ timeout: 10000 });
-    // The "Rimuovi" button (removeCoverImage) sets these two hidden fields after
-    // a confirm dialog. Drive them directly so the test exercises the backend
-    // remove path without depending on the confirm-dialog implementation.
+    // The "Rimuovi" button (removeCoverImage) clears these hidden fields after a
+    // confirm dialog (it also clears scraped_cover_url — that path is exercised
+    // by test 5). Drive them directly so the test exercises the backend remove
+    // path without depending on the confirm-dialog implementation.
     await page.evaluate(() => {
       document.getElementById('remove_cover').value = '1';
       document.getElementById('copertina_url').value = '';

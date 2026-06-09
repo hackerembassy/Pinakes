@@ -1025,8 +1025,8 @@ const i18nTranslations = Object.assign({}, window.i18nTranslations || {}, <?= js
     'Errore' => __("Errore"),
     'Si è verificato un errore durante il salvataggio.' => __("Si è verificato un errore durante il salvataggio."),
     'Si è verificato un errore di rete.' => __("Si è verificato un errore di rete."),
-    'ISBN Mancante' => __("ISBN Mancante"),
-    'Inserisci un codice ISBN per continuare.' => __("Inserisci un codice ISBN per continuare.")
+    'Codice mancante' => __("Codice mancante"),
+    'Inserisci un codice ISBN o EAN per continuare.' => __("Inserisci un codice ISBN o EAN per continuare.")
 ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>);
 
 // LibraryThing accordion toggle
@@ -3512,10 +3512,11 @@ function initializeIsbnImport() {
     const defaultBtnLabel = FORM_MODE === 'edit' ? __('Aggiorna Dati') : __('Importa Dati');
 
     // Barcode scanners append a carriage return (Enter) after the code. Left
-    // unhandled, that Enter submits the whole form and trips the browser's
-    // "required field" validation on the title before anything is filled in
-    // (issue #164). Swallow the Enter here and trigger the import instead —
-    // which is exactly what scanning into this field is meant to do.
+    // unhandled, that Enter submits the whole form, which — the form is
+    // novalidate — trips the custom JS "title is required" SweetAlert before
+    // anything is filled in (issue #164). Swallow the Enter here and trigger
+    // the import instead — which is exactly what scanning into this field is
+    // meant to do.
     input.addEventListener('keydown', function(event) {
         if (event.key === 'Enter') {
             event.preventDefault();
@@ -3528,8 +3529,8 @@ function initializeIsbnImport() {
         if (!isbn) {
             Swal.fire({
                 icon: 'warning',
-                title: __('ISBN Mancante'),
-                text: __('Inserisci un codice ISBN per continuare.')
+                title: __('Codice mancante'),
+                text: __('Inserisci un codice ISBN o EAN per continuare.')
             });
             return;
         }

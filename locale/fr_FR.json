@@ -5219,5 +5219,7 @@
   "Questo sito è riservato agli utenti registrati. Accedi per continuare.": "Ce site est réservé aux utilisateurs enregistrés. Veuillez vous connecter pour continuer.",
   "Accesso al sito": "Accès au site",
   "Controlla chi può consultare il sito pubblico": "Contrôlez qui peut consulter le site public",
-  "Con la modalità privata attiva, l'area amministrativa, l'accesso, la registrazione e gli asset restano sempre raggiungibili; tutto il resto richiede l'autenticazione.": "Lorsque le mode privé est activé, l'espace d'administration, la connexion, l'inscription et les ressources restent accessibles ; tout le reste nécessite une authentification."
+  "Con la modalità privata attiva, l'area amministrativa, l'accesso, la registrazione e gli asset restano sempre raggiungibili; tutto il resto richiede l'autenticazione.": "Lorsque le mode privé est activé, l'espace d'administration, la connexion, l'inscription et les ressources restent accessibles ; tout le reste nécessite une authentification.",
+  "Codice mancante": "Code manquant",
+  "Inserisci un codice ISBN o EAN per continuare.": "Saisissez un code ISBN ou EAN pour continuer."
 }

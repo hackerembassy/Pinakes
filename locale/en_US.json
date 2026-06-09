@@ -5219,5 +5219,7 @@
   "Questo sito è riservato agli utenti registrati. Accedi per continuare.": "This site is restricted to registered users. Please sign in to continue.",
   "Accesso al sito": "Site access",
   "Controlla chi può consultare il sito pubblico": "Control who can browse the public site",
-  "Con la modalità privata attiva, l'area amministrativa, l'accesso, la registrazione e gli asset restano sempre raggiungibili; tutto il resto richiede l'autenticazione.": "With private mode on, the admin area, login, registration and assets stay reachable; everything else requires authentication."
+  "Con la modalità privata attiva, l'area amministrativa, l'accesso, la registrazione e gli asset restano sempre raggiungibili; tutto il resto richiede l'autenticazione.": "With private mode on, the admin area, login, registration and assets stay reachable; everything else requires authentication.",
+  "Codice mancante": "Missing code",
+  "Inserisci un codice ISBN o EAN per continuare.": "Enter an ISBN or EAN code to continue."
 }
