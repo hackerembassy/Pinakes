@@ -1170,6 +1170,10 @@ class LibriController
             // Optionals (numero_pagine, ean, data_pubblicazione, traduttore)
             // Merge normalized $fields over $data so NULL isbn/ean values are preserved
             (new \App\Models\BookRepository($db))->updateOptionals($id, array_merge($data, $fields));
+            // The cover persisted just above may be a local file that
+            // downloadExternalCover() saved during this submit; capture it so
+            // it can be cleaned up if the branches below replace it (#F002).
+            $intermediateCover = (string) ($fields['copertina_url'] ?? '');
 
             // Handle simple cover upload (wins over a scraped URL when both present)
             $coverFileUploaded = false;
@@ -1184,6 +1188,17 @@ class LibriController
             $removeCoverRequested = (isset($data['remove_cover']) && $data['remove_cover'] === '1');
             if (!$coverFileUploaded && !$removeCoverRequested && !$scrapedCoverAlreadySaved && !empty($data['scraped_cover_url'])) {
                 $this->handleCoverUrl($db, $id, (string) $data['scraped_cover_url']);
+            }
+
+            // A file upload (or a different scraped URL) above may have just
+            // replaced the cover that downloadExternalCover() saved during this
+            // same submit, leaving that intermediate file orphaned on disk
+            // (#F002). deleteLocalCoverFile() already no-ops when the
+            // intermediate IS the final cover (pure-scrape path) or isn't a
+            // local /uploads/copertine/ file.
+            if (!$removeCoverRequested) {
+                $finalCover = $this->currentCoverUrl($db, $id);
+                $this->deleteLocalCoverFile($intermediateCover, $finalCover);
             }
 
             // Set a success message in the session
@@ -1826,6 +1841,11 @@ class LibriController
             // dance to swap an auto-imported cover (#165).
             // Merge normalized $fields over $data so NULL isbn/ean values are preserved
             (new \App\Models\BookRepository($db))->updateOptionals($id, array_merge($data, $fields));
+            // The cover persisted just above may be a local file that
+            // downloadExternalCover() saved during this submit; capture it so
+            // the cleanup below can also remove it when a file upload or a
+            // different scraped URL replaces it (#F002).
+            $intermediateCover = (string) ($fields['copertina_url'] ?? '');
 
             $coverFileUploaded = false;
             if (!empty($_FILES['copertina']) && ($_FILES['copertina']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
@@ -1852,6 +1872,10 @@ class LibriController
             if (!$removeCoverRequested) {
                 $finalCover = $this->currentCoverUrl($db, $id);
                 $this->deleteLocalCoverFile((string) ($currentBook['copertina_url'] ?? ''), $finalCover);
+                // Also clean up the intermediate file downloadExternalCover()
+                // saved during this submit when a file upload / scraped URL
+                // replaced it (#F002); no-ops when intermediate === final.
+                $this->deleteLocalCoverFile($intermediateCover, $finalCover);
             }
 
             // Set a success message in the session
@@ -2143,6 +2167,17 @@ class LibriController
             return;
         }
         if ($newUrl !== null && $oldUrl === $newUrl) {
+            return;
+        }
+        // The replacement must itself be a DURABLE LOCAL file before the old
+        // one is removed: when the final cover is a raw external URL (the
+        // download bailed — non-whitelisted domain, SSRF block, network/HTTP
+        // error — and the raw URL was persisted) or the local file is missing,
+        // keep the old working cover. A harmless orphan on disk beats losing
+        // the only working cover to a possibly-dead remote URL (#F006).
+        if ($newUrl !== null
+            && (strpos($newUrl, '/uploads/copertine/') !== 0
+                || !file_exists(__DIR__ . '/../../public' . $newUrl))) {
             return;
         }
         $safePath = realpath(__DIR__ . '/../../public' . $oldUrl);

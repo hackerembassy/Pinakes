@@ -3520,7 +3520,9 @@ function initializeIsbnImport() {
     input.addEventListener('keydown', function(event) {
         if (event.key === 'Enter') {
             event.preventDefault();
-            btn.click();
+            if (!btn.disabled) {
+                btn.click();
+            }
         }
     });
 
