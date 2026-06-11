@@ -5264,6 +5264,7 @@
   "Sono accettati solo file .zip fino a 2 GB.": "Es werden nur .zip-Dateien bis zu 2 GB akzeptiert.",
   "Ricarica la pagina": "Seite neu laden",
   "Formato legacy": "Altes Format",
+  "Sola lettura": "Schreibgeschützt",
   "Il ripristino non è supportato per i backup in formato cartella; scarica il file per un ripristino manuale.": "Die Wiederherstellung wird für Backups im Ordnerformat nicht unterstützt; laden Sie die Datei für eine manuelle Wiederherstellung herunter.",
   "Tempo trascorso": "Verstrichene Zeit",
   "Il server non ha risposto correttamente: l'operazione potrebbe essere ancora in corso o interrotta a metà. Non avviare subito un nuovo ripristino. Verifica la lista backup (potrebbe esserci un backup di sicurezza pre-ripristino) e i log del server.": "Der Server hat nicht korrekt geantwortet: Der Vorgang läuft möglicherweise noch oder wurde auf halbem Weg unterbrochen. Starten Sie nicht sofort eine neue Wiederherstellung. Überprüfen Sie die Backup-Liste (möglicherweise gibt es ein Sicherungs-Backup vor der Wiederherstellung) und die Server-Logs.",

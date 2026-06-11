@@ -193,8 +193,7 @@ test.describe.serial('G1 — Backup', () => {
     const entries = zipEntries(zipPath);
     expect(entries.some(e => e.startsWith('files/'))).toBe(false);
 
-    const { json } = await apiPost(page, '/admin/updates/backups', {});
-    // GET — we call via a page.evaluate fetch so we can reuse the same session.
+    // GET the backups list via a page.evaluate fetch (reuses the session cookies).
     const listRes = await page.evaluate(async (u) => {
       const r = await fetch(u);
       return r.json();
@@ -328,7 +327,7 @@ test.describe.serial('G2 — Restore', () => {
     fs.unlinkSync(markerPath);
     dbQuery(`DROP TRIGGER IF EXISTS trg_check_active_prestito_before_insert`);
 
-    expect(Number(dbQuery(`SELECT COUNT(*) FROM libri WHERE titolo='${TAG} libro'`))).toBe(0);
+    expect(Number(dbQuery(`SELECT COUNT(*) FROM libri WHERE titolo='${TAG} libro' AND deleted_at IS NULL`))).toBe(0);
     expect(fs.existsSync(markerPath)).toBe(false);
     expect(trigCount()).toBe(trigBefore - 1);
 
@@ -340,7 +339,7 @@ test.describe.serial('G2 — Restore', () => {
     if (res.json?.safety_backup) CREATED_BACKUPS.push(res.json.safety_backup);
 
     // Assertions: row back, marker back, trigger count restored.
-    expect(Number(dbQuery(`SELECT COUNT(*) FROM libri WHERE titolo='${TAG} libro'`))).toBe(1);
+    expect(Number(dbQuery(`SELECT COUNT(*) FROM libri WHERE titolo='${TAG} libro' AND deleted_at IS NULL`))).toBe(1);
     expect(fs.existsSync(markerPath)).toBe(true);
     expect(fs.readFileSync(markerPath, 'utf-8')).toBe('MARKER-' + TAG);
     expect(trigCount()).toBe(trigBefore);
@@ -601,7 +600,7 @@ test.describe.serial('G3 — Concurrency / lock', () => {
       apiPost(page, '/admin/updates/backup/restore', { backup }),
     ]);
     const errs = [a, b].map((r) => (r.json && r.json.error) || '');
-    // Both concurrent restores are serialized out by the lock.
+    // Both concurrent restores are rejected by the held lock (not queued).
     for (const e of errs) expect(e).toMatch(/già in corso/i);
 
     // Wait for the holder to release, then a restore succeeds again.
@@ -690,6 +689,7 @@ test.describe.serial('G4 — Permissions', () => {
     const adminCreate = await apiPost(adminPage, '/admin/updates/backup', { scope: 'db' });
     expect(adminCreate.status).toBe(200);
     expect(adminCreate.json?.success).toBe(true);
+    if (adminCreate.json?.name) CREATED_BACKUPS.push(adminCreate.json.name); // track for cleanup
   });
 
   test('17. The backup scope selector is admin-only in the UI', async () => {
@@ -727,7 +727,7 @@ test.describe.serial('G5 — Robustness, PHP-level integration via runPhp', () =
     const phpCode = `
 <?php
 // Bootstrap: parse .env manually so we can connect to the DB.
-$root = '${APP_ROOT}';
+$root = '${APP_ROOT.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
 $env  = file_get_contents($root . '/.env');
 foreach (explode("\\n", $env) as $line) {
     $line = trim($line);
@@ -861,7 +861,7 @@ if ($tablesBefore === $tablesAfter && $utentiBefore === $utentiAfter && $trigsBe
   test("20. cnfEscape: backslash doubled, double-quote escaped, single-quote unchanged", async () => {
     const phpCode = `
 <?php
-$root = '${APP_ROOT}';
+$root = '${APP_ROOT.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
 $env  = file_get_contents($root . '/.env');
 foreach (explode("\\n", $env) as $line) {
     $line = trim($line);

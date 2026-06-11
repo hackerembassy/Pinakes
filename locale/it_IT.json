@@ -5264,6 +5264,7 @@
   "Sono accettati solo file .zip fino a 2 GB.": "Sono accettati solo file .zip fino a 2 GB.",
   "Ricarica la pagina": "Ricarica la pagina",
   "Formato legacy": "Formato legacy",
+  "Sola lettura": "Sola lettura",
   "Il ripristino non è supportato per i backup in formato cartella; scarica il file per un ripristino manuale.": "Il ripristino non è supportato per i backup in formato cartella; scarica il file per un ripristino manuale.",
   "Tempo trascorso": "Tempo trascorso",
   "Il server non ha risposto correttamente: l'operazione potrebbe essere ancora in corso o interrotta a metà. Non avviare subito un nuovo ripristino. Verifica la lista backup (potrebbe esserci un backup di sicurezza pre-ripristino) e i log del server.": "Il server non ha risposto correttamente: l'operazione potrebbe essere ancora in corso o interrotta a metà. Non avviare subito un nuovo ripristino. Verifica la lista backup (potrebbe esserci un backup di sicurezza pre-ripristino) e i log del server.",
