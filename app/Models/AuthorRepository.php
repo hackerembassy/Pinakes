@@ -150,7 +150,7 @@ class AuthorRepository
         $values = [$nome, $pseudonimo, $data_nascita, $data_morte, $nazionalita, $biografia, $sito_web];
 
         // issue #163 columns — guarded with hasColumn() for backward compat with
-        // installs whose DB has not yet applied migrate_0.7.20.sql.
+        // installs whose DB has not yet applied the 0.7.20 migration.
         // foto = stored path or URL; collegamenti = pre-encoded JSON string. Both
         // nullable — empty becomes NULL so the column reads cleanly.
         if ($this->hasColumn('foto')) {
@@ -204,7 +204,7 @@ class AuthorRepository
         $values = [$nome, $pseudonimo, $data_nascita, $data_morte, $nazionalita, $biografia, $sito_web];
 
         // issue #163 columns — guarded with hasColumn() for backward compat with
-        // installs whose DB has not yet applied migrate_0.7.20.sql.
+        // installs whose DB has not yet applied the 0.7.20 migration.
         if ($this->hasColumn('foto')) {
             $assignments[] = 'foto=?';
             $types .= 's';
