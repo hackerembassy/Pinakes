@@ -50,8 +50,7 @@ if (!empty($autore['collegamenti'])) {
     }
 }
 
-// Shared button styles — identical to the book detail page (scheda_libro.php)
-// so the two admin entity pages share the same chrome.
+// Shared button styles — identical to the book detail page (scheda_libro.php).
 $btnPrimary = 'inline-flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-700';
 $btnGhost   = 'inline-flex items-center gap-2 rounded-lg border-2 border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-100';
 $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300 px-5 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50';
@@ -68,7 +67,6 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
 
     <!-- Header: breadcrumb + title + actions -->
     <div class="mb-6">
-      <!-- Breadcrumb -->
       <nav aria-label="breadcrumb" class="mb-4">
         <ol class="flex items-center space-x-2 text-sm">
           <li>
@@ -88,7 +86,6 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
       </nav>
 
       <div class="flex flex-col gap-4">
-        <!-- Title -->
         <div class="flex flex-col gap-2">
           <h1 class="text-3xl font-bold text-gray-900 flex flex-wrap items-start gap-3">
             <i class="fas fa-user-edit text-gray-600 mt-1"></i>
@@ -101,7 +98,6 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
           </h1>
         </div>
 
-        <!-- Action buttons -->
         <div class="flex flex-col lg:flex-row lg:flex-wrap items-stretch lg:items-center gap-3">
           <a href="<?= htmlspecialchars(url('/admin/authors/edit/' . (int)($autore['id'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>"
              class="<?php echo $btnPrimary; ?> justify-center">
@@ -135,195 +131,184 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
       </div>
     </div>
 
-    <!-- Main content -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Left: photo + quick info -->
-      <div class="lg:col-span-1">
-        <div class="card overflow-hidden">
-          <div class="p-4 flex items-center justify-center bg-gray-50">
-            <?php if ($fotoUrl !== ''): ?>
-              <img src="<?php echo htmlspecialchars($fotoUrl, ENT_QUOTES, 'UTF-8'); ?>"
-                   alt="<?= htmlspecialchars(__('Foto autore'), ENT_QUOTES, 'UTF-8') ?>" loading="lazy"
-                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
-                   class="max-h-72 w-full object-contain rounded-lg shadow" />
-              <div class="hidden w-32 h-32 rounded-full bg-gray-200 items-center justify-center">
-                <i class="fas fa-user text-gray-400 text-4xl"></i>
-              </div>
-            <?php else: ?>
-              <div class="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center my-6">
-                <i class="fas fa-user text-gray-400 text-4xl"></i>
-              </div>
-            <?php endif; ?>
-          </div>
-          <div class="p-4 space-y-3">
-            <div class="text-base text-gray-600">
-              <i class="fas fa-book text-gray-400 mr-2"></i>
-              <span class="font-medium"><?= __('Totale Libri') ?>:</span>
-              <?php echo number_format($totalBooks, 0, ',', '.'); ?>
+    <!-- Identity card: photo + quick facts, full width, side-by-side -->
+    <div class="card mb-6">
+      <div class="p-6 flex flex-col sm:flex-row gap-6">
+        <div class="shrink-0 flex sm:block justify-center">
+          <?php if ($fotoUrl !== ''): ?>
+            <img src="<?php echo htmlspecialchars($fotoUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                 alt="<?= htmlspecialchars(__('Foto autore'), ENT_QUOTES, 'UTF-8') ?>" loading="lazy"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
+                 class="w-36 h-36 object-cover rounded-2xl border border-gray-200 shadow-sm" />
+            <div class="hidden w-36 h-36 rounded-2xl bg-gray-100 items-center justify-center">
+              <i class="fas fa-user text-gray-300 text-5xl"></i>
+            </div>
+          <?php else: ?>
+            <div class="w-36 h-36 rounded-2xl bg-gray-100 flex items-center justify-center">
+              <i class="fas fa-user text-gray-300 text-5xl"></i>
+            </div>
+          <?php endif; ?>
+        </div>
+
+        <div class="flex-1 min-w-0">
+          <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-gray-500"><?= __('Totale Libri') ?></dt>
+              <dd class="mt-1 text-base font-semibold text-gray-900"><?php echo number_format($totalBooks, 0, ',', '.'); ?></dd>
             </div>
             <?php if ($pseudonimo): ?>
-              <div class="text-base text-gray-600">
-                <i class="fas fa-theater-masks text-gray-400 mr-2"></i>
-                <span class="font-medium"><?= __("Pseudonimo") ?>:</span>
-                <?php echo HtmlHelper::e($pseudonimo); ?>
+              <div>
+                <dt class="text-xs uppercase tracking-wide text-gray-500"><?= __("Pseudonimo") ?></dt>
+                <dd class="mt-1 text-base font-semibold text-gray-900"><?php echo HtmlHelper::e($pseudonimo); ?></dd>
               </div>
             <?php endif; ?>
             <?php if ($dataNascita): ?>
-              <div class="text-base text-gray-600">
-                <i class="fas fa-birthday-cake text-gray-400 mr-2"></i>
-                <span class="font-medium"><?= __("Data di nascita") ?>:</span>
-                <?php echo HtmlHelper::e($dataNascita); ?>
+              <div>
+                <dt class="text-xs uppercase tracking-wide text-gray-500"><?= __("Data di nascita") ?></dt>
+                <dd class="mt-1 text-base font-semibold text-gray-900"><?php echo HtmlHelper::e($dataNascita); ?></dd>
               </div>
             <?php endif; ?>
             <?php if ($dataMorte): ?>
-              <div class="text-base text-gray-600">
-                <i class="fas fa-book-dead text-gray-400 mr-2"></i>
-                <span class="font-medium"><?= __("Data di morte") ?>:</span>
-                <?php echo HtmlHelper::e($dataMorte); ?>
+              <div>
+                <dt class="text-xs uppercase tracking-wide text-gray-500"><?= __("Data di morte") ?></dt>
+                <dd class="mt-1 text-base font-semibold text-gray-900"><?php echo HtmlHelper::e($dataMorte); ?></dd>
               </div>
             <?php endif; ?>
             <?php if ($nazionalita): ?>
-              <div class="text-base text-gray-600">
-                <i class="fas fa-flag text-gray-400 mr-2"></i>
-                <span class="font-medium"><?= __("Nazionalità") ?>:</span>
-                <?php echo HtmlHelper::e($nazionalita); ?>
+              <div>
+                <dt class="text-xs uppercase tracking-wide text-gray-500"><?= __("Nazionalità") ?></dt>
+                <dd class="mt-1 text-base font-semibold text-gray-900"><?php echo HtmlHelper::e($nazionalita); ?></dd>
               </div>
             <?php endif; ?>
             <?php if ($sitoWeb): ?>
-              <div class="text-base text-gray-600 break-words">
-                <i class="fas fa-globe text-gray-400 mr-2"></i>
-                <span class="font-medium"><?= __("Sito web") ?>:</span>
-                <a href="<?php echo htmlspecialchars($sitoWeb, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer" class="text-gray-900 hover:text-gray-600 underline decoration-gray-400">
-                  <?php echo HtmlHelper::e($sitoWeb); ?>
-                </a>
+              <div class="min-w-0">
+                <dt class="text-xs uppercase tracking-wide text-gray-500"><?= __("Sito web") ?></dt>
+                <dd class="mt-1 text-base font-semibold text-gray-900 truncate">
+                  <a href="<?php echo htmlspecialchars($sitoWeb, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer" class="text-gray-900 hover:text-gray-600 underline decoration-gray-400">
+                    <?php echo HtmlHelper::e($sitoWeb); ?>
+                  </a>
+                </dd>
               </div>
             <?php endif; ?>
-            <?php if (!empty($collegamenti)): ?>
-              <div class="text-base text-gray-600">
-                <i class="fas fa-link text-gray-400 mr-2"></i>
-                <span class="font-medium"><?= __("Collegamenti e fonti") ?>:</span>
-                <div class="mt-2 flex flex-wrap gap-2">
-                  <?php foreach ($collegamenti as $c): ?>
-                    <a href="<?php echo htmlspecialchars($c['url'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"
-                       class="inline-flex items-center px-2 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
-                      <i class="fas fa-external-link-alt mr-1 text-xs"></i><?php echo htmlspecialchars($c['etichetta'] !== '' ? $c['etichetta'] : $c['url'], ENT_QUOTES, 'UTF-8'); ?>
-                    </a>
-                  <?php endforeach; ?>
-                </div>
+            <?php if ($createdAt): ?>
+              <div>
+                <dt class="text-xs uppercase tracking-wide text-gray-500"><?= __("Creato il") ?></dt>
+                <dd class="mt-1 text-sm font-medium text-gray-600"><?php echo format_date($createdAt, true, '/'); ?></dd>
               </div>
             <?php endif; ?>
-            <?php if ($createdAt || $updatedAt): ?>
-              <div class="pt-3 border-t border-gray-100 space-y-2">
-                <?php if ($createdAt): ?>
-                  <div class="text-sm text-gray-500">
-                    <i class="fas fa-calendar-plus text-gray-400 mr-2"></i>
-                    <span class="font-medium"><?= __("Creato il") ?>:</span>
-                    <?php echo format_date($createdAt, true, '/'); ?>
-                  </div>
-                <?php endif; ?>
-                <?php if ($updatedAt): ?>
-                  <div class="text-sm text-gray-500">
-                    <i class="fas fa-calendar-check text-gray-400 mr-2"></i>
-                    <span class="font-medium"><?= __("Ultimo aggiornamento") ?>:</span>
-                    <?php echo format_date($updatedAt, true, '/'); ?>
-                  </div>
-                <?php endif; ?>
+            <?php if ($updatedAt): ?>
+              <div>
+                <dt class="text-xs uppercase tracking-wide text-gray-500"><?= __("Ultimo aggiornamento") ?></dt>
+                <dd class="mt-1 text-sm font-medium text-gray-600"><?php echo format_date($updatedAt, true, '/'); ?></dd>
               </div>
             <?php endif; ?>
+          </dl>
+
+          <?php if (!empty($collegamenti)): ?>
+            <div class="mt-5 pt-5 border-t border-gray-100">
+              <dt class="text-xs uppercase tracking-wide text-gray-500 mb-2"><?= __("Collegamenti e fonti") ?></dt>
+              <div class="flex flex-wrap gap-2">
+                <?php foreach ($collegamenti as $c): ?>
+                  <a href="<?php echo htmlspecialchars($c['url'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer"
+                     class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
+                    <i class="fas fa-external-link-alt mr-1.5 text-xs text-gray-400"></i><?php echo htmlspecialchars($c['etichetta'] !== '' ? $c['etichetta'] : $c['url'], ENT_QUOTES, 'UTF-8'); ?>
+                  </a>
+                <?php endforeach; ?>
+              </div>
+            </div>
+          <?php endif; ?>
+        </div>
+      </div>
+    </div>
+
+    <!-- Biography: full width -->
+    <?php if ($biografia): ?>
+      <div class="card mb-6">
+        <div class="p-6">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <i class="fas fa-feather text-gray-600"></i>
+            <?= __("Biografia") ?>
+          </h2>
+          <div class="prose prose-sm sm:prose max-w-none text-gray-700 leading-relaxed">
+            <?php echo nl2br(HtmlHelper::e($biografia)); ?>
           </div>
         </div>
       </div>
+    <?php endif; ?>
 
-      <!-- Right: biography + book catalog -->
-      <div class="lg:col-span-2 space-y-6">
-        <?php if ($biografia): ?>
-          <div class="card">
-            <div class="p-6">
-              <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <i class="fas fa-feather text-gray-600"></i>
-                <?= __("Biografia") ?>
-              </h2>
-              <div class="prose prose-sm max-w-none text-gray-700 leading-relaxed">
-                <?php echo nl2br(HtmlHelper::e($biografia)); ?>
-              </div>
+    <!-- Book catalog: full width, its own row -->
+    <div class="card">
+      <div class="p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+          <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
+            <i class="fas fa-book text-gray-600"></i>
+            <?= __("Catalogo libri") ?>
+            <span class="bg-gray-200 text-gray-800 text-xs font-bold px-2.5 py-1 rounded-full">
+              <?= sprintf(__("%d titoli"), $totalBooks) ?>
+            </span>
+          </h2>
+          <a href="<?= htmlspecialchars(url('/admin/books/create'), ENT_QUOTES, 'UTF-8') ?>"
+             class="<?php echo $btnPrimary; ?> justify-center">
+            <i class="fas fa-plus"></i>
+            <?= __("Aggiungi nuovo libro") ?>
+          </a>
+        </div>
+
+        <?php if ($totalBooks === 0): ?>
+          <div class="text-center py-12 bg-gray-50 rounded-2xl">
+            <div class="mx-auto mb-4 w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center">
+              <i class="fas fa-book text-gray-500 text-2xl"></i>
             </div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-1"><?= __("Nessun libro trovato") ?></h3>
+            <p class="text-sm text-gray-500"><?= __("Questo autore non ha ancora libri registrati nella biblioteca.") ?></p>
+          </div>
+        <?php else: ?>
+          <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            <?php foreach ($libri as $libro): ?>
+              <?php
+                $cover = (string)($libro['copertina_url'] ?? '');
+                if ($cover === '' && !empty($libro['copertina'])) { $cover = (string)$libro['copertina']; }
+                if ($cover !== '' && strncmp($cover, 'uploads/', 8) === 0) { $cover = '/' . $cover; }
+                if ($cover === '') { $cover = '/uploads/copertine/placeholder.jpg'; }
+                $cover = preg_match('#^https?://#', $cover) ? $cover : url($cover);
+              ?>
+              <article class="group bg-white border border-gray-200 rounded-2xl overflow-hidden hover:border-gray-300 hover:shadow-xl transition-all duration-300">
+                <div class="relative h-52 bg-gray-100 overflow-hidden">
+                  <img src="<?php echo htmlspecialchars($cover, ENT_QUOTES, 'UTF-8'); ?>"
+                       alt="Copertina <?php echo HtmlHelper::e($libro['titolo'] ?? ''); ?>"
+                       class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                       onerror="this.onerror=null;this.src=(window.BASE_PATH||'')+'/uploads/copertine/placeholder.jpg'">
+                </div>
+                <div class="p-5 space-y-3">
+                  <div>
+                    <h3 class="text-base font-semibold text-gray-900 line-clamp-2 group-hover:text-gray-600 transition-colors">
+                      <a href="<?= htmlspecialchars(url('/admin/books/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>"><?php echo HtmlHelper::e($libro['titolo'] ?? 'Titolo non disponibile'); ?></a>
+                    </h3>
+                    <?php if (!empty($libro['editore_nome'])): ?>
+                      <p class="text-sm text-gray-500 mt-1"><?= sprintf(__("Editore: %s"), HtmlHelper::e($libro['editore_nome'])) ?></p>
+                    <?php endif; ?>
+                  </div>
+                  <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs uppercase tracking-wide text-gray-500">
+                    <span><?= sprintf(__("ISBN13: %s"), HtmlHelper::e($libro['isbn13'] ?? $libro['ean'] ?? 'N/D')) ?></span>
+                    <span class="whitespace-nowrap"><?php echo HtmlHelper::e(__(ucfirst($libro['stato'] ?? ''))); ?></span>
+                  </div>
+                  <div class="flex gap-2 pt-3 items-center">
+                    <a href="<?= htmlspecialchars(url('/admin/books/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>"
+                       class="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 text-white text-sm font-medium px-3 h-11 hover:bg-gray-700 transition whitespace-nowrap">
+                      <i class="fas fa-eye"></i><?= __("Dettagli") ?>
+                    </a>
+                    <a href="<?= htmlspecialchars(url('/admin/books/edit/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>"
+                       class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border-2 border-gray-300 text-gray-700 text-sm font-medium h-11 hover:bg-gray-100 transition"
+                       title="<?= __("Modifica") ?>">
+                      <i class="fas fa-edit"></i>
+                      <?= __("Modifica") ?>
+                    </a>
+                  </div>
+                </div>
+              </article>
+            <?php endforeach; ?>
           </div>
         <?php endif; ?>
-
-        <div class="card">
-          <div class="p-6">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
-              <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                <i class="fas fa-book text-gray-600"></i>
-                <?= __("Catalogo libri") ?>
-                <span class="bg-gray-200 text-gray-800 text-xs font-bold px-2.5 py-1 rounded-full">
-                  <?= sprintf(__("%d titoli"), $totalBooks) ?>
-                </span>
-              </h2>
-              <a href="<?= htmlspecialchars(url('/admin/books/create'), ENT_QUOTES, 'UTF-8') ?>"
-                 class="<?php echo $btnPrimary; ?> justify-center">
-                <i class="fas fa-plus"></i>
-                <?= __("Aggiungi nuovo libro") ?>
-              </a>
-            </div>
-
-            <?php if ($totalBooks === 0): ?>
-              <div class="text-center py-12 bg-gray-50 rounded-2xl">
-                <div class="mx-auto mb-4 w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center">
-                  <i class="fas fa-book text-gray-500 text-2xl"></i>
-                </div>
-                <h3 class="text-lg font-semibold text-gray-900 mb-1"><?= __("Nessun libro trovato") ?></h3>
-                <p class="text-sm text-gray-500"><?= __("Questo autore non ha ancora libri registrati nella biblioteca.") ?></p>
-              </div>
-            <?php else: ?>
-              <div class="grid gap-5 sm:grid-cols-2">
-                <?php foreach ($libri as $libro): ?>
-                  <?php
-                    $cover = (string)($libro['copertina_url'] ?? '');
-                    if ($cover === '' && !empty($libro['copertina'])) { $cover = (string)$libro['copertina']; }
-                    if ($cover !== '' && strncmp($cover, 'uploads/', 8) === 0) { $cover = '/' . $cover; }
-                    if ($cover === '') { $cover = '/uploads/copertine/placeholder.jpg'; }
-                    $cover = preg_match('#^https?://#', $cover) ? $cover : url($cover);
-                  ?>
-                  <article class="group bg-white border border-gray-200 rounded-2xl overflow-hidden hover:border-gray-300 hover:shadow-xl transition-all duration-300">
-                    <div class="relative h-52 bg-gray-100 overflow-hidden">
-                      <img src="<?php echo htmlspecialchars($cover, ENT_QUOTES, 'UTF-8'); ?>"
-                           alt="Copertina <?php echo HtmlHelper::e($libro['titolo'] ?? ''); ?>"
-                           class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                           onerror="this.onerror=null;this.src=(window.BASE_PATH||'')+'/uploads/copertine/placeholder.jpg'">
-                    </div>
-                    <div class="p-5 space-y-3">
-                      <div>
-                        <h3 class="text-base font-semibold text-gray-900 line-clamp-2 group-hover:text-gray-600 transition-colors">
-                          <a href="<?= htmlspecialchars(url('/admin/books/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>"><?php echo HtmlHelper::e($libro['titolo'] ?? 'Titolo non disponibile'); ?></a>
-                        </h3>
-                        <?php if (!empty($libro['editore_nome'])): ?>
-                          <p class="text-sm text-gray-500 mt-1"><?= sprintf(__("Editore: %s"), HtmlHelper::e($libro['editore_nome'])) ?></p>
-                        <?php endif; ?>
-                      </div>
-                      <div class="flex items-center justify-between text-xs uppercase tracking-wide text-gray-500">
-                        <span><?= sprintf(__("ISBN13: %s"), HtmlHelper::e($libro['isbn13'] ?? $libro['ean'] ?? 'N/D')) ?></span>
-                        <span><?php echo HtmlHelper::e(__(ucfirst($libro['stato'] ?? ''))); ?></span>
-                      </div>
-                      <div class="flex gap-2 pt-3 items-center">
-                        <a href="<?= htmlspecialchars(url('/admin/books/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>"
-                           class="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 text-white text-sm font-medium px-3 h-11 hover:bg-gray-700 transition whitespace-nowrap">
-                          <i class="fas fa-eye"></i><?= __("Dettagli") ?>
-                        </a>
-                        <a href="<?= htmlspecialchars(url('/admin/books/edit/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>"
-                           class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border-2 border-gray-300 text-gray-700 text-sm font-medium h-11 hover:bg-gray-100 transition"
-                           title="<?= __("Modifica") ?>">
-                          <i class="fas fa-edit"></i>
-                          <?= __("Modifica") ?>
-                        </a>
-                      </div>
-                    </div>
-                  </article>
-                <?php endforeach; ?>
-              </div>
-            <?php endif; ?>
-          </div>
-        </div>
       </div>
     </div>
   </div>
