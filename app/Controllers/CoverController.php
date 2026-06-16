@@ -285,7 +285,9 @@ class CoverController
     }
 
     /**
-     * Ensure the URL uses HTTPS, belongs to the whitelist and resolves to public IPs.
+     * Ensure the URL uses HTTPS and resolves to public IPs only. The host allow-list
+     * was removed (issue #173); the boundary is assertPublicDns() + per-hop IP pinning
+     * in downloadCover(), which is what actually prevents reaching internal services.
      */
     private function assertUrlAllowed(string $url): string
     {
@@ -299,8 +301,14 @@ class CoverController
         }
 
         $host = strtolower($parts['host']);
-        if (!in_array($host, self::ALLOWED_DOMAINS, true)) {
-            throw new \RuntimeException('Dominio non autorizzato per il download');
+
+        // Issue #173: the exact-host allow-list kept blocking legitimate covers whose
+        // CDN host is dynamic (covers.openlibrary.org 302s to archive.org /
+        // iaNNNNNN.us.archive.org). We trust any public HTTPS host here; the real SSRF
+        // boundary is assertPublicDns() below, which rejects private/reserved IPs (and
+        // is re-checked on every redirect hop by downloadCover()).
+        if ($host === '') {
+            throw new \RuntimeException('URL malformato');
         }
 
         $this->assertPublicDns($host);
@@ -319,11 +327,22 @@ class CoverController
         for ($redirects = 0; $redirects <= 3; $redirects++) {
             $this->assertUrlAllowed($currentUrl);
 
+            // Pin the connection to the validated public IP: assertPublicDns() resolves
+            // and validates, but cURL would re-resolve on connect — a DNS rebind in
+            // between could reach a different (internal) address. CURLOPT_RESOLVE stops
+            // that by forcing cURL to use the exact IP we just checked, per hop.
+            $pinHost = strtolower((string) (parse_url($currentUrl, PHP_URL_HOST) ?? ''));
+            $pinIp = \App\Support\SsrfGuard::resolvePinnedIp($pinHost);
+            if ($pinIp === null) {
+                throw new \RuntimeException('Host non risolvibile a un IP pubblico');
+            }
+
             $ch = curl_init($currentUrl);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_HEADER => true,
                 CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_RESOLVE => ["$pinHost:443:$pinIp", "$pinHost:80:$pinIp"],
                 CURLOPT_TIMEOUT => 20,
                 CURLOPT_CONNECTTIMEOUT => 10,
                 CURLOPT_SSL_VERIFYPEER => true,
@@ -428,54 +447,22 @@ class CoverController
         }
 
         foreach ($ips as $ip) {
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+            if (!\App\Support\SsrfGuard::isPublicIp($ip)) {
                 throw new \RuntimeException('IP privato non consentito');
             }
         }
 
         foreach ($aaaaRecords as $record) {
             $ipv6 = $record['ipv6'] ?? null;
-            if ($ipv6 && filter_var($ipv6, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+            if ($ipv6 && !\App\Support\SsrfGuard::isPublicIp((string) $ipv6)) {
                 throw new \RuntimeException('IP privato non consentito');
             }
         }
     }
 
-    private const ALLOWED_DOMAINS = [
-        // Google Books
-        'images.google.com',
-        'books.google.com',
-        'books.google.it',
-        'books.google.co.uk',
-
-        // OpenLibrary
-        'covers.openlibrary.org',
-
-        // Italian bookstores
-        'www.libreriauniversitaria.it',
-        'img.libreriauniversitaria.it',
-        'img2.libreriauniversitaria.it',
-        'img3.libreriauniversitaria.it',
-        'www.ibs.it',
-        'images.ibs.it',
-        'www.lafeltrinelli.it',
-        'www.ubiklibri.it',
-        'ubiklibri.it',
-        'cdn.mondadoristore.it',
-
-        // Amazon CDN
-        'images-na.ssl-images-amazon.com',
-        'images-eu.ssl-images-amazon.com',
-        'm.media-amazon.com',
-        'images-amazon.com',
-
-        // Goodreads
-        'd.gr-assets.com',
-        'i.gr-assets.com',
-        's.gr-assets.com',
-
-        // Other bookstores
-        'prodimage.images-bn.com',
-        'cdn-images.bookshop.org'
-    ];
+    // NOTE (issue #173): the previous exact-host ALLOWED_DOMAINS list was removed.
+    // It blocked legitimate covers whose CDN host is dynamic (covers.openlibrary.org
+    // 302s to archive.org / iaNNNNNN.us.archive.org). Cover fetches now accept any
+    // public HTTPS host; SSRF is bounded by assertPublicDns() (private/reserved IPs
+    // rejected) and re-checked on every redirect hop in downloadCover().
 }

@@ -39,7 +39,48 @@ class LibriController
         // Ubik Libri
         'www.ubiklibri.it',
         'ubiklibri.it',
+        // Internet Archive — covers.openlibrary.org 302-redirects here (issue #173)
+        'archive.org',
     ];
+
+    /**
+     * Wide suffix allow-list for cover hosts (issue #173). Exact-host matching kept
+     * blocking legitimate sources whose CDN host is dynamic — most notably
+     * covers.openlibrary.org, which 302s to archive.org / iaNNNNNN.us.archive.org.
+     * These suffixes cover the major book-cover CDNs. SSRF is still bounded by the
+     * private/reserved-IP check, the image-content validation and the size cap below.
+     */
+    private const COVER_ALLOWED_SUFFIXES = [
+        '.archive.org',
+        '.openlibrary.org',
+        '.googleusercontent.com', '.ggpht.com', '.gstatic.com', '.googleapis.com', '.google.com',
+        '.ssl-images-amazon.com', '.media-amazon.com', '.images-amazon.com', '.amazonaws.com',
+        '.cloudfront.net', '.akamaized.net', '.akamaihd.net', '.fastly.net', '.cloudflare.com',
+        '.cloudinary.com', '.imgix.net', '.wikimedia.org',
+        '.gr-assets.com', '.images-bn.com', '.bookshop.org',
+        '.libreriauniversitaria.it', '.mondadoristore.it', '.lafeltrinelli.it', '.ibs.it', '.ubiklibri.it',
+    ];
+
+    /**
+     * Whether a host may be fetched as a cover source: exact match in
+     * COVER_ALLOWED_DOMAINS, or ends with one of the wide COVER_ALLOWED_SUFFIXES.
+     */
+    private static function coverHostAllowed(string $host): bool
+    {
+        if ($host === '') {
+            return false;
+        }
+        $host = strtolower($host);
+        if (\in_array($host, self::COVER_ALLOWED_DOMAINS, true)) {
+            return true;
+        }
+        foreach (self::COVER_ALLOWED_SUFFIXES as $suffix) {
+            if (str_ends_with($host, $suffix)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * Maximum file size for cover downloads (5MB)
@@ -135,137 +176,26 @@ class LibriController
         $parsedUrl = parse_url($url);
         $host = strtolower($parsedUrl['host'] ?? '');
 
-        // Use centralized whitelist
-        if (!\in_array($host, self::COVER_ALLOWED_DOMAINS, true)) {
+        // Initial host: wide cover allow-list (exact + suffix). The real SSRF
+        // boundary is the public-IP check after each request, not this list.
+        if (!self::coverHostAllowed($host)) {
             \App\Support\SecureLogger::warning('Cover download from non-whitelisted domain', ['url' => $url, 'host' => $host]);
             return $url; // Return original URL if domain not allowed
         }
 
         try {
-            // First, check file size via HEAD request to avoid downloading huge files
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_NOBODY => true,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_MAXREDIRS => 3,
-                CURLOPT_TIMEOUT => 10,
-                CURLOPT_CONNECTTIMEOUT => 5,
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_SSL_VERIFYHOST => 2,
-                CURLOPT_USERAGENT => 'BibliotecaCoverBot/1.0',
-            ]);
-            if (defined('CURLOPT_PROTOCOLS_STR')) {
-                curl_setopt($ch, CURLOPT_PROTOCOLS_STR, 'https,http');
-                curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS_STR, 'https,http');
-            } else {
-                curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS | CURLPROTO_HTTP);
-                curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS | CURLPROTO_HTTP);
+            // SSRF-safe fetch: redirects are followed MANUALLY, each hop's host is
+            // resolved to a validated PUBLIC IP and pinned via CURLOPT_RESOLVE, with a
+            // size cap and image validation (App\Support\SsrfGuard). This is what lets
+            // the cover allow-list stay wide (issue #173) without an SSRF: a wide host
+            // can still never make the server reach an internal/reserved IP, on any hop.
+            $fetched = \App\Support\SsrfGuard::fetchImage($url, self::MAX_COVER_SIZE);
+            if ($fetched === null) {
+                \App\Support\SecureLogger::warning('Cover not saved locally: SSRF-safe fetch blocked or failed', ['url' => $url]);
+                return $url; // keep the original URL when we cannot safely localise it
             }
-            curl_exec($ch);
-            $effectiveUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
-            $effectiveHost = strtolower((string) (parse_url($effectiveUrl, PHP_URL_HOST) ?? ''));
-            $primaryIp = (string) curl_getinfo($ch, CURLINFO_PRIMARY_IP);
-            $contentLength = (int) curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
-            curl_close($ch);
+            [$imageData, $mimeType] = $fetched;
 
-            // SSRF protection: block redirects to non-whitelisted hosts
-            if ($effectiveHost === '' || !\in_array($effectiveHost, self::COVER_ALLOWED_DOMAINS, true)) {
-                \App\Support\SecureLogger::warning('Cover download blocked: redirected to non-whitelisted host', [
-                    'url' => $url,
-                    'effective_url' => $effectiveUrl,
-                    'effective_host' => $effectiveHost,
-                ]);
-                return $url;
-            }
-
-            // SSRF protection: block private/reserved IP ranges after redirect resolution
-            if ($primaryIp !== '' && filter_var($primaryIp, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-                \App\Support\SecureLogger::warning('Cover download blocked: private IP after redirect', [
-                    'url' => $url,
-                    'resolved_ip' => $primaryIp
-                ]);
-                return $url;
-            }
-
-            // Check size limit before downloading (if Content-Length is provided)
-            if ($contentLength > self::MAX_COVER_SIZE) {
-                \App\Support\SecureLogger::warning('Cover too large (HEAD check)', [
-                    'url' => $url,
-                    'size' => $contentLength,
-                    'max' => self::MAX_COVER_SIZE
-                ]);
-                return $url;
-            }
-
-            // Download the image
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_MAXREDIRS => 3,
-                CURLOPT_TIMEOUT => 20,
-                CURLOPT_CONNECTTIMEOUT => 10,
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_SSL_VERIFYHOST => 2,
-                CURLOPT_USERAGENT => 'BibliotecaCoverBot/1.0',
-            ]);
-            if (defined('CURLOPT_PROTOCOLS_STR')) {
-                curl_setopt($ch, CURLOPT_PROTOCOLS_STR, 'https,http');
-                curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS_STR, 'https,http');
-            } else {
-                curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS | CURLPROTO_HTTP);
-                curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS | CURLPROTO_HTTP);
-            }
-
-            $imageData = curl_exec($ch);
-            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $effectiveUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
-            $effectiveHost = strtolower((string) (parse_url($effectiveUrl, PHP_URL_HOST) ?? ''));
-            $primaryIp = (string) curl_getinfo($ch, CURLINFO_PRIMARY_IP);
-            curl_close($ch);
-
-            // SSRF protection: block redirects to non-whitelisted hosts
-            if ($effectiveHost === '' || !\in_array($effectiveHost, self::COVER_ALLOWED_DOMAINS, true)) {
-                \App\Support\SecureLogger::warning('Cover GET blocked: redirected to non-whitelisted host', [
-                    'url' => $url,
-                    'effective_url' => $effectiveUrl,
-                    'effective_host' => $effectiveHost,
-                ]);
-                return $url;
-            }
-
-            // SSRF protection: block private/reserved IP ranges after redirect resolution
-            if ($primaryIp !== '' && filter_var($primaryIp, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-                \App\Support\SecureLogger::warning('Cover GET blocked: private IP after redirect', [
-                    'url' => $url,
-                    'resolved_ip' => $primaryIp
-                ]);
-                return $url;
-            }
-
-            if ($imageData === false || $httpCode !== 200 || \strlen($imageData) < 100) {
-                \App\Support\SecureLogger::warning('Cover download failed', ['url' => $url, 'http_code' => $httpCode]);
-                return $url; // Return original URL on download failure
-            }
-
-            // Verify size after download (in case Content-Length was not provided or wrong)
-            if (\strlen($imageData) > self::MAX_COVER_SIZE) {
-                \App\Support\SecureLogger::warning('Cover too large (POST check)', [
-                    'url' => $url,
-                    'size' => \strlen($imageData),
-                    'max' => self::MAX_COVER_SIZE
-                ]);
-                return $url;
-            }
-
-            // Validate image
-            $imageInfo = @getimagesizefromstring($imageData);
-            if ($imageInfo === false) {
-                \App\Support\SecureLogger::warning('Invalid image data', ['url' => $url]);
-                return $url;
-            }
-
-            $mimeType = $imageInfo['mime'];
             $extension = match ($mimeType) {
                 'image/jpeg', 'image/jpg' => 'jpg',
                 'image/png' => 'png',
@@ -2393,7 +2323,7 @@ class LibriController
             return false;
         }
 
-        return \in_array($host, self::COVER_ALLOWED_DOMAINS, true);
+        return self::coverHostAllowed(strtolower($host));
     }
 
     /**
