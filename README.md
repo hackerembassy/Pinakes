@@ -34,6 +34,20 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 
 ---
 
+## What's New in v0.7.20.1
+
+Maintenance release — two fixes, no schema change.
+
+### Book covers from OpenLibrary now save ([#173](https://github.com/fabiodalez-dev/Pinakes/issues/173))
+
+OpenLibrary serves its cover images via a redirect from `covers.openlibrary.org` to the Internet Archive, which the cover downloader's strict host check blocked — so the cover previewed on the edit form but was dropped on save. Cover fetching was reworked to accept any public source while staying **SSRF-safe**: redirects are followed one hop at a time, every hop's host is resolved to a verified **public** IP and the connection is **pinned** to it (no DNS-rebind), and IPv4-mapped / NAT64 addresses are rejected. OpenLibrary (and any CDN-hosted) covers now download and are stored as a local file.
+
+### Hardened updater — fail-closed patches ([#174](https://github.com/fabiodalez-dev/Pinakes/pull/174))
+
+Follow-ups to the in-app updater: a present-but-broken pre-update patch now aborts the update (fail-closed) instead of silently proceeding un-patched; a post-install patch error is surfaced as a warning instead of being hidden; and the releases API fetch no longer follows redirects with the auth token. Internal-only robustness — no action needed on upgrade.
+
+---
+
 ## What's New in v0.7.20
 
 ### Author profiles — photo & sources ([#163](https://github.com/fabiodalez-dev/Pinakes/issues/163) / [#170](https://github.com/fabiodalez-dev/Pinakes/pull/170))
