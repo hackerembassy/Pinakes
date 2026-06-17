@@ -413,6 +413,18 @@ test.describe.serial('Mobile API plugin — E2E suite', () => {
         expect(body.meta).toHaveProperty('https');
     });
 
+    test('9b. /health advertises a VAPID public key (applicationServerKey)', async ({ request }) => {
+        const res  = await apiGet(request, '/health');
+        const body = await res.json();
+        const d = body.data;
+        // The plugin auto-generates a VAPID keypair; the public key is exposed so
+        // the app can subscribe. It is a base64url uncompressed P-256 point (87 chars).
+        expect(typeof d.vapid_public_key).toBe('string');
+        expect(d.vapid_public_key.length).toBe(87);
+        expect(d.vapid_public_key).toMatch(/^[A-Za-z0-9_-]+$/); // base64url, no padding
+        expect(d.features.push).toBe(true);                     // push available once keyed
+    });
+
     // ══ 3. Auth — login ════════════════════════════════════════════════════════
 
     test('10. POST /auth/login success → token returned + user payload', async ({ request }) => {

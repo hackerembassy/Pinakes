@@ -8,7 +8,7 @@ completed by hand afterwards.
 ## Verification (run on Apache :8081 + MySQL)
 
 - **PHPStan level 5**: clean on the whole plugin + `app/Support/HttpClient.php` — **0 errors**.
-- **E2E suite** (`tests/mobile-api.spec.js`, 73 tests): **72 passed, 1 skipped**.
+- **E2E suite** (`tests/mobile-api.spec.js`, 74 tests): **73 passed, 1 skipped**.
   - The 1 skip is test 62 (login rate-limit → 429). It self-skips because the dev/E2E
     server runs `PINAKES_E2E_BYPASS_RATE_LIMIT=1` (`SetEnv` in `pinakes.conf`), which
     the broader serial suite needs so its many logins don't saturate the bucket. The
@@ -41,13 +41,31 @@ Fixed by **reusing `app/Support/SsrfGuard.php`** (the same guard built for cover
 - **Send** (`UnifiedPushProvider::send`): re-resolves to a public IP and **pins** the
   connection to it (TOCTOU/DNS-rebind defense) via a new additive `pin_ip` option on
   `HttpClient` (Guzzle `CURLOPT_RESOLVE`), with `max_redirects=0` so a 302 can't bypass.
+- **HTTPS enforcement** (`HttpsEnforceMiddleware`): the dev loopback exemption is decided
+  from the real TCP peer (`REMOTE_ADDR`), not the client-controllable `Host` header — a
+  remote `Host: localhost` can no longer bypass HTTPS and leak a token in cleartext.
+  (Fixes a background-review MEDIUM finding on the pushed commits.)
+
+## VAPID signing — DONE (RFC 8292)
+
+Real ES256 VAPID signing is implemented (`src/Push/VapidSigner.php`), no external
+dependency (raw OpenSSL):
+
+- A P-256 keypair is auto-generated per instance and stored (public plain, **private
+  encrypted** via `SettingsEncryption`); the public key is exposed at `/health`
+  (`vapid_public_key`, the app's `applicationServerKey`).
+- Each push carries a signed `Authorization: vapid t=<JWT>, k=<pub>` header bound to
+  the endpoint origin, plus `Crypto-Key: p256ecdsa=…` for older servers. Signing is
+  best-effort — a failure never blocks delivery.
+- Verified end-to-end: the generated ES256 signature **validates** against the public
+  key (DER→raw R||S conversion confirmed); E2E test asserts `/health` advertises the key.
 
 ## Partial / caveats (honest)
 
-- **VAPID signing is advisory-only.** `UnifiedPushProvider` delivers the WebPush POST
-  but does not compute a real VAPID JWT (sent as an advisory `X-Push-Subject` header).
-  Distributors that strictly require VAPID will reject; most self-hosted ones accept.
-  Real JWT signing is the main push TODO.
+- **Web Push payload encryption (RFC 8291) is NOT done.** The JSON payload is sent
+  unencrypted. UnifiedPush distributors that accept application payloads (the common
+  self-hosted case: ntfy/NextPush) deliver it; ECDH/HKDF encryption is a follow-up if
+  end-to-end-encrypted Web Push is required.
 - **`FcmProvider` is a stub** (returns skipped). UnifiedPush is the primary path per
   the chosen design; FCM HTTP v1 is left as a follow-up.
 - **`registration_enabled` in /health** falls back to "open unless private mode" — core
