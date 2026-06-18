@@ -411,11 +411,18 @@ final class AuthController
      * Produce a throwaway bcrypt hash of random bytes for constant-time
      * verification on the no-such-user path. Never persisted, never a credential.
      */
+    /** Process-cached dummy bcrypt hash (computed once, see dummyHash()). */
+    private static ?string $dummyHash = null;
+
     private static function dummyHash(): string
     {
-        // Bcrypt of random bytes — a non-matching, non-persisted hash used solely
-        // to keep the no-such-user code path constant-time vs. wrong-password.
-        return password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT);
+        // A valid, non-matching bcrypt hash used to keep the no-such-user path's
+        // timing close to the wrong-password path. Computed ONCE per process and
+        // cached — not a fresh password_hash() per call — so a flood of
+        // unknown-email logins can't force a bcrypt computation on every request
+        // (CPU-exhaustion vector). It is still a real bcrypt hash, so
+        // password_verify() does the full work (constant-time) and always fails.
+        return self::$dummyHash ??= password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT);
     }
 
     private function generateTessera(): string

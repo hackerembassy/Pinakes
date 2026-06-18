@@ -633,9 +633,25 @@ class MobileApiPlugin
             'enabled'              => $repo->get(self::ENABLE_CATEGORY, self::ENABLE_KEY, '0') ?? '0',
             'push_provider'        => $repo->get(self::ENABLE_CATEGORY, self::PUSH_PROVIDER_KEY, 'unifiedpush') ?? 'unifiedpush',
             'push_vapid_subject'   => $repo->get(self::ENABLE_CATEGORY, self::PUSH_VAPID_SUBJECT_KEY, '') ?? '',
-            'push_fcm_credentials' => $repo->get(self::ENABLE_CATEGORY, self::PUSH_FCM_CREDENTIALS_KEY, '') ?? '',
+            'push_fcm_credentials' => $this->fcmCredentials(),
             'push_vapid_public_key' => $repo->get(self::ENABLE_CATEGORY, self::PUSH_VAPID_PUBLIC_KEY, '') ?? '',
         ];
+    }
+
+    /**
+     * The FCM service-account JSON, decrypted from its at-rest encrypted form.
+     * Empty string when unset. Tolerates a legacy plaintext value (decrypt returns
+     * null on a non-ciphertext input → fall back to the raw stored string).
+     */
+    private function fcmCredentials(): string
+    {
+        $stored = (string) ($this->repo()->get(self::ENABLE_CATEGORY, self::PUSH_FCM_CREDENTIALS_KEY, '') ?? '');
+        if ($stored === '') {
+            return '';
+        }
+        $plain = \App\Support\SettingsEncryption::decrypt($stored);
+
+        return ($plain !== null && $plain !== '') ? $plain : $stored;
     }
 
     /**
@@ -702,7 +718,15 @@ class MobileApiPlugin
             }
 
             if (array_key_exists('push_fcm_credentials', $settings)) {
-                $repo->set(self::ENABLE_CATEGORY, self::PUSH_FCM_CREDENTIALS_KEY, trim((string) $settings['push_fcm_credentials']));
+                // FCM service-account JSON contains a private key → encrypt at rest
+                // (same treatment as the VAPID private key), so a DB dump / stray
+                // read can't expose the Google credential.
+                $fcm = trim((string) $settings['push_fcm_credentials']);
+                $repo->set(
+                    self::ENABLE_CATEGORY,
+                    self::PUSH_FCM_CREDENTIALS_KEY,
+                    $fcm === '' ? '' : \App\Support\SettingsEncryption::encrypt($fcm)
+                );
             }
 
             return true;

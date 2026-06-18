@@ -799,12 +799,12 @@ final class CatalogController
     private function notModified(ServerRequestInterface $request, string $etag): bool
     {
         $ifNoneMatch = trim($request->getHeaderLine('If-None-Match'));
-        if ($ifNoneMatch === '') {
+        if ($ifNoneMatch === '' || $ifNoneMatch === '*') {
+            // No validator, or the "*" wildcard. "*" is only meaningful for
+            // conditional writes; for a GET we don't honor it (it would let any
+            // client force a 304 without ever having seen the resource) — serve the
+            // full representation instead.
             return false;
-        }
-        // Honor a comma-separated list and the "*" wildcard.
-        if ($ifNoneMatch === '*') {
-            return true;
         }
         foreach (explode(',', $ifNoneMatch) as $candidate) {
             $candidate = trim($candidate);

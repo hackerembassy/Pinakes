@@ -681,7 +681,8 @@ final class ActionsController
      * manifest). Core has no per-user notification table (admin_notifications is
      * admin-only), so the feed is DERIVED, read-only, from the user's own
      * actionable state: loans due-soon, loans overdue, reservations ready for
-     * pickup, and reservations that became loanable. Strictly user-scoped.
+     * pickup, and watched titles that became available again (book_available,
+     * from mobile_availability_watchers). Strictly user-scoped.
      *
      * This intentionally mirrors the push trigger taxonomy (loan_due,
      * loan_overdue, reservation_ready, book_available) so the app renders the same
@@ -755,10 +756,13 @@ final class ActionsController
             }
 
             // Reservations promoted to a pending pickup loan (ready to collect).
+            // Only 'da_ritirare' is actually ready — matches the push dispatcher's
+            // reservation_ready sweep. 'prenotato' is still queued (not yet ready)
+            // and would be mislabelled "pronto per il ritiro", so it is excluded.
             $sql = "SELECT pr.id, pr.libro_id, pr.data_scadenza, l.titolo
                     FROM prestiti pr
                     JOIN libri l ON l.id = pr.libro_id AND l.deleted_at IS NULL
-                    WHERE pr.utente_id = ? AND pr.stato IN ('da_ritirare','prenotato')
+                    WHERE pr.utente_id = ? AND pr.stato = 'da_ritirare'
                       AND pr.origine = 'prenotazione'
                     ORDER BY pr.created_at DESC";
             $stmt = $this->db->prepare($sql);
@@ -1043,6 +1047,13 @@ final class ActionsController
     {
         $tokenId = $request->getAttribute(AppAuthMiddleware::ATTR_TOKEN_ID);
         $keepId  = is_int($tokenId) ? $tokenId : 0;
+        // Defensive: the caller's token id is always set by AppAuthMiddleware, but
+        // if it were ever absent/0 the "id <> 0" predicate would match EVERY token
+        // and revoke the caller's own device too (self-DoS). Abort instead.
+        if ($keepId <= 0) {
+            SecureLogger::warning('[MobileApi] revokeOtherTokens skipped: missing caller token id');
+            return;
+        }
 
         $stmt = $this->db->prepare(
             'UPDATE mobile_app_tokens SET revoked_at = NOW()

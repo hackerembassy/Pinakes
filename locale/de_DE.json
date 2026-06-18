@@ -5319,7 +5319,7 @@
   "Orario silenzioso non valido (formato HH:MM).": "Ungültige Ruhezeiten (Format HH:MM).",
   "Preferenze aggiornate.": "Einstellungen aktualisiert.",
   "Libro di nuovo disponibile": "Buch wieder verfügbar",
-  "\"%s\" è di nuovo disponibile per il prestito.": "\"%s\" ist wieder ausleihbar.",
+  "\"%s\" è di nuovo disponibile per il prestito.": "„%s“ ist wieder ausleihbar.",
   "Notifiche push": "Push-Benachrichtigungen",
   "Facoltative. Senza credenziali l'app riceve comunque le notifiche tramite il feed in-app (polling). Le notifiche push non bloccano mai il funzionamento.": "Optional. Ohne Zugangsdaten erhält die App Benachrichtigungen weiterhin über den In-App-Feed (Polling). Push blockiert den Betrieb nie.",
   "Provider push": "Push-Anbieter",

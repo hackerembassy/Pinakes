@@ -347,7 +347,7 @@ $tabDevicesUrl  = htmlspecialchars(url('/admin/plugins/' . $resolvedId . '/setti
                   <input type="hidden" name="action" value="revoke_device">
                   <input type="hidden" name="device_id" value="<?= $devId ?>">
                   <button type="button"
-                          aria-label="<?= htmlspecialchars(__('Revoca') . ': ' . $deviceName, ENT_QUOTES, 'UTF-8') ?>"
+                          aria-label="<?= htmlspecialchars(__('Revoca') . ': ' . ($deviceName !== '' ? $deviceName : __('Sconosciuto')), ENT_QUOTES, 'UTF-8') ?>"
                           data-device-name="<?= htmlspecialchars($deviceName, ENT_QUOTES, 'UTF-8') ?>"
                           data-user-name="<?= htmlspecialchars($userName ?: $userEmail, ENT_QUOTES, 'UTF-8') ?>"
                           data-form-id="mobile-device-revoke-form-<?= $devId ?>"

@@ -57,4 +57,13 @@ final class PushResult
     {
         return $this->status === self::GONE;
     }
+
+    /**
+     * Nothing was attempted (NullProvider / unsupported). Distinct from FAILED:
+     * a skip must NOT count against the subscription's failure budget.
+     */
+    public function isSkipped(): bool
+    {
+        return $this->status === self::SKIPPED;
+    }
 }

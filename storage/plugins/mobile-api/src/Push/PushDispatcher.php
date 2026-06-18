@@ -28,10 +28,11 @@ use mysqli;
  * delivered, so a NullProvider / quiet-hours user keeps it and still sees the
  * availability in the in-app feed.
  *
- * NEVER hard-fail (spec §Push config): the whole sweep is wrapped; a provider that
- * is NullProvider, or any per-row error, degrades to the in-app feed and is logged,
- * never thrown. A skipped push is never a lost notification — every event type is
- * also derivable by GET /me/notifications.
+ * NEVER hard-fail (spec §Push config): the whole sweep is wrapped and never throws.
+ * A real provider ERROR is logged (SecureLogger) and bumps the subscription's
+ * failure budget; a NullProvider/unconfigured SKIP is merely counted (no log, no
+ * failure bump). Either way a skipped push is never a lost notification — every
+ * event type is also derivable by GET /me/notifications.
  *
  * Data isolation: every query is scoped by the OWNING user_id; a push for user A is
  * only ever sent to user A's own subscriptions. Every `libri` read carries
@@ -249,6 +250,15 @@ final class PushDispatcher
                 continue;
             }
 
+            // Serialize concurrent cron passes: claim the (user, watcher) pair in
+            // mobile_push_log (INSERT IGNORE on a UNIQUE index) BEFORE delivering, so
+            // two overlapping sweeps can't both push for the same watcher. The
+            // watcher row remains the durable feed record; this claim only guards
+            // the push send. (Keyed on the watcher id, which is unique per wish.)
+            if (!$this->claim($userId, 'book_available:' . $watcherId)) {
+                continue;
+            }
+
             $payload = new PushPayload(
                 'book_available',
                 __('Libro di nuovo disponibile'),
@@ -259,8 +269,10 @@ final class PushDispatcher
             $sent = $this->deliver($userId, $payload, $counters);
             if ($sent <= 0) {
                 // Nothing was delivered (no active subscription / NullProvider):
-                // keep the watcher so the feed keeps showing it and a future pass
-                // can deliver once a subscription exists.
+                // keep the watcher so GET /me/notifications keeps surfacing the
+                // availability. The claim above is already consumed, so no further
+                // push fires for this watcher — the feed is the durable fallback,
+                // consistent with the other event types.
                 continue;
             }
 
@@ -325,13 +337,19 @@ final class PushDispatcher
             if ($result->isOk()) {
                 $counters['sent']++;
                 $sent++;
-                $this->markSubscriptionOk($subId);
+                $this->markSubscriptionOk($subId, $userId);
             } elseif ($result->isGone()) {
                 $counters['skipped']++;
-                $this->pruneSubscription($subId);
+                $this->pruneSubscription($subId, $userId);
+            } elseif ($result->isSkipped()) {
+                // Nothing was attempted (NullProvider / unconfigured push). This is
+                // NOT a delivery failure — do NOT bump failure_count, otherwise a
+                // push-unconfigured instance would disable every device after a few
+                // cron passes (failure_count >= 10 excludes the subscription).
+                $counters['skipped']++;
             } else {
                 $counters['skipped']++;
-                $this->bumpSubscriptionFailure($subId);
+                $this->bumpSubscriptionFailure($subId, $userId);
             }
         }
 
@@ -440,39 +458,43 @@ final class PushDispatcher
         return $out;
     }
 
-    private function markSubscriptionOk(int $subId): void
+    // The subscription mutators scope by BOTH id and user_id (the id always comes
+    // from subscriptionsFor($userId), but the extra guard makes a confused-deputy
+    // write to another user's subscription impossible — consistent with the
+    // watcher DELETE).
+    private function markSubscriptionOk(int $subId, int $userId): void
     {
         $stmt = $this->db->prepare(
-            'UPDATE mobile_push_subscriptions SET last_ok_at = NOW(), failure_count = 0 WHERE id = ?'
+            'UPDATE mobile_push_subscriptions SET last_ok_at = NOW(), failure_count = 0 WHERE id = ? AND user_id = ?'
         );
         if ($stmt === false) {
             return;
         }
-        $stmt->bind_param('i', $subId);
+        $stmt->bind_param('ii', $subId, $userId);
         $stmt->execute();
         $stmt->close();
     }
 
-    private function bumpSubscriptionFailure(int $subId): void
+    private function bumpSubscriptionFailure(int $subId, int $userId): void
     {
         $stmt = $this->db->prepare(
-            'UPDATE mobile_push_subscriptions SET failure_count = failure_count + 1 WHERE id = ?'
+            'UPDATE mobile_push_subscriptions SET failure_count = failure_count + 1 WHERE id = ? AND user_id = ?'
         );
         if ($stmt === false) {
             return;
         }
-        $stmt->bind_param('i', $subId);
+        $stmt->bind_param('ii', $subId, $userId);
         $stmt->execute();
         $stmt->close();
     }
 
-    private function pruneSubscription(int $subId): void
+    private function pruneSubscription(int $subId, int $userId): void
     {
-        $stmt = $this->db->prepare('DELETE FROM mobile_push_subscriptions WHERE id = ?');
+        $stmt = $this->db->prepare('DELETE FROM mobile_push_subscriptions WHERE id = ? AND user_id = ?');
         if ($stmt === false) {
             return;
         }
-        $stmt->bind_param('i', $subId);
+        $stmt->bind_param('ii', $subId, $userId);
         $stmt->execute();
         $stmt->close();
     }
