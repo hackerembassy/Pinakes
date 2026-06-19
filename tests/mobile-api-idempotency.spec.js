@@ -140,6 +140,7 @@ const ENDPOINTS = [
     { name: 'DELETE /me/devices/{deviceId}',     method: 'DELETE', path: '/me/devices/{deviceId}',        auth: true,  kind: 'gone2' },
     { name: 'GET /catalog/search',               method: 'GET',    path: '/catalog/search',               auth: true,  kind: 'etag' },
     { name: 'GET /catalog/books/{bookId}',       method: 'GET',    path: '/catalog/books/{bookId}',       auth: true,  kind: 'etag' },
+    { name: 'GET /catalog/books/{bookId}/availability', method: 'GET', path: '/catalog/books/{bookId}/availability', auth: true, kind: 'safeGet' },
     { name: 'GET /catalog/genres',               method: 'GET',    path: '/catalog/genres',               auth: true,  kind: 'etag' },
     { name: 'GET /me/loans',                     method: 'GET',    path: '/me/loans',                     auth: true,  kind: 'safeGet' },
     { name: 'GET /me/reservations',              method: 'GET',    path: '/me/reservations',              auth: true,  kind: 'safeGet' },

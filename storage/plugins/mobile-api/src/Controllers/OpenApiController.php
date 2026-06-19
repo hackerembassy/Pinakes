@@ -443,6 +443,25 @@ final class OpenApiController
                 ],
             ],
 
+            '/catalog/books/{id}/availability' => [
+                'get' => [
+                    'tags'        => ['catalog'],
+                    'summary'     => 'Book loan availability (calendar)',
+                    'description' => 'Per-day loan availability for the date-picker calendar: total_copies, earliest_available, unavailable_dates (fully-booked days), and days[] with per-day free/total counts. Same computation as the website; excludes the requesting user\'s own active reservations. Soft-deleted books return 404.',
+                    'operationId' => 'getCatalogBookAvailability',
+                    'security'    => [['bearerAuth' => []]],
+                    'parameters'  => [
+                        ['name' => 'id', 'in' => 'path', 'required' => true, 'schema' => ['type' => 'integer'], 'description' => 'Book ID'],
+                    ],
+                    'responses' => [
+                        '200' => ['description' => 'Availability calendar data.'],
+                        '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                        '404' => ['$ref' => '#/components/responses/NotFound'],
+                        '500' => ['$ref' => '#/components/responses/InternalError'],
+                    ],
+                ],
+            ],
+
             '/catalog/genres' => [
                 'get' => [
                     'tags'        => ['catalog'],

@@ -187,7 +187,7 @@ final class PushDispatcher
         $sql = "SELECT pr.id, pr.utente_id, pr.libro_id, l.titolo
                 FROM prestiti pr
                 JOIN libri l ON l.id = pr.libro_id AND l.deleted_at IS NULL
-                WHERE pr.stato = 'da_ritirare' AND pr.origine = 'prenotazione'";
+                WHERE pr.attivo = 1 AND pr.stato = 'da_ritirare' AND pr.origine = 'prenotazione'";
         $res  = $this->db->query($sql);
         $rows = ($res instanceof \mysqli_result) ? $res->fetch_all(MYSQLI_ASSOC) : [];
 

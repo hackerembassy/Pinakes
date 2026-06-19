@@ -58,6 +58,11 @@ final class HealthController
 
             $isHttps = $this->isHttps($request);
 
+            // Catalogue-only mode (system.catalogue_mode): when on, the instance
+            // hides loans, reservations and wishlist everywhere. The app must do
+            // the same, so we gate those feature flags off and expose the mode.
+            $catalogueMode = (bool) ConfigStore::isCatalogueMode();
+
             $data = [
                 'name'                 => $name,
                 'logo'                 => $logo,
@@ -65,13 +70,14 @@ final class HealthController
                 'api_version'          => self::API_VERSION,
                 'features'             => [
                     'catalog'       => true,
-                    'loans'         => true,
-                    'reservations'  => true,
-                    'wishlist'      => true,
+                    'loans'         => !$catalogueMode,
+                    'reservations'  => !$catalogueMode,
+                    'wishlist'      => !$catalogueMode,
                     'messages'      => true,
                     'notifications' => true,
                     'push'          => $vapidPublicKey !== '',
                 ],
+                'catalogue_mode'       => $catalogueMode,
                 'app_access_enabled'   => $appAccessEnabled,
                 'registration_enabled' => $registrationEnabled,
                 'private_mode'         => $privateMode,

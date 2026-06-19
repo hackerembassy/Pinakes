@@ -122,7 +122,9 @@ final class AuthController
                 ],
             ];
 
-            return ResponseEnvelope::success($response, $data, ['token_id' => $issued['token_id']], 200);
+            // No internal token_id in the envelope — the opaque token in $data is
+            // all the client needs; exposing the DB id leaks issuance volume.
+            return ResponseEnvelope::success($response, $data, [], 200);
         } catch (\Throwable $e) {
             SecureLogger::error('[MobileApi] login failed: ' . $e->getMessage());
             return ResponseEnvelope::error($response, 'internal_error', __('Errore del server.'), 500);

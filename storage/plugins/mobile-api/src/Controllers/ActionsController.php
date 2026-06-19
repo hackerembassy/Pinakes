@@ -762,7 +762,7 @@ final class ActionsController
             $sql = "SELECT pr.id, pr.libro_id, pr.data_scadenza, l.titolo
                     FROM prestiti pr
                     JOIN libri l ON l.id = pr.libro_id AND l.deleted_at IS NULL
-                    WHERE pr.utente_id = ? AND pr.stato = 'da_ritirare'
+                    WHERE pr.utente_id = ? AND pr.attivo = 1 AND pr.stato = 'da_ritirare'
                       AND pr.origine = 'prenotazione'
                     ORDER BY pr.created_at DESC";
             $stmt = $this->db->prepare($sql);
@@ -1018,6 +1018,8 @@ final class ActionsController
                 return ResponseEnvelope::error($response, 'weak_password', __('La password deve contenere maiuscole, minuscole e numeri.'), 422);
             case 'invalid':
                 return ResponseEnvelope::error($response, 'password_mismatch', __('Le password non coincidono.'), 422);
+            case 'server':
+                return ResponseEnvelope::error($response, 'server_error', __('Errore del server. Riprova più tardi.'), 500);
             default:
                 return ResponseEnvelope::error($response, 'password_change_failed', __('Impossibile aggiornare la password.'), 500);
         }

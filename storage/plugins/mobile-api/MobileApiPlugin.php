@@ -451,6 +451,14 @@ class MobileApiPlugin
                 return (new CatalogController($db))->bookDetail($request, $response, (int) $args['id']);
             })->add($quotaMw())->add($authMw());
 
+            $group->get('/catalog/books/{id:[0-9]+}/availability', function (
+                ServerRequestInterface $request,
+                ResponseInterface $response,
+                array $args
+            ) use ($db): ResponseInterface {
+                return (new CatalogController($db))->bookAvailability($request, $response, (int) $args['id']);
+            })->add($quotaMw())->add($authMw());
+
             $group->get('/catalog/genres', function (
                 ServerRequestInterface $request,
                 ResponseInterface $response

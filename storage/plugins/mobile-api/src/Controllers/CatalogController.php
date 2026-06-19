@@ -197,6 +197,50 @@ final class CatalogController
 
             $coverRel = $this->coverPath($book['copertina_url'] ?? null);
 
+            // Digital assets (digital-library plugin stores them on libri.audio_url
+            // / libri.file_url). Absolute URLs so the app can stream/open them; an
+            // already-absolute external URL (e.g. a hosted audio) is passed through.
+            $absMedia = static function ($raw): ?string {
+                $v = trim((string) ($raw ?? ''));
+                if ($v === '') {
+                    return null;
+                }
+                return preg_match('#^https?://#i', $v) === 1 ? $v : absoluteUrl($v);
+            };
+            $audioUrl = $absMedia($book['audio_url'] ?? null);
+            $ebookUrl = $absMedia($book['file_url'] ?? null);
+            $ebookFormat = $ebookUrl !== null
+                ? (strtolower((string) pathinfo((string) (parse_url($ebookUrl, PHP_URL_PATH) ?? ''), PATHINFO_EXTENSION)) ?: null)
+                : null;
+
+            // Availability state, so the app can colour-code WHY a title isn't free:
+            // available (green) / on_loan (red, a copy is checked out) / reserved
+            // (amber, held by a scheduled loan or an active reservation) / unavailable.
+            $copiesAvail = (int) ($book['copie_disponibili'] ?? 0);
+            $availState  = 'available';
+            if ($copiesAvail <= 0) {
+                $availState = 'unavailable';
+                $holds = [
+                    'on_loan'  => "SELECT 1 FROM prestiti WHERE libro_id = ? AND attivo = 1 AND stato IN ('in_corso','in_ritardo','da_ritirare') LIMIT 1",
+                    'reserved' => "SELECT 1 FROM prestiti WHERE libro_id = ? AND attivo = 1 AND stato = 'prenotato' LIMIT 1",
+                    'reserved2'=> "SELECT 1 FROM prenotazioni WHERE libro_id = ? AND stato = 'attiva' LIMIT 1",
+                ];
+                foreach ($holds as $state => $sql) {
+                    $q = $this->db->prepare($sql);
+                    if ($q === false) {
+                        continue;
+                    }
+                    $q->bind_param('i', $bookId);
+                    $q->execute();
+                    $hit = ($r = $q->get_result()) !== false && $r->fetch_row() !== null;
+                    $q->close();
+                    if ($hit) {
+                        $availState = ($state === 'reserved2') ? 'reserved' : $state;
+                        break;
+                    }
+                }
+            }
+
             $data = [
                 'id'                 => (int) $book['id'],
                 'title'              => (string) ($book['titolo'] ?? ''),
@@ -212,6 +256,11 @@ final class CatalogController
                 'format'             => $this->nullableString($book['formato'] ?? null),
                 'series'             => $this->nullableString($book['collana'] ?? null),
                 'cover_url'          => absoluteUrl($coverRel),
+                'audio_url'          => $audioUrl,
+                'ebook_url'          => $ebookUrl,
+                'ebook_format'       => $ebookFormat,
+                'has_audio'          => $audioUrl !== null,
+                'has_ebook'          => $ebookUrl !== null,
                 'genre'              => [
                     'id'          => isset($book['genere_id']) ? (int) $book['genere_id'] : null,
                     'name'        => $this->nullableString($book['genere'] ?? null),
@@ -226,6 +275,7 @@ final class CatalogController
                     'copies_total'     => (int) ($book['copie_totali'] ?? 0),
                     'copies_available' => (int) ($book['copie_disponibili'] ?? 0),
                     'loanable_now'     => ((int) ($book['copie_disponibili'] ?? 0)) > 0,
+                    'state'            => $availState, // available | on_loan | reserved | unavailable
                 ],
                 'copies'             => $copies,
                 'location'           => $this->buildLocation($book),
@@ -419,6 +469,41 @@ final class CatalogController
     /**
      * @return array<string, mixed>|null
      */
+    /**
+     * GET /catalog/books/{id}/availability — per-day loan availability that
+     * feeds the date-picker calendar. Reuses the SAME computation as the website
+     * (ReservationsController::getBookAvailabilityData) so app and web agree, and
+     * excludes the requesting user's own reservations so their pending booking
+     * does not read back as unavailable.
+     */
+    public function bookAvailability(
+        ServerRequestInterface $request,
+        ResponseInterface $response,
+        int $bookId
+    ): ResponseInterface {
+        try {
+            if ($bookId <= 0 || $this->fetchBookCore($bookId) === null) {
+                return ResponseEnvelope::error($response, 'not_found', __('Libro non trovato.'), 404);
+            }
+
+            $user   = $request->getAttribute(\App\Plugins\MobileApi\Support\AppAuthMiddleware::ATTR_USER);
+            $userId = (is_array($user) && isset($user['id'])) ? (int) $user['id'] : 0;
+
+            $avail = (new \App\Controllers\ReservationsController($this->db))
+                ->getBookAvailabilityData($bookId, null, 180, $userId > 0 ? $userId : null);
+
+            return ResponseEnvelope::success($response, [
+                'total_copies'       => (int) ($avail['total_copies'] ?? 0),
+                'earliest_available' => $avail['earliest_available'] ?? null,
+                'unavailable_dates'  => array_values((array) ($avail['unavailable_dates'] ?? [])),
+                'days'               => array_values((array) ($avail['days'] ?? [])),
+            ], []);
+        } catch (\Throwable $e) {
+            SecureLogger::error('[MobileApi] book availability failed: ' . $e->getMessage());
+            return ResponseEnvelope::error($response, 'internal_error', __('Disponibilità non disponibile.'), 500);
+        }
+    }
+
     private function fetchBookCore(int $bookId): ?array
     {
         $sql = "
@@ -606,7 +691,7 @@ final class CatalogController
      * Strictly scoped to the resolved $userId — the caller passes the
      * token-resolved id, never a client value (spec §Data isolation).
      *
-     * @return array{has_read:bool, has_reserved:bool, has_wishlisted:bool, has_active_loan:bool}
+     * @return array{has_read:bool, has_reserved:bool, has_wishlisted:bool, has_active_loan:bool, has_pending_request:bool}
      */
     private function fetchPersonalHistory(int $userId, int $bookId): array
     {
@@ -632,21 +717,31 @@ final class CatalogController
             ),
             'has_active_loan' => $this->existsScoped(
                 "SELECT 1 FROM prestiti WHERE utente_id = ? AND libro_id = ?
-                  AND attivo = 1 AND stato IN ('pendente','prenotato','da_ritirare','in_corso','in_ritardo') LIMIT 1",
+                  AND attivo = 1 AND stato IN ('prenotato','da_ritirare','in_corso','in_ritardo') LIMIT 1",
+                $userId,
+                $bookId
+            ),
+            // A loan request awaiting staff approval (attivo = 0, so it is NOT an
+            // active loan yet). The app uses this to block a duplicate request and
+            // show "you have a pending request" instead of a generic Reserve CTA.
+            'has_pending_request' => $this->existsScoped(
+                "SELECT 1 FROM prestiti WHERE utente_id = ? AND libro_id = ?
+                  AND stato = 'pendente' LIMIT 1",
                 $userId,
                 $bookId
             ),
         ];
     }
 
-    /** @return array{has_read:bool, has_reserved:bool, has_wishlisted:bool, has_active_loan:bool} */
+    /** @return array{has_read:bool, has_reserved:bool, has_wishlisted:bool, has_active_loan:bool, has_pending_request:bool} */
     private function emptyHistory(): array
     {
         return [
-            'has_read'        => false,
-            'has_reserved'    => false,
-            'has_wishlisted'  => false,
-            'has_active_loan' => false,
+            'has_read'             => false,
+            'has_reserved'         => false,
+            'has_wishlisted'       => false,
+            'has_active_loan'      => false,
+            'has_pending_request'  => false,
         ];
     }
 
@@ -750,7 +845,7 @@ final class CatalogController
 
     /**
      * @param array<string, mixed> $book
-     * @param array{has_read:bool, has_reserved:bool, has_wishlisted:bool, has_active_loan:bool} $history
+     * @param array{has_read:bool, has_reserved:bool, has_wishlisted:bool, has_active_loan:bool, has_pending_request:bool} $history
      */
     private function computeDetailEtag(int $bookId, array $book, int $userId, array $history): string
     {
@@ -760,7 +855,8 @@ final class CatalogController
             'upd:' . (string) ($book['updated_at'] ?? ''),
             'u:' . $userId,
             'h:' . (int) $history['has_read'] . (int) $history['has_reserved']
-                 . (int) $history['has_wishlisted'] . (int) $history['has_active_loan'],
+                 . (int) $history['has_wishlisted'] . (int) $history['has_active_loan']
+                 . (int) $history['has_pending_request'],
         ]);
 
         return '"' . sha1($seed) . '"';

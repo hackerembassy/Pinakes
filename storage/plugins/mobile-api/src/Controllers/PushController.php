@@ -367,7 +367,8 @@ final class PushController
      *   - https only;
      *   - no userinfo (`user:pass@host`) — a common parser-confusion SSRF vector;
      *   - no bare-IP literal host (push services use real hostnames);
-     *   - port must be the default 443 (block odd internal ports);
+     *   - port must be 443 or 8443 (block odd internal ports; allow the common
+     *     alt HTTPS port self-hosted UnifiedPush distributors use);
      *   - the host must resolve, and EVERY A/AAAA record must be public —
      *     SsrfGuard::resolvePinnedIp() returns null if any is private/reserved/
      *     loopback/link-local/NAT64/IPv4-mapped (one bad record blocks the host).
@@ -385,8 +386,8 @@ final class PushController
         if (isset($parts['user']) || isset($parts['pass'])) {
             return false; // no userinfo
         }
-        if (isset($parts['port']) && (int) $parts['port'] !== 443) {
-            return false; // default https port only
+        if (isset($parts['port']) && !in_array((int) $parts['port'], [443, 8443], true)) {
+            return false; // standard or common alt HTTPS port (self-hosted UnifiedPush distributors often use 8443)
         }
         $host = strtolower((string) $parts['host']);
         if ($host === '' || filter_var($host, FILTER_VALIDATE_IP) !== false) {
