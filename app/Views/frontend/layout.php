@@ -591,6 +591,7 @@ $htmlLang = substr($currentLocale, 0, 2);
         }
 
         .btn-outline-header {
+            position: relative; /* anchor .badge-notification to this button, not the viewport */
             background: transparent;
             color: var(--text-color);
             border: 1px solid var(--border-color);
