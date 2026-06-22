@@ -49,6 +49,10 @@ A free, native **[Pinakes Android app](https://github.com/fabiodalez-dev/Pinakes
 
 When an upload (e.g. the ~30&nbsp;MB admin-UI upgrade ZIP) exceeds the server's `post_max_size`, PHP discards the request body — CSRF token included — before the app runs. Instead of the confusing "security check failed" page, Pinakes now returns a clear **413** that points at the real cause and how to raise `post_max_size` / `upload_max_filesize` (note: `php_value` in `.htaccess` only applies under mod_php — on php-fpm/CGI hosts the host's PHP config must be raised).
 
+### Security — dependency CVE fixes
+
+Bumped `guzzlehttp/guzzle` to 7.12.1 and `guzzlehttp/psr7` to 2.12.1 to clear three medium-severity advisories disclosed 2026-06-18: CVE-2026-55767 (dot-only cookie domains matching all hosts) and CVE-2026-55568 (silent HTTPS-proxy downgrade to cleartext) in guzzle, and CVE-2026-55766 (CRLF injection in HTTP start-line serialization) in psr7. No application code changes — patch/minor bumps within the existing major versions.
+
 ## What's New in v0.7.20.2
 
 Internal release — **test coverage only, no functional change to the application**.
