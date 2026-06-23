@@ -151,17 +151,40 @@ async function submitBookForm(page, expectedId = null) {
   return Number(match?.[1]);
 }
 
-// The universe/group/cycle/series fields are Choices.js autocompletes (#179);
-// their submitted value lives in a hidden input set via the exposed setter.
+// The universe/group/cycle/series fields are Choices.js autocompletes (#179).
+// Drive the REAL widget flow (open → type → pick suggestion) so the test
+// exercises fetch/dropdown/selection, not just the hidden input. The typed
+// value is always offered as a create-option, so this works for new names too.
 async function setSeriesAutocomplete(page, field, value) {
-  await page.evaluate(([f, v]) => {
-    if (window.__seriesAutocomplete && window.__seriesAutocomplete[f]) {
-      window.__seriesAutocomplete[f](v);
-    } else {
+  const v = String(value || '').trim();
+  const wrapper = page.locator('.choices', { has: page.locator(`#${field}_select`) });
+  const hasWidget = (await wrapper.count()) > 0;
+
+  // Pages without the Choices widget (e.g. the series-detail admin form) expose
+  // a plain <input> with the field id — fill it directly.
+  if (!hasWidget) {
+    const plain = page.locator(`#${field}`);
+    if ((await plain.count()) > 0) await plain.fill(v);
+    return;
+  }
+
+  if (!v) {
+    await page.evaluate((f) => {
       const h = document.getElementById(f);
-      if (h) h.value = v;
-    }
-  }, [field, value || '']);
+      if (h) h.value = '';
+    }, field);
+    return;
+  }
+
+  // Book form: drive the real widget. Pressing Enter goes through the Choices
+  // keypath (_onEnterKey) and commits the typed value for both new and existing
+  // names — the canonical free-text-autocomplete gesture, not a hidden-input
+  // poke. Exercises the #74 Enter-commit guard too.
+  await wrapper.click();
+  const search = wrapper.locator('input[type="search"], .choices__input--cloned').first();
+  await search.fill(v);
+  await search.press('Enter');
+  await expect(page.locator(`#${field}`)).toHaveValue(v);
 }
 
 async function createBookWithSeries(page, data) {

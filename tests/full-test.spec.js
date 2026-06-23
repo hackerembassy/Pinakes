@@ -687,16 +687,17 @@ test.describe.serial('Phase 3: Manual Book Creation', () => {
       await copies.fill('2');
     }
 
-    // Series (collana) — now a Choices.js autocomplete (#179) whose submitted
-    // value lives in a hidden input set via the exposed setter.
-    await page.evaluate((v) => {
-      if (window.__seriesAutocomplete && window.__seriesAutocomplete.collana) {
-        window.__seriesAutocomplete.collana(v);
-      } else {
-        const h = document.getElementById('collana');
-        if (h) h.value = v;
-      }
-    }, `TestSeries_${RUN_ID}`);
+    // Series (collana) — now a Choices.js autocomplete (#179). Drive the real
+    // widget (open → type → Enter): Enter goes through the Choices keypath and
+    // commits the typed value, exercising the widget instead of poking the
+    // hidden input directly. Works for the brand-new name created here.
+    const seriesValue = `TestSeries_${RUN_ID}`;
+    const collanaWrapper = page.locator('.choices', { has: page.locator('#collana_select') });
+    await collanaWrapper.click();
+    const collanaSearch = collanaWrapper.locator('input[type="search"], .choices__input--cloned').first();
+    await collanaSearch.fill(seriesValue);
+    await collanaSearch.press('Enter');
+    await expect(page.locator('#collana')).toHaveValue(seriesValue);
 
     // Notes
     const note = page.locator('#note_varie, textarea[name="note_varie"]');
