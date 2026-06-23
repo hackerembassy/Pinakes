@@ -1,4 +1,5 @@
 {
+  "Esiste già un utente con l'email %s. Se stai reinstallando su un database esistente, accedi con le credenziali esistenti oppure usa un'altra email.": "Esiste già un utente con l'email %s. Se stai reinstallando su un database esistente, accedi con le credenziali esistenti oppure usa un'altra email.",
   " libri": " libri",
   "\"%s\" prestato a %s è in ritardo di %d giorni": "\"%s\" prestato a %s è in ritardo di %d giorni",
   "$1": "$1",
