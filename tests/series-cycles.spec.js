@@ -151,17 +151,43 @@ async function submitBookForm(page, expectedId = null) {
   return Number(match?.[1]);
 }
 
-// The universe/group/cycle/series fields are Choices.js autocompletes (#179);
-// their submitted value lives in a hidden input set via the exposed setter.
+// The universe/group/cycle/series fields are Choices.js autocompletes (#179).
+// Drive the REAL widget flow (open → type → pick suggestion) so the test
+// exercises fetch/dropdown/selection, not just the hidden input. The typed
+// value is always offered as a create-option, so this works for new names too.
 async function setSeriesAutocomplete(page, field, value) {
-  await page.evaluate(([f, v]) => {
-    if (window.__seriesAutocomplete && window.__seriesAutocomplete[f]) {
-      window.__seriesAutocomplete[f](v);
-    } else {
+  const v = String(value || '').trim();
+  const wrapper = page.locator('.choices', { has: page.locator(`#${field}_select`) });
+  const hasWidget = (await wrapper.count()) > 0;
+
+  // Pages without the Choices widget (e.g. the series-detail admin form) expose
+  // a plain <input> with the field id — fill it directly.
+  if (!hasWidget) {
+    const plain = page.locator(`#${field}`);
+    if ((await plain.count()) > 0) await plain.fill(v);
+    return;
+  }
+
+  if (!v) {
+    await page.evaluate((f) => {
       const h = document.getElementById(f);
-      if (h) h.value = v;
-    }
-  }, [field, value || '']);
+      if (h) h.value = '';
+    }, field);
+    return;
+  }
+
+  // Book form: drive the real widget per the repo convention
+  // (.coderabbit.yaml) — fill + waitForTimeout + click the suggestion. The typed
+  // value is always offered as a create-option, so this works for new names too.
+  await wrapper.click();
+  const search = wrapper.locator('input[type="search"], .choices__input--cloned').first();
+  await search.fill(v);
+  await page.waitForTimeout(350);
+  await wrapper
+    .locator('.choices__list--dropdown .choices__item--selectable', { hasText: v })
+    .first()
+    .click();
+  await expect(page.locator(`#${field}`)).toHaveValue(v);
 }
 
 async function createBookWithSeries(page, data) {

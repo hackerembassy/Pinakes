@@ -508,9 +508,9 @@ $selectedSeriesType = \App\Support\SeriesLabels::canonical($book['tipo_collana']
                 <?php $gruppoSerieVal = (string)($book['gruppo_serie'] ?? ''); ?>
                 <select id="gruppo_serie_select" data-series-autocomplete="gruppo_serie" data-placeholder="<?= htmlspecialchars(__('es. Fairy Tail'), ENT_QUOTES, 'UTF-8') ?>" class="form-input" aria-describedby="gruppo_serie_help">
                   <option value=""></option>
-                  <?php if ($gruppoSerieVal !== ''): ?><option value="<?= HtmlHelper::e($gruppoSerieVal) ?>" selected><?= HtmlHelper::e($gruppoSerieVal) ?></option><?php endif; ?>
+                  <?php if ($gruppoSerieVal !== ''): ?><option value="<?= htmlspecialchars($gruppoSerieVal, ENT_QUOTES, 'UTF-8') ?>" selected><?= htmlspecialchars($gruppoSerieVal, ENT_QUOTES, 'UTF-8') ?></option><?php endif; ?>
                 </select>
-                <input type="hidden" id="gruppo_serie" name="gruppo_serie" value="<?php echo HtmlHelper::e($gruppoSerieVal); ?>" />
+                <input type="hidden" id="gruppo_serie" name="gruppo_serie" value="<?php echo htmlspecialchars($gruppoSerieVal, ENT_QUOTES, 'UTF-8'); ?>" />
                 <p id="gruppo_serie_help" class="text-xs text-gray-500 mt-1"><?= __('Etichetta "ombrello" per spin-off (es. tutto il franchise di Fairy Tail).') ?></p>
               </div>
               <div>
@@ -518,9 +518,9 @@ $selectedSeriesType = \App\Support\SeriesLabels::canonical($book['tipo_collana']
                 <?php $seriePadreVal = (string)($book['serie_padre'] ?? ''); ?>
                 <select id="serie_padre_select" data-series-autocomplete="serie_padre" data-placeholder="<?= htmlspecialchars(__('es. I mondi di Aldebaran'), ENT_QUOTES, 'UTF-8') ?>" class="form-input" aria-describedby="serie_padre_help">
                   <option value=""></option>
-                  <?php if ($seriePadreVal !== ''): ?><option value="<?= HtmlHelper::e($seriePadreVal) ?>" selected><?= HtmlHelper::e($seriePadreVal) ?></option><?php endif; ?>
+                  <?php if ($seriePadreVal !== ''): ?><option value="<?= htmlspecialchars($seriePadreVal, ENT_QUOTES, 'UTF-8') ?>" selected><?= htmlspecialchars($seriePadreVal, ENT_QUOTES, 'UTF-8') ?></option><?php endif; ?>
                 </select>
-                <input type="hidden" id="serie_padre" name="serie_padre" value="<?php echo HtmlHelper::e($seriePadreVal); ?>" />
+                <input type="hidden" id="serie_padre" name="serie_padre" value="<?php echo htmlspecialchars($seriePadreVal, ENT_QUOTES, 'UTF-8'); ?>" />
                 <p id="serie_padre_help" class="text-xs text-gray-500 mt-1"><?= __("Serie superiore nella gerarchia (es. l'universo che contiene cicli e stagioni).") ?></p>
               </div>
               <div>
@@ -537,9 +537,9 @@ $selectedSeriesType = \App\Support\SeriesLabels::canonical($book['tipo_collana']
                 <?php $collanaVal = (string)($book['collana'] ?? ''); ?>
                 <select id="collana_select" data-series-autocomplete="collana" data-placeholder="<?= htmlspecialchars(__('es. Fairy Tail: 100 Years Quest'), ENT_QUOTES, 'UTF-8') ?>" class="form-input" aria-describedby="collana_help">
                   <option value=""></option>
-                  <?php if ($collanaVal !== ''): ?><option value="<?= HtmlHelper::e($collanaVal) ?>" selected><?= HtmlHelper::e($collanaVal) ?></option><?php endif; ?>
+                  <?php if ($collanaVal !== ''): ?><option value="<?= htmlspecialchars($collanaVal, ENT_QUOTES, 'UTF-8') ?>" selected><?= htmlspecialchars($collanaVal, ENT_QUOTES, 'UTF-8') ?></option><?php endif; ?>
                 </select>
-                <input type="hidden" id="collana" name="collana" value="<?php echo HtmlHelper::e($collanaVal); ?>" />
+                <input type="hidden" id="collana" name="collana" value="<?php echo htmlspecialchars($collanaVal, ENT_QUOTES, 'UTF-8'); ?>" />
                 <p id="collana_help" class="text-xs text-gray-500 mt-1"><?= __("Nome specifico della serie a cui appartiene il libro.") ?></p>
               </div>
             </div>
@@ -554,9 +554,9 @@ $selectedSeriesType = \App\Support\SeriesLabels::canonical($book['tipo_collana']
                 <?php $cicloSerieVal = (string)($book['ciclo_serie'] ?? ''); ?>
                 <select id="ciclo_serie_select" data-series-autocomplete="ciclo_serie" data-placeholder="<?= htmlspecialchars(__('es. Ciclo 1 - Aldebaran'), ENT_QUOTES, 'UTF-8') ?>" class="form-input">
                   <option value=""></option>
-                  <?php if ($cicloSerieVal !== ''): ?><option value="<?= HtmlHelper::e($cicloSerieVal) ?>" selected><?= HtmlHelper::e($cicloSerieVal) ?></option><?php endif; ?>
+                  <?php if ($cicloSerieVal !== ''): ?><option value="<?= htmlspecialchars($cicloSerieVal, ENT_QUOTES, 'UTF-8') ?>" selected><?= htmlspecialchars($cicloSerieVal, ENT_QUOTES, 'UTF-8') ?></option><?php endif; ?>
                 </select>
-                <input type="hidden" id="ciclo_serie" name="ciclo_serie" value="<?php echo HtmlHelper::e($cicloSerieVal); ?>" />
+                <input type="hidden" id="ciclo_serie" name="ciclo_serie" value="<?php echo htmlspecialchars($cicloSerieVal, ENT_QUOTES, 'UTF-8'); ?>" />
               </div>
               <div>
                 <label for="ordine_ciclo" class="form-label"><?= __("Ordine ciclo") ?></label>
@@ -2232,6 +2232,18 @@ function initializeSeriesAutocompletes() {
                     const typed = input ? input.value.trim() : '';
                     const dd = wrapper ? wrapper.querySelector('.choices__list--dropdown') : null;
                     const hl = dd ? dd.querySelector('.choices__item--selectable.is-highlighted') : null;
+                    // A suggestion is highlighted but the user typed something
+                    // different: commit the TYPED value instead of letting Choices
+                    // pick the highlight (same guard as the publisher field, #74).
+                    if (typed && hl) {
+                        const nameEl = hl.querySelector('.choices__item-text') || hl.childNodes[0];
+                        const highlightedText = (nameEl ? nameEl.textContent : hl.textContent).trim().toLowerCase();
+                        if (highlightedText !== typed.toLowerCase()) {
+                            event.preventDefault();
+                            commitTyped(typed);
+                            return;
+                        }
+                    }
                     if (typed && !hl) { event.preventDefault(); commitTyped(typed); return; }
                     return origEnter(event, hasActiveDropdown);
                 };

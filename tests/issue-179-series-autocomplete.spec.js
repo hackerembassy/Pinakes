@@ -12,7 +12,7 @@ const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '';
 let page;
 
 test.beforeAll(async ({ browser }) => {
-  test.skip(!ADMIN_EMAIL, 'creds not configured (use /tmp/run-e2e.sh)');
+  test.skip(!ADMIN_EMAIL || !ADMIN_PASS, 'E2E admin credentials not configured (set E2E_ADMIN_EMAIL and E2E_ADMIN_PASS, e.g. via /tmp/run-e2e.sh)');
   page = await browser.newPage();
   await page.goto(`${BASE}/accedi`);
   await page.fill('input[name="email"]', ADMIN_EMAIL);
@@ -57,6 +57,31 @@ test('Typing a brand-new universe name commits it (create-new path)', async () =
   await search.press('Enter');
 
   await expect(page.locator('#serie_padre')).toHaveValue(NEW);
+});
+
+test('Enter commits the TYPED value even when a different suggestion is highlighted (#74)', async () => {
+  await page.goto(`${BASE}/admin/books/create`);
+  await page.waitForSelector('#serie_padre_select', { state: 'attached', timeout: 10000 });
+
+  // "Seed: Fairy" is a prefix of the existing universe "Seed: Fairy Tail
+  // Universe": typing it lists BOTH the typed value and the existing one. We
+  // move the highlight onto the EXISTING suggestion (different from the typed
+  // text) and press Enter — the field MUST commit the typed text, not the
+  // highlighted suggestion. Without the _onEnterKey guard this regresses to the
+  // issue #74 bug (wrong value committed).
+  const PARTIAL = 'Seed: Fairy';
+  await universeWrapper().click();
+  const search = universeWrapper().locator('input[type="search"], .choices__input--cloned').first();
+  await search.fill(PARTIAL);
+
+  await expect(
+    page.locator('.choices__list--dropdown .choices__item--selectable', { hasText: 'Seed: Fairy Tail Universe' }).first()
+  ).toBeVisible({ timeout: 8000 });
+  // Highlight moves off the prepended typed option onto the existing universe.
+  await search.press('ArrowDown');
+  await search.press('Enter');
+
+  await expect(page.locator('#serie_padre')).toHaveValue(PARTIAL);
 });
 
 // All four series fields share the same generic autocomplete: each suggests its
