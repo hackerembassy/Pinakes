@@ -1,4 +1,5 @@
 {
+  "Esiste già un utente con l'email %s. Se stai reinstallando su un database esistente, accedi con le credenziali esistenti oppure usa un'altra email.": "Un utilisateur avec l'e-mail %s existe déjà. Si vous réinstallez sur une base de données existante, connectez-vous avec les identifiants existants ou utilisez une autre adresse e-mail.",
   " libri": " livres",
   "\"%s\" prestato a %s è in ritardo di %d giorni": "\"%s\" emprunté par %s est en retard de %d jours",
   "$1": "$1",

@@ -853,6 +853,17 @@ class Installer {
                 'codice_tessera' => $codiceTessera
             ];
         } catch (PDOException $e) {
+            // A duplicate email means an admin with this address already exists —
+            // e.g. re-running the installer against a database that survived while
+            // the .installed marker was lost (failed-install retry, DB restore
+            // without the marker, or a docroot/marker mishap). Surface a clear,
+            // actionable message instead of a raw SQL error.
+            if ($e->getCode() === '23000' || stripos($e->getMessage(), 'Duplicate entry') !== false) {
+                throw new \RuntimeException(sprintf(
+                    __("Esiste già un utente con l'email %s. Se stai reinstallando su un database esistente, accedi con le credenziali esistenti oppure usa un'altra email."),
+                    $email
+                ), 0, $e);
+            }
             throw $e;
         }
     }
