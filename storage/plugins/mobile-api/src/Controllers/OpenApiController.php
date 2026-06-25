@@ -1116,12 +1116,24 @@ final class OpenApiController
     /** @return array<string, mixed> */
     private function messageRequestSchema(): array
     {
+        // Mirror the real ActionsController::sendMessage contract: the message
+        // text is `messaggio` (aliases `message` / `body` are accepted); nome/
+        // cognome/email default to the authenticated user when omitted; telefono/
+        // indirizzo are optional. The previous schema wrongly required
+        // subject/body — the controller never reads `subject`.
         return [
-            'type'       => 'object',
-            'required'   => ['subject', 'body'],
-            'properties' => [
-                'subject' => ['type' => 'string', 'maxLength' => 255],
-                'body'    => ['type' => 'string', 'maxLength' => 5000],
+            'type'        => 'object',
+            'required'    => ['messaggio'],
+            'description' => 'nome/cognome/email default to the authenticated user when omitted. The message text is `messaggio` (aliases: `message`, `body`).',
+            'properties'  => [
+                'messaggio' => ['type' => 'string', 'maxLength' => 5000, 'description' => 'Message text.'],
+                'message'   => ['type' => 'string', 'maxLength' => 5000, 'description' => 'Alias of `messaggio`.'],
+                'body'      => ['type' => 'string', 'maxLength' => 5000, 'description' => 'Alias of `messaggio`.'],
+                'nome'      => ['type' => 'string', 'maxLength' => 100],
+                'cognome'   => ['type' => 'string', 'maxLength' => 100],
+                'email'     => ['type' => 'string', 'format' => 'email'],
+                'telefono'  => ['type' => 'string'],
+                'indirizzo' => ['type' => 'string'],
             ],
         ];
     }
