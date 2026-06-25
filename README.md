@@ -37,6 +37,25 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 
 ---
 
+## What's New in v0.7.23
+
+### Mobile API ⇄ Android app coherence ([#194](https://github.com/fabiodalez-dev/Pinakes/pull/194))
+
+This release closes the gaps between the bundled **Mobile API** plugin and the companion Android app so the two actually agree on every contract.
+
+- **The "mobile access disabled" dead end is gone.** The Mobile API access flag lives in the plugin's own settings, but there was no way to reach them from the admin UI — so an upgraded site that activated the plugin still answered the app with *"mobile access is disabled on this library."* **Admin → Plugins** now renders a generic **Settings** action for any plugin that ships a settings view, and posts back to the plugin that owns it. Open **Mobile API → Settings** and flip the access toggle.
+- **Loan vs. reservation now matches the website.** A request with no date (or today's date) on an available copy is booked as an **immediate loan**, exactly like the web form; a future date becomes a **reservation**. The app and the website no longer disagree about what "borrow now" does.
+- **Availability calendar normalised.** Per-day availability is exposed with a consistent `free` / `partial` / `full` state so the app's date-picker colours match the real stock.
+- **OpenAPI contract realigned** to the controllers it documents — including the `/messages` request schema, which now reflects the field the endpoint actually reads (`messaggio`, with the documented fallbacks) instead of a stale `subject`/`body` shape.
+
+On the app side (the separate [Pinakes Android](https://github.com/fabiodalez-dev/Pinakes-Android) repo, [#5](https://github.com/fabiodalez-dev/Pinakes-Android/pull/5)) this ships the in-app **registration** and **password-recovery** screens, feature-flag gating that follows the instance's catalogue-only mode, and a round of security hardening (duplicate-submit guard on registration, no account-enumeration on password recovery, password-confirmation forwarded end to end).
+
+### Security — Slim CVE-2026-48157 ([#192](https://github.com/fabiodalez-dev/Pinakes/pull/192))
+
+Bumped `slim/slim` 4.15.1 → 4.15.2 to clear **CVE-2026-48157**, a reflected XSS affecting Slim ≤ 4.15.1. Dependency-only bump within the existing major version — no application code changes.
+
+This is a **code-only release — no new migration**. The Mobile API plugin moves to **1.0.1**; no other bundled plugin changed.
+
 ## What's New in v0.7.22
 
 ### Series / universe / cycle autocomplete on the book form ([#179](https://github.com/fabiodalez-dev/Pinakes/issues/179))
