@@ -217,7 +217,7 @@ $selectedSeriesType = \App\Support\SeriesLabels::canonical($book['tipo_collana']
             <div>
               <label for="data_pubblicazione" class="form-label"><?= __("Data di Pubblicazione") ?></label>
               <input id="data_pubblicazione" name="data_pubblicazione" type="text" class="form-input" placeholder="<?= __('es. 26 agosto 2025') ?>" value="<?php echo HtmlHelper::e($book['data_pubblicazione'] ?? ''); ?>" />
-              <p class="text-xs text-gray-500 mt-1"><?= __("Data originale di pubblicazione (formato italiano)") ?></p>
+              <p class="text-xs text-gray-500 mt-1"><?= __("Data di pubblicazione originale (testo libero)") ?></p>
             </div>
             <div>
               <label for="anno_pubblicazione" class="form-label"><?= __("Anno di Pubblicazione") ?></label>
