@@ -1205,13 +1205,13 @@ class BookRepository
                 $cols['numero_serie'] = $seriesNum;
             }
         }
-        // No earlier branch sets $cols['traduttore']/'illustratore', so the
-        // "not already set" guard the sibling fields use would be dead code here
-        // (and PHPStan flags it as impossibleType). Assign directly when scraped.
-        if ($this->hasColumn('traduttore') && !empty($data['scraped_translator'])) {
+        // Manual values are mapped into $cols above. Scraped values are only a
+        // fallback, otherwise a form submit carrying both fields would silently
+        // overwrite the librarian's typed translator/illustrator.
+        if ($this->hasColumn('traduttore') && !array_key_exists('traduttore', $cols) && !empty($data['scraped_translator'])) {
             $cols['traduttore'] = \App\Support\AuthorNormalizer::normalize((string) $data['scraped_translator']);
         }
-        if ($this->hasColumn('illustratore') && !empty($data['scraped_illustrator'])) {
+        if ($this->hasColumn('illustratore') && !array_key_exists('illustratore', $cols) && !empty($data['scraped_illustrator'])) {
             $cols['illustratore'] = \App\Support\AuthorNormalizer::normalize((string) $data['scraped_illustrator']);
         }
         if ($this->hasColumn('tipo_media') && !array_key_exists('tipo_media', $cols)) {
