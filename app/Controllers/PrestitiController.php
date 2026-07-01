@@ -866,7 +866,7 @@ class PrestitiController
 
             // Conferma di restituzione all'utente (GAP-1) — solo per restituzioni
             // effettive, non per copie segnate perse/danneggiate.
-            if ($nuovo_stato === 'restituito') {
+            if ($loan_stato === 'restituito') {
                 try {
                     (new NotificationService($db))->sendLoanReturnedNotification($id);
                 } catch (\Throwable $e) {

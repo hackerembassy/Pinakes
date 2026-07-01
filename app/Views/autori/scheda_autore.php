@@ -290,7 +290,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
                   </div>
                   <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs uppercase tracking-wide text-gray-500">
                     <span><?= sprintf(__("ISBN13: %s"), HtmlHelper::e($libro['isbn13'] ?? $libro['ean'] ?? 'N/D')) ?></span>
-                    <span class="whitespace-nowrap"><?php echo HtmlHelper::e(__(ucfirst($libro['stato'] ?? ''))); ?></span>
+                    <span class="whitespace-nowrap"><?php echo HtmlHelper::e(translate_book_status((string)($libro['stato'] ?? ''))); ?></span>
                   </div>
                   <div class="flex gap-2 pt-3 items-center">
                     <a href="<?= htmlspecialchars(url('/admin/books/' . (int)$libro['id']), ENT_QUOTES, 'UTF-8') ?>"

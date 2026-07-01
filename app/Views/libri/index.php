@@ -490,7 +490,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const getStatusMeta = (statoRaw) => {
     const stato = String(statoRaw || '').trim().toLowerCase();
     if (stato === 'disponibile') return { cls: 'bg-green-500', icon: 'fa-check-circle' };
-    if (stato === 'prestato' || stato === 'non disponibile' || stato === 'in_ritardo') {
+    if (stato === 'prestato' || stato === 'non_disponibile' || stato === 'non disponibile' || stato === 'in_ritardo') {
       return { cls: 'bg-red-500', icon: 'fa-times-circle' };
     }
     if (stato === 'riservato' || stato === 'prenotato') return { cls: 'bg-blue-500', icon: 'fa-bookmark' };

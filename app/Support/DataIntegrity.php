@@ -900,7 +900,7 @@ class DataIntegrity {
             $results['fixed'] += $availabilityResult['updated'];
             $results['errors'] = array_merge($results['errors'], $availabilityResult['errors']);
 
-            // 2. Correggi stati libri basandosi sulle copie disponibili
+            // 2. Correggi stati libri attivi basandosi sulle copie correnti
             $stmt = $this->db->prepare("
                 UPDATE libri SET stato = CASE
                     WHEN copie_disponibili > 0 THEN 'disponibile'
@@ -908,7 +908,8 @@ class DataIntegrity {
                     WHEN EXISTS (SELECT 1 FROM copie c WHERE c.libro_id = libri.id) THEN 'non_disponibile'
                     ELSE stato
                 END
-                WHERE stato IN ('disponibile', 'prestato')
+                WHERE stato IN ('disponibile', 'prestato', 'non_disponibile')
+                AND deleted_at IS NULL
             ");
             $stmt->execute();
             $results['fixed'] += $this->db->affected_rows;

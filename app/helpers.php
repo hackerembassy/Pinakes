@@ -326,6 +326,27 @@ if (!function_exists('translate_loan_status')) {
     }
 }
 
+if (!function_exists('translate_book_status')) {
+    /**
+     * Translate a book availability status code to its localized label.
+     */
+    function translate_book_status(string $status): string
+    {
+        $status = strtolower(trim($status));
+
+        return match ($status) {
+            'disponibile' => __('Disponibile'),
+            'non_disponibile' => __('Non Disponibile'),
+            'prestato' => __('Prestato'),
+            'prenotato' => __('Prenotato'),
+            'in_ritardo' => __('In Ritardo'),
+            'danneggiato' => __('Danneggiato'),
+            'perso' => __('Perso'),
+            default => $status === '' ? '' : __(ucwords(str_replace('_', ' ', $status)))
+        };
+    }
+}
+
 if (!function_exists('absoluteUrl')) {
     /**
      * Generate an absolute URL for the given path.

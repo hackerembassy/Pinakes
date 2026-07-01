@@ -539,7 +539,7 @@ assertEq(1, copieTot($b40), 'after repair, copy returns to copie_totali');
 pass('repair: copie_totali excludes repair copy, restores after repair');
 
 /* ==========================================================================
- * 41-46  Mixed / availability math
+ * 41-48  Mixed / availability math
  * ====================================================================== */
 // 41-43: 3 copies = 1 loaned + 1 manutenzione + 1 disponibile
 $b = mkBook('mixed');
@@ -590,7 +590,7 @@ assertEq(0, copieDisp($bp), 'all-perso book -> copie_disponibili=0');
 assertEq('non_disponibile', bookStato($bp), 'all-perso book -> libri.stato non_disponibile');
 pass('edge: all copies perso -> libri.stato non_disponibile');
 
-// 46: copie_disponibili never negative (reservations exceeding copies clamp to 0)
+// 48: copie_disponibili never negative (reservations exceeding copies clamp to 0)
 $b = mkBook('negclamp');
 $c = mkCopies($b, 1)[0];
 $ua = mkUser();
@@ -612,9 +612,9 @@ assertEq(0, copieDisp($b), '1 copy - 2 active reservations clamps to 0');
 pass('math: copie_disponibili never negative (clamped to 0)');
 
 /* ==========================================================================
- * 47-50  Misc invariants
+ * 49-52  Misc invariants
  * ====================================================================== */
-// 47: returning an already-returned loan is a guarded no-op
+// 49: returning an already-returned loan is a guarded no-op
 $b = mkBook('double_return');
 $c = mkCopies($b, 1)[0];
 $u = mkUser();
@@ -626,7 +626,7 @@ assertEq('restituito', $row['stato'], 'second return is a no-op -> stato stays r
 assertEq('disponibile', copyStato($c), 'second return is a no-op -> copy stays disponibile');
 pass('misc: returning an already-returned loan is a no-op');
 
-// 48: soft-deleted book — return still closes the loan & frees the copy
+// 50: soft-deleted book — return still closes the loan & frees the copy
 $b = mkBook('softdel');
 $c = mkCopies($b, 1)[0];
 $u = mkUser();
@@ -639,7 +639,7 @@ assertEq('0', (string) $row['attivo'], 'soft-deleted book -> return still closes
 assertEq('disponibile', copyStato($c), 'soft-deleted book -> copy still freed');
 pass('misc: soft-deleted book return closes loan & frees copy');
 
-// 49: in_trasferimento copy excluded from loanable count
+// 51: in_trasferimento copy excluded from loanable count
 $b = mkBook('transit');
 [$t1, $t2] = mkCopies($b, 2);
 (new CopyRepository($db))->updateStatus($t2, 'in_trasferimento');

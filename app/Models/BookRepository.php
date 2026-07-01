@@ -346,7 +346,9 @@ class BookRepository
         $copie_disponibili = isset($data['copie_disponibili']) ? (int) $data['copie_disponibili'] : 1;
 
         $tipo_acquisizione = $this->sanitizeAcquisitionType($data['tipo_acquisizione'] ?? null);
-        $stato = $this->normalizeEnumValue($data['stato'] ?? null, 'stato', 'disponibile');
+        $stato = array_key_exists('stato', $data)
+            ? $this->normalizeEnumValue($data['stato'], 'stato', 'disponibile')
+            : null;
 
         $fields = [];
         $placeholders = [];
@@ -799,7 +801,7 @@ class BookRepository
         if ($this->hasColumn('posizione_id')) {
             $addSet('posizione_id', 'i', $posizione_id_val);
         }
-        if ($this->hasColumn('stato')) {
+        if ($this->hasColumn('stato') && array_key_exists('stato', $data)) {
             $addSet('stato', 's', $stato);
         }
         if ($this->hasColumn('lingua')) {

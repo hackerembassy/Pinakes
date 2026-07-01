@@ -1358,8 +1358,9 @@ class LibriController
             }
         }
 
-        // Non aggiorniamo copie_disponibili dall'utente, sarà ricalcolato automaticamente
+        // Non aggiorniamo disponibilità/stato dall'utente: sono derivati dalle copie.
         unset($fields['copie_disponibili']);
+        unset($fields['stato']);
 
         $fields['scaffale_id'] = empty($fields['scaffale_id']) || $fields['scaffale_id'] == 0 ? null : (int) $fields['scaffale_id'];
         $fields['mensola_id'] = empty($fields['mensola_id']) || $fields['mensola_id'] == 0 ? null : (int) $fields['mensola_id'];
