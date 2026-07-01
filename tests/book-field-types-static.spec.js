@@ -13,7 +13,7 @@ function read(relPath) {
 test.describe('book field-type consistency', () => {
   test('1) schema, migration and form preserve non_disponibile availability', () => {
     const schema = read('installer/database/schema.sql');
-    const migration = read('installer/database/migrations/migrate_0.7.25.sql');
+    const migration = read('installer/database/migrations/migrate_0.7.25-rc.1.sql');
     const form = read('app/Views/libri/partials/book_form.php');
 
     expect(schema).toContain('`tipo_acquisizione` varchar(50)');

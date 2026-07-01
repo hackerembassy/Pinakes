@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Behavioral suite — 10 checks that migrate_0.7.25.sql upgrades an EXISTING
+ * Behavioral suite — 10 checks that migrate_0.7.25-rc.1.sql upgrades an EXISTING
  * (pre-0.7.25) install correctly. This is the upgrade path that ships in the
  * 0.7.25 release candidate; a bad migration silently breaks every install that
  * updates through the admin UI.
@@ -121,7 +121,7 @@ $scalar = function (string $sql) use ($db) {
 
 /** Run the REAL migration file against the sandbox table (rename libri only). */
 $applyMigration = function () use ($db, $root): void {
-    $sql = (string) file_get_contents($root . '/installer/database/migrations/migrate_0.7.25.sql');
+    $sql = (string) file_get_contents($root . '/installer/database/migrations/migrate_0.7.25-rc.1.sql');
     // Strip -- comment lines so the split doesn't choke on ';' inside prose.
     $sql = preg_replace('/^\s*--.*$/m', '', $sql);
     // Point every `libri` reference at the sandbox (backtick form + quoted name).
