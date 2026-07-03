@@ -37,6 +37,19 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 
 ---
 
+## What's New in v0.7.28
+
+Follows up 0.7.27's permissions helper after a real Docker upgrade report ([#205](https://github.com/fabiodalez-dev/Pinakes/issues/205)).
+
+### Safer, Docker-aware permissions helper (`bin/setup-permissions.sh`)
+
+- The helper is now **"grant, never reset"**: it only *adds* the ownership and read/write bits that are missing. It no longer resets modes, no longer switches the group unless you pass `--group`, and never strips `.env`'s existing readers. (0.7.27's version could do all three, which locked PHP out of a Docker bind-mount install and produced a 500 — this cannot.)
+- New **`--from-container <name>`** for Docker installs: the script reads the real uid/gid PHP runs as *inside* the container (`docker exec … id`) and chowns the host files to that numeric id — the only thing that maps correctly across a bind-mount. So the helper now works for normal hosts, NAS, cPanel **and** Docker.
+
+No schema migration. Operational change only; upgrading from 0.7.27 only replaces the bundled helper script.
+
+---
+
 ## What's New in v0.7.27
 
 A follow-up to the 0.7.26 updater hardening, from a real upgrade report ([#205](https://github.com/fabiodalez-dev/Pinakes/issues/205)).
