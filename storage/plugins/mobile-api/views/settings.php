@@ -265,7 +265,7 @@ $tabDevicesUrl  = htmlspecialchars(url('/admin/plugins/' . $resolvedId . '/setti
                 <i class="fas fa-triangle-exclamation mr-1"></i>
                 <?= htmlspecialchars(sprintf(__('Rilevato un reverse proxy da %s che inoltra HTTPS, ma quell\'indirizzo non è ancora fidato: l\'app riceverebbe un errore HTTPS. Aggiungilo alla lista qui sopra e salva.'), $proxyRemoteAddr), ENT_QUOTES, 'UTF-8') ?>
                 <button type="button"
-                        onclick="var f=document.getElementById('trusted_proxies');f.value=(f.value.trim()?f.value.trim().replace(/,\s*$/,'')+', ':'')+<?= json_encode($proxyRemoteAddr, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;"
+                        onclick="var f=document.getElementById('trusted_proxies');f.value=(f.value.trim()?f.value.trim().replace(/,\s*$/,'')+', ':'')+<?= htmlspecialchars(json_encode($proxyRemoteAddr, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>;"
                         class="ml-1 underline font-medium">
                   <?= htmlspecialchars(sprintf(__('Aggiungi %s'), $proxyRemoteAddr), ENT_QUOTES, 'UTF-8') ?>
                 </button>
