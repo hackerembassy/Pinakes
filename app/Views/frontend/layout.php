@@ -270,6 +270,11 @@ $htmlLang = substr($currentLocale, 0, 2);
             --text-muted: #94a3b8;
             --light-bg: #f8f9fa;
             --white: #ffffff;
+            /* Aliases so views that reference these names resolve globally
+               (the mobile-menu header and the catalog use them; without a
+               global definition they fell back to transparent/inherited). */
+            --bg-primary: var(--white);
+            --dark-color: var(--text-color);
             --card-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
             --card-shadow-hover: 0 8px 30px rgba(15, 23, 42, 0.12);
             --border-color: #e2e8f0;
