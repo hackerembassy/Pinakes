@@ -6469,5 +6469,9 @@
   "Email verificata con successo! Il tuo account è attivo: puoi accedere subito.": "E-Mail erfolgreich bestätigt! Dein Konto ist aktiv: Du kannst dich sofort anmelden.",
   "Registrazione utenti": "Benutzerregistrierung",
   "Richiedi l'approvazione dell'amministratore per le nuove registrazioni": "Administratorgenehmigung für neue Registrierungen erforderlich",
-  "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.": "Wenn aktiviert, bleibt ein neuer Benutzer ausstehend, bis ein Administrator das Konto genehmigt. Wenn deaktiviert, wird das Konto nach der E-Mail-Bestätigung automatisch aktiviert."
+  "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.": "Wenn aktiviert, bleibt ein neuer Benutzer ausstehend, bis ein Administrator das Konto genehmigt. Wenn deaktiviert, wird das Konto nach der E-Mail-Bestätigung automatisch aktiviert.",
+  "Durata massima richiedibile": "Maximale anfragbare Dauer",
+  "Periodo massimo che un utente può richiedere per un prestito o una prenotazione. Le richieste che superano questo limite vengono rifiutate.": "Der längste Zeitraum, den ein Benutzer für eine Ausleihe oder Reservierung anfragen kann. Anfragen, die dieses Limit überschreiten, werden abgelehnt.",
+  "Durata massima prestito (giorni)": "Maximale Ausleihdauer (Tage)",
+  "Valore compreso tra 1 e 3650 giorni. Predefinito: 90 giorni": "Wert zwischen 1 und 3650 Tagen. Standard: 90 Tage"
 }

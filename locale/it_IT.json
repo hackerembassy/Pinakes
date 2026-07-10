@@ -6469,5 +6469,9 @@
   "Email verificata con successo! Il tuo account è attivo: puoi accedere subito.": "Email verificata con successo! Il tuo account è attivo: puoi accedere subito.",
   "Registrazione utenti": "Registrazione utenti",
   "Richiedi l'approvazione dell'amministratore per le nuove registrazioni": "Richiedi l'approvazione dell'amministratore per le nuove registrazioni",
-  "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.": "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email."
+  "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.": "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.",
+  "Durata massima richiedibile": "Durata massima richiedibile",
+  "Periodo massimo che un utente può richiedere per un prestito o una prenotazione. Le richieste che superano questo limite vengono rifiutate.": "Periodo massimo che un utente può richiedere per un prestito o una prenotazione. Le richieste che superano questo limite vengono rifiutate.",
+  "Durata massima prestito (giorni)": "Durata massima prestito (giorni)",
+  "Valore compreso tra 1 e 3650 giorni. Predefinito: 90 giorni": "Valore compreso tra 1 e 3650 giorni. Predefinito: 90 giorni"
 }

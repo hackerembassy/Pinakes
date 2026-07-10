@@ -6469,5 +6469,9 @@
   "Email verificata con successo! Il tuo account è attivo: puoi accedere subito.": "Email verified successfully! Your account is active: you can sign in right away.",
   "Registrazione utenti": "User registration",
   "Richiedi l'approvazione dell'amministratore per le nuove registrazioni": "Require administrator approval for new registrations",
-  "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.": "When enabled, a new user stays pending until an administrator approves the account. When disabled, the account is activated automatically after email verification."
+  "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.": "When enabled, a new user stays pending until an administrator approves the account. When disabled, the account is activated automatically after email verification.",
+  "Durata massima richiedibile": "Maximum requestable duration",
+  "Periodo massimo che un utente può richiedere per un prestito o una prenotazione. Le richieste che superano questo limite vengono rifiutate.": "The longest period a user can request for a loan or reservation. Requests exceeding this limit are rejected.",
+  "Durata massima prestito (giorni)": "Maximum loan duration (days)",
+  "Valore compreso tra 1 e 3650 giorni. Predefinito: 90 giorni": "Value between 1 and 3650 days. Default: 90 days"
 }

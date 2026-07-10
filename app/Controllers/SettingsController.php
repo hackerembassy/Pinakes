@@ -996,7 +996,7 @@ class SettingsController
     }
 
     /**
-     * @return array{loan_duration_days: int, pickup_expiry_days: int, max_renewals: int, max_active_loans_per_user: int}
+     * @return array{loan_duration_days: int, pickup_expiry_days: int, max_renewals: int, max_active_loans_per_user: int, max_loan_duration_days: int}
      */
     private function resolveLoansSettings(SettingsRepository $repository): array
     {
@@ -1005,6 +1005,7 @@ class SettingsController
             'pickup_expiry_days'       => (int) ($repository->get('loans', 'pickup_expiry_days', '3') ?? 3),
             'max_renewals'             => (int) ($repository->get('loans', 'max_renewals', '3') ?? 3),
             'max_active_loans_per_user' => (int) ($repository->get('loans', 'max_active_loans_per_user', '0') ?? 0),
+            'max_loan_duration_days'   => (int) ($repository->get('loans', 'max_loan_duration_days', '90') ?? 90),
         ];
     }
 
@@ -1027,11 +1028,13 @@ class SettingsController
         $pickupExpiryDays = min(30,   max(1, (int) ($data['pickup_expiry_days'] ?? 3)));          // 1 … 30 days (matches the loans-tab input max)
         $maxRenewals      = min(100,  max(0, (int) ($data['max_renewals'] ?? 3)));                // 0 … 100
         $maxActiveLoans   = min(1000, max(0, (int) ($data['max_active_loans_per_user'] ?? 0)));   // 0 (unlimited) … 1000
+        $maxLoanDuration  = min(3650, max(1, (int) ($data['max_loan_duration_days'] ?? 90)));     // 1 day … 10 years (reservation-window cap enforced by ReservationsController)
 
         $repository->set('loans', 'loan_duration_days', (string) $loanDurationDays);
         $repository->set('loans', 'pickup_expiry_days', (string) $pickupExpiryDays);
         $repository->set('loans', 'max_renewals', (string) $maxRenewals);
         $repository->set('loans', 'max_active_loans_per_user', (string) $maxActiveLoans);
+        $repository->set('loans', 'max_loan_duration_days', (string) $maxLoanDuration);
 
         $_SESSION['success_message'] = __('Impostazioni prestiti aggiornate correttamente.');
         return $response->withHeader('Location', url('/admin/settings?tab=loans'))->withStatus(302);
