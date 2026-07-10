@@ -102,3 +102,20 @@ PREPARE _s FROM @sql; EXECUTE _s; DEALLOCATE PREPARE _s;
 SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'libri' AND COLUMN_NAME = 'private_comment');
 SET @sql = IF(@col_exists = 0, "ALTER TABLE `libri` ADD COLUMN `private_comment` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT 'Private comment (LibraryThing)' AFTER `comment`", "SELECT 1");
 PREPARE _s FROM @sql; EXECUTE _s; DEALLOCATE PREPARE _s;
+
+-- ─── libri.rating index + CHECK (match installer/database/schema.sql) ───
+-- migrate_0.4.7 shipped idx_lt_rating and chk_lt_rating alongside the rating
+-- column; re-add them here (guarded) so an install that regains rating via
+-- this migration also regains the same index + range constraint, not just the
+-- bare column. Idempotent via information_schema probes.
+SET @idx_exists = (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'libri' AND INDEX_NAME = 'idx_lt_rating');
+SET @sql = IF(@idx_exists = 0, "ALTER TABLE `libri` ADD KEY `idx_lt_rating` (`rating`)", "SELECT 1");
+PREPARE _s FROM @sql; EXECUTE _s; DEALLOCATE PREPARE _s;
+
+-- CHECK constraint names are schema-unique (not per-table) and this MySQL/
+-- MariaDB exposes them in CHECK_CONSTRAINTS (keyed by schema+name), NOT
+-- TABLE_CONSTRAINTS — probing the wrong table would re-issue the ADD on an
+-- install that already has it and fail with "Duplicate check constraint name".
+SET @chk_exists = (SELECT COUNT(*) FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'chk_lt_rating');
+SET @sql = IF(@chk_exists = 0, "ALTER TABLE `libri` ADD CONSTRAINT `chk_lt_rating` CHECK (`rating` IS NULL OR `rating` BETWEEN 1 AND 5)", "SELECT 1");
+PREPARE _s FROM @sql; EXECUTE _s; DEALLOCATE PREPARE _s;

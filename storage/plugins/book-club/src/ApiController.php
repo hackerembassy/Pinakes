@@ -209,10 +209,11 @@ class ApiController extends BaseController
             $meetings = [];
             $meetingRows = $this->rows(
                 "SELECT mt.id, mt.title, mt.starts_at, mt.ends_at, mt.kind, mt.location,
-                        l.titolo AS book_title
+                        COALESCE(l.titolo, ext.titolo) AS book_title
                    FROM bookclub_meetings mt
                    LEFT JOIN bookclub_books cb ON cb.id = mt.club_book_id
                    LEFT JOIN libri l ON l.id = cb.libro_id AND l.deleted_at IS NULL
+                   LEFT JOIN bookclub_external_books ext ON ext.id = cb.external_book_id
                   WHERE mt.club_id = ? AND mt.status = 'scheduled' AND mt.starts_at >= NOW()
                   ORDER BY mt.starts_at ASC",
                 'i',
