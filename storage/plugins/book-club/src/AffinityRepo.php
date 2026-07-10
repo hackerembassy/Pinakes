@@ -61,6 +61,30 @@ class AffinityRepo
         $this->db = $db;
     }
 
+    /**
+     * Whether the optional libri.rating column exists on this install.
+     *
+     * rating (LibraryThing import) is added by core migrate_0.4.7.sql, but the
+     * updater only runs migrations newer than the version being upgraded FROM —
+     * an install that first updated at, say, 0.7.x never ran 0.4.7, so on it the
+     * column is simply absent. A plugin must not assume a core column exists;
+     * referencing l.rating unconditionally 500'd the affinity page for exactly
+     * such an install. Detect it once and degrade gracefully.
+     */
+    private function hasLibriRatingColumn(): bool
+    {
+        static $has = null;
+        if ($has !== null) {
+            return $has;
+        }
+        $res = $this->db->query(
+            "SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'libri' AND COLUMN_NAME = 'rating' LIMIT 1"
+        );
+        $has = ($res instanceof \mysqli_result) && $res->num_rows > 0;
+        return $has;
+    }
+
     // ------------------------------------------------------------------
     // Low-level helpers (same pattern as Repo)
     // ------------------------------------------------------------------
@@ -521,8 +545,14 @@ class AffinityRepo
             return [];
         }
         [$ph, $types] = self::intInClause($genreIds);
+        // rating is optional (see hasLibriRatingColumn): keep a `rating` key in
+        // every row (NULL when the column is absent) so callers don't break, and
+        // only order by it when it exists — otherwise fall back to title.
+        $hasRating = $this->hasLibriRatingColumn();
+        $ratingCol = $hasRating ? 'l.rating' : 'NULL AS rating';
+        $ratingOrder = $hasRating ? '(l.rating IS NULL) ASC, l.rating DESC, ' : '';
         return $this->rows(
-            "SELECT l.id, l.titolo, l.copertina_url, l.anno_pubblicazione, l.rating,
+            "SELECT l.id, l.titolo, l.copertina_url, l.anno_pubblicazione, {$ratingCol},
                     g.nome AS genere,
                     (SELECT GROUP_CONCAT(a.nome ORDER BY la.ordine_credito SEPARATOR ', ')
                        FROM libri_autori la JOIN autori a ON a.id = la.autore_id
@@ -533,7 +563,7 @@ class AffinityRepo
                 AND l.genere_id IN ($ph)
                 AND NOT EXISTS (SELECT 1 FROM bookclub_books cb
                                  WHERE cb.club_id = ? AND cb.libro_id = l.id)
-              ORDER BY (l.rating IS NULL) ASC, l.rating DESC, l.titolo ASC
+              ORDER BY {$ratingOrder}l.titolo ASC
               LIMIT ?",
             $types . 'ii',
             array_merge($genreIds, [$clubId, max(1, min(25, $limit))])

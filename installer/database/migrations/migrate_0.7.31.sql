@@ -78,3 +78,27 @@ SET @sql = IF(@idx_exists = 0,
     "ALTER TABLE `libri` ADD FULLTEXT KEY `ft_libri_search_index` (`search_index`)",
     "SELECT 1");
 PREPARE _s FROM @sql; EXECUTE _s; DEALLOCATE PREPARE _s;
+
+-- ─── libri LibraryThing columns backfill (review/rating/comment/private_comment) ───
+-- These were added by migrate_0.4.7.sql, but the updater only runs migrations
+-- NEWER than the version being upgraded FROM. An install that first updated at
+-- 0.7.x never ran 0.4.7, so on it these columns are absent — and code that
+-- assumes them (e.g. the Book Club affinity page ORDER BY l.rating, the
+-- LibraryThing importer, the book-detail view) then fails with 1054 "Unknown
+-- column". Re-add them here, each guarded, so every 0.7.31+ install has them.
+-- Idempotent: an install that already has a column skips it via the probe.
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'libri' AND COLUMN_NAME = 'review');
+SET @sql = IF(@col_exists = 0, "ALTER TABLE `libri` ADD COLUMN `review` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT 'Book review (LibraryThing)' AFTER `descrizione`", "SELECT 1");
+PREPARE _s FROM @sql; EXECUTE _s; DEALLOCATE PREPARE _s;
+
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'libri' AND COLUMN_NAME = 'rating');
+SET @sql = IF(@col_exists = 0, "ALTER TABLE `libri` ADD COLUMN `rating` TINYINT UNSIGNED NULL COMMENT 'Rating 1-5 (LibraryThing)' AFTER `review`", "SELECT 1");
+PREPARE _s FROM @sql; EXECUTE _s; DEALLOCATE PREPARE _s;
+
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'libri' AND COLUMN_NAME = 'comment');
+SET @sql = IF(@col_exists = 0, "ALTER TABLE `libri` ADD COLUMN `comment` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT 'Public comment (LibraryThing)' AFTER `rating`", "SELECT 1");
+PREPARE _s FROM @sql; EXECUTE _s; DEALLOCATE PREPARE _s;
+
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'libri' AND COLUMN_NAME = 'private_comment');
+SET @sql = IF(@col_exists = 0, "ALTER TABLE `libri` ADD COLUMN `private_comment` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT 'Private comment (LibraryThing)' AFTER `comment`", "SELECT 1");
+PREPARE _s FROM @sql; EXECUTE _s; DEALLOCATE PREPARE _s;
