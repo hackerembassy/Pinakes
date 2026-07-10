@@ -37,6 +37,68 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 
 ---
 
+## What's New in v0.7.31
+
+A feature + hardening release built from real user reports on the catalogue,
+loan and book-club workflows, plus a faster catalogue search.
+
+### Faster catalogue search (denormalized FULLTEXT)
+
+- The catalogue, autocomplete and preview searches now match on a single
+  denormalized `libri.search_index` FULLTEXT column that folds title, subtitle,
+  author names, publisher names, ISBN/EAN, keywords and the plain description —
+  replacing a long `OR`-of-`LIKE` chain plus a per-row author subquery. Subtitles
+  now appear in the results ([#238](https://github.com/fabiodalez-dev/Pinakes/discussions/238)).
+
+### Per-copy tracking + camera scanner in the loan workflow
+
+- Books can carry **per-copy inventory labels**; loans and returns can be done
+  **by copy code**, with an in-browser **barcode scanner** ([#243](https://github.com/fabiodalez-dev/Pinakes/pull/243)).
+- The camera scanner was blocked by a `Permissions-Policy: camera=()` response
+  header; it is now allowed same-origin (`camera=(self)`) so `getUserMedia`
+  works ([#238](https://github.com/fabiodalez-dev/Pinakes/discussions/238)).
+- On the **create-loan** form, entering or scanning a copy inventory code now
+  **identifies the book automatically** (and pins the exact copy), so the
+  operator no longer has to also search the title and can't pick the wrong book.
+  Subtitles show in the book search, and the **loan details** page + **receipt
+  PDF** now include the physical copy inventory code and the subtitle.
+
+### Book Club: books not (yet) in the catalogue
+
+- Members can propose and vote on books that aren't in the library, and a
+  librarian can **acquire an external book into the catalogue** in one step
+  (creating the `libri` record, authors, publisher and a physical copy)
+  ([#138](https://github.com/fabiodalez-dev/Pinakes/issues/138)).
+
+### Settings that actually take effect + email i18n
+
+- A sweep of the settings pages: previously-orphaned toggles now have a real
+  effect, per-locale email templates are honoured across it/en/de/fr, and the
+  cookie banner + email-verification / admin-state flows were hardened against
+  an auth-bypass edge case.
+
+### Frontend theming + accessibility + Remember me
+
+- Hardcoded colours across the public frontend are now driven by CSS theme
+  variables, with AA-contrast and 44px mobile tap targets.
+- The **"Remember me"** checkbox on login is honoured again (a field-name
+  mismatch had silently ignored it).
+
+### Migration `migrate_0.7.31.sql`
+
+Idempotent, guarded via `information_schema` probes:
+
+- adds `libri.search_index` (MEDIUMTEXT) + `ft_libri_search_index` FULLTEXT and
+  backfills every non-deleted row;
+- re-adds the LibraryThing `review`/`rating`/`comment`/`private_comment` columns
+  (+ `idx_lt_rating` / `chk_lt_rating`) on installs that first updated after
+  0.4.7 and so had skipped them;
+- backfills `oai_deleted_records.created_at` on installs created before that
+  column was added to `schema.sql`, so every install converges to the canonical
+  schema.
+
+---
+
 ## What's New in v0.7.28
 
 Follows up 0.7.27's permissions helper after a real Docker upgrade report ([#205](https://github.com/fabiodalez-dev/Pinakes/issues/205)).
