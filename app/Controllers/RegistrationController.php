@@ -260,12 +260,30 @@ class RegistrationController
         if ($row = $res->fetch_assoc()) {
             $uid = (int) $row['id'];
             $stmt->close();
-            $stmt = $db->prepare("UPDATE utenti SET email_verificata = 1, token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
+
+            // Whether new self-registrations still need an administrator to
+            // approve them AFTER they verify their email. Default true (the
+            // historical behaviour). When false, verifying the email is enough
+            // to activate the account.
+            $requireApproval = (bool) ConfigStore::get('registration.require_admin_approval', true);
+
+            if ($requireApproval) {
+                $stmt = $db->prepare("UPDATE utenti SET email_verificata = 1, token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
+            } else {
+                // No admin approval required: activate on email verification. The
+                // CASE WHEN only promotes a still-'sospeso' (freshly registered)
+                // account, so it never un-suspends one an admin later suspended,
+                // while email_verificata is set either way.
+                $stmt = $db->prepare("UPDATE utenti SET email_verificata = 1, stato = CASE WHEN stato = 'sospeso' THEN 'attivo' ELSE stato END, token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
+            }
             $stmt->bind_param('i', $uid);
             $stmt->execute();
             $stmt->close();
-            // Show message instructing admin approval pending
-            return $response->withHeader('Location', RouteTranslator::route('login') . '?verified=1')->withStatus(302);
+
+            // Pending-approval accounts get the "await approval" notice; auto-
+            // activated ones are told they can sign in immediately.
+            $verifiedQuery = $requireApproval ? '?verified=1' : '?verified=1&activated=1';
+            return $response->withHeader('Location', RouteTranslator::route('login') . $verifiedQuery)->withStatus(302);
         }
         $stmt->close();
 

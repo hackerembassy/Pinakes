@@ -271,6 +271,10 @@ class SettingsController
             'smtp_security' => ConfigStore::get('mail.smtp.encryption', 'tls'),
         ];
         $settings = array_merge($defaults, $stored);
+
+        // Registration approval flag lives in its own config group but is edited
+        // from this (email) form, so surface it here for the checkbox to pre-fill.
+        $settings['require_admin_approval'] = (bool) ConfigStore::get('registration.require_admin_approval', true);
         $driver = $stored['driver_mode'] ?? $settings['type'] ?? $defaults['type'];
         $settings['type'] = $driver;
 

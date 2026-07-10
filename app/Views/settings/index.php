@@ -309,6 +309,17 @@ $activeTab = $activeTab ?? 'general';
             </div>
           </div>
 
+          <div class="border border-gray-200 rounded-2xl p-5 bg-white max-sm:!bg-transparent max-sm:!border-0 max-sm:!rounded-none max-sm:!shadow-none max-sm:!p-0">
+            <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide"><?= __("Registrazione utenti") ?></h3>
+            <label class="mt-4 flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" name="require_admin_approval" value="1" <?php echo !empty($emailSettings['require_admin_approval']) ? 'checked' : ''; ?> class="mt-1 h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500">
+              <span class="text-sm text-gray-700">
+                <span class="block font-medium text-gray-900"><?= __("Richiedi l'approvazione dell'amministratore per le nuove registrazioni") ?></span>
+                <span class="block text-gray-500 mt-0.5"><?= __("Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.") ?></span>
+              </span>
+            </label>
+          </div>
+
           <div class="flex justify-end">
             <button type="submit" class="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-700 transition-colors">
               <i class="fas fa-save"></i>

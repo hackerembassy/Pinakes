@@ -6465,5 +6465,9 @@
   "Impossibile accedere alla fotocamera. Controlla i permessi del browser.": "Impossibile accedere alla fotocamera. Controlla i permessi del browser.",
   "Nessuna fotocamera trovata su questo dispositivo.": "Nessuna fotocamera trovata su questo dispositivo.",
   "Questo browser non supporta l'accesso alla fotocamera.": "Questo browser non supporta l'accesso alla fotocamera.",
-  "Impossibile avviare lo scanner.": "Impossibile avviare lo scanner."
+  "Impossibile avviare lo scanner.": "Impossibile avviare lo scanner.",
+  "Email verificata con successo! Il tuo account è attivo: puoi accedere subito.": "Email verificata con successo! Il tuo account è attivo: puoi accedere subito.",
+  "Registrazione utenti": "Registrazione utenti",
+  "Richiedi l'approvazione dell'amministratore per le nuove registrazioni": "Richiedi l'approvazione dell'amministratore per le nuove registrazioni",
+  "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.": "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email."
 }
