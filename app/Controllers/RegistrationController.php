@@ -274,11 +274,17 @@ class RegistrationController
                 if ($requireApproval) {
                     $stmt = $db->prepare("UPDATE utenti SET email_verificata = 1, token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
                 } else {
-                    // No admin approval required: activate on email verification. The
-                    // CASE WHEN only promotes a still-'sospeso' (freshly registered)
-                    // account, so it never un-suspends one an admin later suspended,
-                    // while email_verificata is set either way.
-                    $stmt = $db->prepare("UPDATE utenti SET email_verificata = 1, stato = CASE WHEN stato = 'sospeso' THEN 'attivo' ELSE stato END, token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
+                    // No admin approval required: activate on email verification, but
+                    // ONLY for a genuinely fresh, never-verified registration
+                    // (email_verificata = 0). 'sospeso' is ALSO the state an admin
+                    // sets to suspend an already-verified user, whose old
+                    // verification token is not cleared on suspend — without the
+                    // email_verificata = 0 gate a stale link would silently
+                    // un-suspend them (auth bypass). The stato CASE is listed
+                    // BEFORE email_verificata = 1 on purpose: MySQL evaluates SET
+                    // assignments left-to-right, so the CASE reads the OLD (0)
+                    // value; reversing the order would make it always see 1.
+                    $stmt = $db->prepare("UPDATE utenti SET stato = CASE WHEN stato = 'sospeso' AND email_verificata = 0 THEN 'attivo' ELSE stato END, email_verificata = 1, token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
                 }
                 $stmt->bind_param('i', $uid);
                 $stmt->execute();
