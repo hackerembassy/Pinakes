@@ -888,12 +888,14 @@ $htmlLang = substr($currentLocale, 0, 2);
         }
 
         .status-available {
+            background: var(--success-color); /* fallback for browsers without color-mix() */
             background: color-mix(in srgb, var(--success-color) 90%, transparent);
             color: white;
             box-shadow: none;
         }
 
         .status-borrowed {
+            background: var(--danger-color); /* fallback for browsers without color-mix() */
             background: color-mix(in srgb, var(--danger-color) 90%, transparent);
             color: white;
             box-shadow: none;
