@@ -31,6 +31,7 @@ const EXT_TITLE_2 = `External Book Alt ${RUN}`;
 const EXT_AUTHOR_1 = `Jane External ${RUN}`;
 const EXT_AUTHOR_2 = `Janet External ${RUN}`;
 const EXT_PUBLISHER = `External Press ${RUN}`;
+const MEMBER_EMAIL = `e2e-bc-uwe-${RUN}@example.test`;
 
 test.skip(!ADMIN_EMAIL || !ADMIN_PASS || !DB_USER || !DB_PASS || !DB_NAME || (!DB_HOST && !DB_SOCKET), 'E2E credentials not configured');
 
@@ -110,6 +111,16 @@ test.describe.serial('Book Club — Uwe feedback', () => {
 
     slug = dbQuery(`SELECT slug FROM bookclub_clubs WHERE name=${sqlStr(CLUB_NAME)} AND deleted_at IS NULL ORDER BY id DESC LIMIT 1`);
     expect(slug, 'club must have been created with a slug').not.toBe('');
+
+    // This spec must be hermetic on a fresh CI database. The previous version
+    // assumed another, unrelated mobile-API spec had already created a fixed
+    // user, so the gating workflow failed before exercising member editing or
+    // external-book acquisition.
+    dbQuery(`INSERT INTO utenti
+      (codice_tessera, nome, cognome, email, password, stato, email_verificata, tipo_utente, privacy_accettata, created_at, updated_at)
+      VALUES (${sqlStr(`BCUWE${RUN}`)}, 'E2E', 'Book Club Member', ${sqlStr(MEMBER_EMAIL)}, 'not-used', 'attivo', 1, 'standard', 1, NOW(), NOW())`);
+    expect(Number(dbQuery(`SELECT id FROM utenti WHERE email=${sqlStr(MEMBER_EMAIL)} LIMIT 1`) || '0'),
+      'member test user must be created by this spec').toBeGreaterThan(0);
   });
 
   test.afterAll(async () => {
@@ -127,6 +138,7 @@ test.describe.serial('Book Club — Uwe feedback', () => {
     dbQuery(`DELETE FROM libri WHERE titolo IN (${sqlStr(EXT_TITLE)}, ${sqlStr(EXT_TITLE_2)})`);
     dbQuery(`DELETE FROM autori WHERE nome IN (${sqlStr(EXT_AUTHOR_1)}, ${sqlStr(EXT_AUTHOR_2)})`);
     dbQuery(`DELETE FROM editori WHERE nome=${sqlStr(EXT_PUBLISHER)}`);
+    dbQuery(`DELETE FROM utenti WHERE email=${sqlStr(MEMBER_EMAIL)}`);
     await context.close();
   });
 
@@ -173,7 +185,7 @@ test.describe.serial('Book Club — Uwe feedback', () => {
 
   test('⑤ edit a member: role and status change from the admin club page', async () => {
     const clubId = Number(dbQuery(`SELECT id FROM bookclub_clubs WHERE name=${sqlStr(CLUB_NAME)} ORDER BY id DESC LIMIT 1`) || '0');
-    const memberEmail = 'e2e-bcfixes@example.test';
+    const memberEmail = MEMBER_EMAIL;
     const memberUserId = Number(dbQuery(`SELECT id FROM utenti WHERE email=${sqlStr(memberEmail)} LIMIT 1`) || '0');
     expect(memberUserId, 'the member test user must exist').toBeGreaterThan(0);
 
