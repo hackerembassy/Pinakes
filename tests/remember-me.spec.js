@@ -47,7 +47,13 @@ async function login(page, { remember }) {
     await page.check('#remember_me');
   }
   await page.locator('button[type="submit"]').click();
-  await page.waitForURL(url => !url.toString().includes('/accedi'), { timeout: 15000 });
+  // Positive post-login assertion: an admin lands on /admin/... A negative
+  // !includes('/accedi') predicate is both locale-fragile (a non-Italian
+  // install redirects failures to /login?error=…, which does NOT contain
+  // '/accedi', so it would resolve and false-pass) and, on the IT install,
+  // turns every failure into an opaque 15s timeout. Matching /admin is
+  // locale-independent and only a real login can satisfy it.
+  await page.waitForURL(/\/admin(\/|$|\?)/, { timeout: 15000 });
 }
 
 test.describe.serial('Remember Me checkbox', () => {
