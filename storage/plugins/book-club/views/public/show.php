@@ -200,7 +200,12 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
                       <img src="<?= $e($book['copertina_url']) ?>" alt="" class="bc-cover" loading="lazy">
                     <?php endif; ?>
                     <div>
-                      <div class="fw-semibold"><?= $e($book['titolo']) ?></div>
+                      <div class="fw-semibold">
+                        <?= $e($book['titolo']) ?>
+                        <?php if (!empty($book['is_external'])): ?>
+                          <span class="bc-badge bc-badge-warn ms-1" title="<?= $e(__('Questo libro non è ancora nel catalogo della biblioteca.')) ?>"><i class="fas fa-book-medical me-1"></i><?= $e(__('Proposta esterna')) ?></span>
+                        <?php endif; ?>
+                      </div>
                       <?php if (!empty($book['autori'])): ?><div class="bc-muted"><?= $e($book['autori']) ?></div><?php endif; ?>
                       <?php if (!empty($book['reading_starts']) || !empty($book['reading_ends'])): ?>
                         <div class="bc-muted small mt-1">
@@ -217,15 +222,23 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
                     </div>
                   </div>
                   <?php if ($canManage): ?>
-                    <form method="post" action="<?= $e(url('/book-club/' . $slug . '/books/' . (int) $book['id'] . '/state')) ?>" class="d-flex align-items-center gap-2">
-                      <input type="hidden" name="csrf_token" value="<?= $e($csrf) ?>">
-                      <select name="state" class="form-select form-select-sm w-auto">
-                        <?php foreach ($states as $target): ?>
-                          <option value="<?= $e($target['key']) ?>" <?= $target['key'] === $book['state'] ? 'selected' : '' ?>><?= $e($target['label']) ?></option>
-                        <?php endforeach; ?>
-                      </select>
-                      <button type="submit" class="bc-btn bc-btn-outline bc-btn-sm" title="<?= $e(__('Sposta')) ?>"><i class="fas fa-arrow-right"></i></button>
-                    </form>
+                    <div class="d-flex flex-column align-items-end gap-2">
+                      <form method="post" action="<?= $e(url('/book-club/' . $slug . '/books/' . (int) $book['id'] . '/state')) ?>" class="d-flex align-items-center gap-2">
+                        <input type="hidden" name="csrf_token" value="<?= $e($csrf) ?>">
+                        <select name="state" class="form-select form-select-sm w-auto">
+                          <?php foreach ($states as $target): ?>
+                            <option value="<?= $e($target['key']) ?>" <?= $target['key'] === $book['state'] ? 'selected' : '' ?>><?= $e($target['label']) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                        <button type="submit" class="bc-btn bc-btn-outline bc-btn-sm" title="<?= $e(__('Sposta')) ?>"><i class="fas fa-arrow-right"></i></button>
+                      </form>
+                      <?php if (!empty($book['is_external'])): ?>
+                        <form method="post" action="<?= $e(url('/book-club/' . $slug . '/books/' . (int) $book['id'] . '/acquire')) ?>">
+                          <input type="hidden" name="csrf_token" value="<?= $e($csrf) ?>">
+                          <button type="submit" class="bc-btn bc-btn-sm" title="<?= $e(__('Crea la voce di catalogo da questa proposta esterna.')) ?>"><i class="fas fa-plus me-1"></i><?= $e(__('Acquisisci in catalogo')) ?></button>
+                        </form>
+                      <?php endif; ?>
+                    </div>
                   <?php endif; ?>
                 </div>
               <?php endforeach; ?>
@@ -262,6 +275,24 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
                       class="form-control mb-3"></textarea>
             <button type="submit" class="bc-btn"><?= $e(__('Invia proposta')) ?></button>
           </form>
+
+          <details class="mt-3 pt-3 border-top bc-external-propose">
+            <summary class="bc-summary"><?= $e(__('Il libro non è in catalogo?')) ?></summary>
+            <p class="bc-muted small mt-2 mb-3"><?= $e(__('Proponi un libro non ancora presente in biblioteca. Non verrà aggiunto al catalogo finché il club non lo sceglie e un responsabile lo acquisisce.')) ?></p>
+            <form method="post" action="<?= $e(url('/book-club/' . $slug . '/proposals')) ?>">
+              <input type="hidden" name="csrf_token" value="<?= $e($csrf) ?>">
+              <input type="hidden" name="source" value="external">
+              <input type="text" name="ext_titolo" required maxlength="500" placeholder="<?= $e(__('Titolo')) ?>" class="form-control mb-2">
+              <div class="row g-2 mb-2">
+                <div class="col-12 col-md-6"><input type="text" name="ext_autori" maxlength="500" placeholder="<?= $e(__('Autore/i')) ?>" class="form-control"></div>
+                <div class="col-6 col-md-3"><input type="text" name="ext_isbn" maxlength="20" placeholder="<?= $e(__('ISBN')) ?>" class="form-control"></div>
+                <div class="col-6 col-md-3"><input type="text" name="ext_anno" maxlength="10" placeholder="<?= $e(__('Anno')) ?>" class="form-control"></div>
+              </div>
+              <input type="text" name="ext_editore" maxlength="255" placeholder="<?= $e(__('Editore (facoltativo)')) ?>" class="form-control mb-2">
+              <textarea name="motivation" rows="2" maxlength="3000" placeholder="<?= $e(__('Perché proponi questo libro? (facoltativo)')) ?>" class="form-control mb-3"></textarea>
+              <button type="submit" class="bc-btn bc-btn-outline"><?= $e(__('Proponi libro esterno')) ?></button>
+            </form>
+          </details>
           <script>
             (function () {
               var input = document.getElementById('bc-book-search');
@@ -395,7 +426,7 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
         <?php endif; ?>
         <?php foreach ($meetings as $meeting): ?>
           <?php $isPast = strtotime((string) $meeting['starts_at']) < time(); ?>
-          <div class="bc-row <?= $meeting['status'] === 'cancelled' ? 'bc-cancelled' : '' ?>">
+          <div id="bc-meeting-<?= (int) $meeting['id'] ?>" class="bc-row <?= $meeting['status'] === 'cancelled' ? 'bc-cancelled' : '' ?>">
             <div class="d-flex align-items-start justify-content-between gap-3">
               <div>
                 <div class="fw-semibold">
@@ -442,6 +473,48 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
                 <button name="status" value="cancelled" class="bc-btn bc-btn-danger bc-btn-sm"
                         onclick="return confirm('<?= $e(__('Annullare questo incontro?')) ?>');"><?= $e(__('Annulla incontro')) ?></button>
               </form>
+              <details class="mt-2 bc-meeting-edit">
+                <summary class="bc-summary"><?= $e(__('Modifica incontro')) ?></summary>
+                <form method="post" action="<?= $e(url('/book-club/' . $slug . '/meetings/' . (int) $meeting['id'] . '/edit')) ?>" class="mt-3">
+                  <input type="hidden" name="csrf_token" value="<?= $e($csrf) ?>">
+                  <input type="text" name="title" required maxlength="190" value="<?= $e((string) $meeting['title']) ?>" class="form-control mb-3">
+                  <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-3">
+                      <input type="datetime-local" name="starts_at" required value="<?= $e(date('Y-m-d\TH:i', (int) strtotime((string) $meeting['starts_at']))) ?>" class="form-control form-control-sm" title="<?= $e(__('Inizio')) ?>">
+                    </div>
+                    <div class="col-6 col-md-3">
+                      <input type="datetime-local" name="ends_at" value="<?= !empty($meeting['ends_at']) ? $e(date('Y-m-d\TH:i', (int) strtotime((string) $meeting['ends_at']))) : '' ?>" class="form-control form-control-sm" title="<?= $e(__('Fine (facoltativa)')) ?>">
+                    </div>
+                    <div class="col-6 col-md-3">
+                      <select name="kind" class="form-select form-select-sm">
+                        <?php foreach ($kindLabels as $value => $label): ?>
+                          <option value="<?= $e($value) ?>" <?= $meeting['kind'] === $value ? 'selected' : '' ?>><?= $e($label) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-6 col-md-3">
+                      <input type="number" name="seats" min="1" value="<?= $meeting['seats'] !== null ? (int) $meeting['seats'] : '' ?>" placeholder="<?= $e(__('Posti (illimitati)')) ?>" class="form-control form-control-sm">
+                    </div>
+                  </div>
+                  <div class="row g-2 mb-3">
+                    <div class="col-12 col-md-6">
+                      <input type="text" name="location" maxlength="255" value="<?= $e((string) ($meeting['location'] ?? '')) ?>" placeholder="<?= $e(__('Luogo')) ?>" class="form-control">
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <input type="url" name="video_url" maxlength="500" value="<?= $e((string) ($meeting['video_url'] ?? '')) ?>" placeholder="<?= $e(__('Link videoconferenza')) ?>" class="form-control">
+                    </div>
+                  </div>
+                  <select name="club_book_id" class="form-select mb-3">
+                    <option value=""><?= $e(__('Nessun libro collegato')) ?></option>
+                    <?php foreach ($books as $book): ?>
+                      <?php if ($book['state'] === \App\Plugins\BookClub\BookClubPlugin::STATE_PENDING) { continue; } ?>
+                      <option value="<?= (int) $book['id'] ?>" <?= (int) ($meeting['club_book_id'] ?? 0) === (int) $book['id'] ? 'selected' : '' ?>><?= $e($book['titolo']) ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                  <textarea name="agenda" rows="2" maxlength="5000" placeholder="<?= $e(__('Ordine del giorno (facoltativo)')) ?>" class="form-control mb-3"><?= $e((string) ($meeting['agenda'] ?? '')) ?></textarea>
+                  <button type="submit" class="bc-btn bc-btn-sm"><?= $e(__('Salva modifiche')) ?></button>
+                </form>
+              </details>
             <?php endif; ?>
           </div>
         <?php endforeach; ?>
@@ -511,6 +584,9 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
           <div class="bc-muted mt-1"><i class="far fa-clock me-1"></i><?= $e(date('d/m/Y H:i', (int) strtotime((string) $nextMeeting['starts_at']))) ?></div>
           <?php if (!empty($nextMeeting['location'])): ?>
             <div class="bc-muted"><i class="fas fa-map-marker-alt me-1"></i><?= $e($nextMeeting['location']) ?></div>
+          <?php endif; ?>
+          <?php if ($canManage): ?>
+            <a class="bc-btn bc-btn-outline bc-btn-sm mt-2" href="<?= $e(url('/book-club/' . $slug)) ?>#bc-meeting-<?= (int) $nextMeeting['id'] ?>"><i class="fas fa-pen me-1"></i><?= $e(__('Modifica incontro')) ?></a>
           <?php endif; ?>
         </section>
       <?php endif; ?>

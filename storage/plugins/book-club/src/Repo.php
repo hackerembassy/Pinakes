@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Plugins\BookClub;
 
+use App\Support\SearchIndexBuilder;
 use App\Support\SecureLogger;
 use mysqli;
 
@@ -79,6 +80,153 @@ class Repo
         }
         $stmt->close();
         return $ok;
+    }
+
+    /**
+     * @param array<int, mixed> $params
+     */
+    private function execAffected(string $sql, string $types = '', array $params = []): ?int
+    {
+        $stmt = $this->db->prepare($sql);
+        if ($stmt === false) {
+            SecureLogger::error('[BookClub] prepare failed: ' . $this->db->error . ' - ' . $sql);
+            return null;
+        }
+        if ($types !== '') {
+            $stmt->bind_param($types, ...$params);
+        }
+        if (!$stmt->execute()) {
+            SecureLogger::error('[BookClub] execute failed: ' . $stmt->error);
+            $stmt->close();
+            return null;
+        }
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+        return $affected;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function externalAuthorNames(?string $value): array
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return [];
+        }
+        $parts = preg_split('/\s*[|;]\s*/u', $raw) ?: [];
+        $names = [];
+        foreach ($parts as $part) {
+            $name = trim($part);
+            if ($name === '') {
+                continue;
+            }
+            $name = mb_substr($name, 0, 255, 'UTF-8');
+            $key = mb_strtolower($name, 'UTF-8');
+            $names[$key] = $name;
+        }
+        return array_values($names);
+    }
+
+    private function findOrCreateAuthor(string $name): int
+    {
+        $stmt = $this->db->prepare('SELECT id FROM autori WHERE nome = ? ORDER BY id ASC LIMIT 1');
+        if ($stmt === false) {
+            throw new \RuntimeException('author lookup prepare failed');
+        }
+        $stmt->bind_param('s', $name);
+        if (!$stmt->execute()) {
+            $err = $stmt->error;
+            $stmt->close();
+            throw new \RuntimeException('author lookup failed: ' . $err);
+        }
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($row !== null) {
+            return (int) $row['id'];
+        }
+
+        $stmt = $this->db->prepare('INSERT INTO autori (nome) VALUES (?)');
+        if ($stmt === false) {
+            throw new \RuntimeException('author insert prepare failed');
+        }
+        $stmt->bind_param('s', $name);
+        if (!$stmt->execute()) {
+            $err = $stmt->error;
+            $stmt->close();
+            throw new \RuntimeException('author insert failed: ' . $err);
+        }
+        $id = (int) $stmt->insert_id;
+        $stmt->close();
+        return $id;
+    }
+
+    private function attachExternalAuthors(int $libroId, ?string $authors): void
+    {
+        $order = 1;
+        foreach ($this->externalAuthorNames($authors) as $name) {
+            $authorId = $this->findOrCreateAuthor($name);
+            if (!$this->exec(
+                "INSERT INTO libri_autori (libro_id, autore_id, ruolo, ordine_credito) VALUES (?, ?, 'principale', ?)",
+                'iii',
+                [$libroId, $authorId, $order]
+            )) {
+                throw new \RuntimeException('author link failed');
+            }
+            $order++;
+        }
+    }
+
+    private function findOrCreatePublisher(?string $name): ?int
+    {
+        $name = mb_substr(trim((string) $name), 0, 255, 'UTF-8');
+        if ($name === '') {
+            return null;
+        }
+
+        $stmt = $this->db->prepare('SELECT id FROM editori WHERE nome = ? ORDER BY id ASC LIMIT 1');
+        if ($stmt === false) {
+            throw new \RuntimeException('publisher lookup prepare failed');
+        }
+        $stmt->bind_param('s', $name);
+        if (!$stmt->execute()) {
+            $err = $stmt->error;
+            $stmt->close();
+            throw new \RuntimeException('publisher lookup failed: ' . $err);
+        }
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($row !== null) {
+            return (int) $row['id'];
+        }
+
+        $stmt = $this->db->prepare('INSERT INTO editori (nome) VALUES (?)');
+        if ($stmt === false) {
+            throw new \RuntimeException('publisher insert prepare failed');
+        }
+        $stmt->bind_param('s', $name);
+        if (!$stmt->execute()) {
+            $err = $stmt->error;
+            $stmt->close();
+            throw new \RuntimeException('publisher insert failed: ' . $err);
+        }
+        $id = (int) $stmt->insert_id;
+        $stmt->close();
+        return $id;
+    }
+
+    private function attachPrimaryPublisher(int $libroId, ?int $publisherId): void
+    {
+        if ($publisherId === null || $publisherId <= 0) {
+            return;
+        }
+        if (!$this->exec(
+            'INSERT INTO libri_editori (libro_id, editore_id, ordine) VALUES (?, ?, 0) ON DUPLICATE KEY UPDATE ordine = 0',
+            'ii',
+            [$libroId, $publisherId]
+        )) {
+            throw new \RuntimeException('publisher link failed');
+        }
     }
 
     // ------------------------------------------------------------------
@@ -488,20 +636,38 @@ class Repo
     // Club books
     // ------------------------------------------------------------------
 
-    private const BOOK_SELECT = "SELECT cb.*, l.titolo, l.copertina_url, l.anno_pubblicazione,
-                       (SELECT GROUP_CONCAT(a.nome ORDER BY la.ordine_credito SEPARATOR ', ')
-                          FROM libri_autori la JOIN autori a ON a.id = la.autore_id
-                         WHERE la.libro_id = l.id) AS autori,
+    // A club book is EITHER a catalogue book (cb.libro_id → libri) OR an
+    // external proposal (cb.external_book_id → bookclub_external_books, a book
+    // not in the library). Both are LEFT JOINed and the display fields are
+    // COALESCEd so one SELECT serves both; is_external tells them apart.
+    private const BOOK_SELECT = "SELECT cb.*,
+                       COALESCE(l.titolo, ext.titolo) AS titolo,
+                       COALESCE(l.copertina_url, ext.copertina_url) AS copertina_url,
+                       COALESCE(l.anno_pubblicazione, ext.anno) AS anno_pubblicazione,
+                       COALESCE(
+                           (SELECT GROUP_CONCAT(a.nome ORDER BY la.ordine_credito SEPARATOR ', ')
+                              FROM libri_autori la JOIN autori a ON a.id = la.autore_id
+                             WHERE la.libro_id = l.id),
+                           ext.autori
+                       ) AS autori,
+                       (cb.external_book_id IS NOT NULL) AS is_external,
+                       ext.isbn AS external_isbn,
                        up.nome AS proposer_nome, up.cognome AS proposer_cognome
                   FROM bookclub_books cb
-                  JOIN libri l ON l.id = cb.libro_id AND l.deleted_at IS NULL
+                  LEFT JOIN libri l ON l.id = cb.libro_id AND l.deleted_at IS NULL
+                  LEFT JOIN bookclub_external_books ext ON ext.id = cb.external_book_id
                   LEFT JOIN utenti up ON up.id = cb.proposed_by";
+
+    // Guard shared by the list methods: keep the old behaviour of hiding a
+    // catalogue book whose libri row is missing/soft-deleted, while still
+    // showing external proposals (which have no libri row by design).
+    private const BOOK_PRESENT = ' (l.id IS NOT NULL OR cb.external_book_id IS NOT NULL) ';
 
     /** @return list<array<string, mixed>> */
     public function clubBooks(int $clubId): array
     {
         return $this->rows(
-            self::BOOK_SELECT . ' WHERE cb.club_id = ? ORDER BY cb.position ASC, cb.created_at DESC',
+            self::BOOK_SELECT . ' WHERE cb.club_id = ? AND' . self::BOOK_PRESENT . 'ORDER BY cb.position ASC, cb.created_at DESC',
             'i',
             [$clubId]
         );
@@ -510,7 +676,7 @@ class Repo
     /** @return array<string, mixed>|null */
     public function clubBook(int $clubBookId): ?array
     {
-        return $this->row(self::BOOK_SELECT . ' WHERE cb.id = ?', 'i', [$clubBookId]);
+        return $this->row(self::BOOK_SELECT . ' WHERE cb.id = ? AND' . self::BOOK_PRESENT, 'i', [$clubBookId]);
     }
 
     public function bookAlreadyInClub(int $clubId, int $libroId): bool
@@ -538,6 +704,137 @@ class Repo
             [$clubId, $libroId, $state, $proposedBy, $motivation]
         );
         return $ok ? (int) $this->db->insert_id : null;
+    }
+
+    /**
+     * Propose a book that is NOT in the catalogue. The metadata lives in
+     * bookclub_external_books (never in `libri`); the bookclub_books row points
+     * at it via external_book_id. Returns the new club-book id, or null.
+     *
+     * @param array{titolo:string, autori?:?string, isbn?:?string, anno?:?string, editore?:?string} $data
+     */
+    public function proposeExternalBook(int $clubId, array $data, string $state, ?int $proposedBy, string $motivation): ?int
+    {
+        $titolo = trim((string) ($data['titolo'] ?? ''));
+        if ($titolo === '') {
+            return null;
+        }
+        $autori  = isset($data['autori']) && trim((string) $data['autori']) !== '' ? trim((string) $data['autori']) : null;
+        $isbn    = isset($data['isbn']) && trim((string) $data['isbn']) !== '' ? trim((string) $data['isbn']) : null;
+        $anno    = isset($data['anno']) && trim((string) $data['anno']) !== '' ? trim((string) $data['anno']) : null;
+        $editore = isset($data['editore']) && trim((string) $data['editore']) !== '' ? trim((string) $data['editore']) : null;
+
+        $ok = $this->exec(
+            'INSERT INTO bookclub_external_books (club_id, titolo, autori, isbn, anno, editore, proposed_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            'isssssi',
+            [$clubId, $titolo, $autori, $isbn, $anno, $editore, $proposedBy]
+        );
+        if (!$ok) {
+            return null;
+        }
+        $externalId = (int) $this->db->insert_id;
+
+        $ok2 = $this->exec(
+            'INSERT INTO bookclub_books (club_id, external_book_id, state, proposed_by, motivation) VALUES (?, ?, ?, ?, ?)',
+            'iisis',
+            [$clubId, $externalId, $state, $proposedBy, $motivation]
+        );
+        if (!$ok2) {
+            // Roll back the orphaned external row (best-effort; CASCADE-safe).
+            $this->exec('DELETE FROM bookclub_external_books WHERE id = ?', 'i', [$externalId]);
+            return null;
+        }
+        return (int) $this->db->insert_id;
+    }
+
+    /**
+     * Acquire an external proposal into the catalogue: create the real `libri`
+     * row from its metadata (this is the ONLY moment the book enters the
+     * library), repoint the club-book to it, and stamp the external row.
+     * Returns the new libro_id, or null if the club-book is not external / fails.
+     */
+    public function acquireExternalBook(int $clubBookId): ?int
+    {
+        $this->db->begin_transaction();
+        try {
+            $row = $this->row(
+                'SELECT cb.external_book_id, ext.titolo, ext.autori, ext.isbn, ext.anno, ext.editore, ext.copertina_url
+                   FROM bookclub_books cb
+                   JOIN bookclub_external_books ext ON ext.id = cb.external_book_id
+                  WHERE cb.id = ? AND cb.external_book_id IS NOT NULL
+                  FOR UPDATE',
+                'i',
+                [$clubBookId]
+            );
+            if ($row === null || trim((string) $row['titolo']) === '') {
+                $this->db->rollback();
+                return null;
+            }
+            $extId  = (int) $row['external_book_id'];
+            $titolo = (string) $row['titolo'];
+            $anno   = ($row['anno'] !== null && $row['anno'] !== '') ? (int) $row['anno'] : null;
+            $digits = $row['isbn'] !== null ? preg_replace('/[^0-9Xx]/', '', (string) $row['isbn']) : '';
+            $isbn13 = strlen((string) $digits) === 13 ? (string) $digits : null;
+            $isbn10 = strlen((string) $digits) === 10 ? (string) $digits : null;
+            $cover  = ($row['copertina_url'] !== null && $row['copertina_url'] !== '') ? substr((string) $row['copertina_url'], 0, 255) : null;
+            $publisherId = $this->findOrCreatePublisher(isset($row['editore']) ? (string) $row['editore'] : null);
+
+            // Only `titolo` is mandatory in `libri`; everything else is optional.
+            $inserted = $publisherId !== null
+                ? $this->exec(
+                    'INSERT INTO libri (titolo, anno_pubblicazione, isbn13, isbn10, copertina_url, editore_id) VALUES (?, ?, ?, ?, ?, ?)',
+                    'sisssi',
+                    [$titolo, $anno, $isbn13, $isbn10, $cover, $publisherId]
+                )
+                : $this->exec(
+                    'INSERT INTO libri (titolo, anno_pubblicazione, isbn13, isbn10, copertina_url) VALUES (?, ?, ?, ?, ?)',
+                    'sisss',
+                    [$titolo, $anno, $isbn13, $isbn10, $cover]
+                );
+            if (!$inserted) {
+                throw new \RuntimeException('catalog insert failed');
+            }
+            $libroId = (int) $this->db->insert_id;
+            $this->attachExternalAuthors($libroId, isset($row['autori']) ? (string) $row['autori'] : null);
+            $this->attachPrimaryPublisher($libroId, $publisherId);
+            SearchIndexBuilder::rebuild($this->db, $libroId);
+
+            // Give the acquired book one physical copy, matching how the normal
+            // catalogue-creation flow (LibriController) seeds copies. `libri`
+            // defaults copie_totali/copie_disponibili to 1, so WITHOUT a matching
+            // `copie` row the book would claim one available copy but have none
+            // to lend — and the per-copy features (labels, loan/return by code)
+            // would find nothing. Inventory number LIB-{id}, same as a single
+            // manually-created copy; the whole thing is inside this transaction.
+            if (!$this->exec(
+                "INSERT INTO copie (libro_id, numero_inventario, stato) VALUES (?, ?, 'disponibile')",
+                'is',
+                [$libroId, 'LIB-' . $libroId]
+            )) {
+                throw new \RuntimeException('catalog copy creation failed');
+            }
+
+            $bookRows = $this->execAffected(
+                'UPDATE bookclub_books SET libro_id = ?, external_book_id = NULL WHERE id = ? AND external_book_id = ?',
+                'iii',
+                [$libroId, $clubBookId, $extId]
+            );
+            $externalRows = $this->execAffected(
+                'UPDATE bookclub_external_books SET acquired_libro_id = ? WHERE id = ? AND acquired_libro_id IS NULL',
+                'ii',
+                [$libroId, $extId]
+            );
+            if ($bookRows !== 1 || $externalRows !== 1) {
+                throw new \RuntimeException('catalog acquisition repoint failed');
+            }
+
+            $this->db->commit();
+            return $libroId;
+        } catch (\Throwable $e) {
+            $this->db->rollback();
+            SecureLogger::error('[BookClub] external acquisition rolled back: ' . $e->getMessage());
+            return null;
+        }
     }
 
     public function changeBookState(int $clubBookId, string $fromState, string $toState, ?int $changedBy): bool
@@ -673,18 +970,27 @@ class Repo
     {
         return $this->rows(
             "SELECT o.id, o.club_book_id, cb.state, cb.created_at AS proposed_at,
-                    l.titolo, l.copertina_url,
-                    (SELECT GROUP_CONCAT(a.nome SEPARATOR ', ')
-                       FROM libri_autori la JOIN autori a ON a.id = la.autore_id
-                      WHERE la.libro_id = l.id) AS autori,
+                    COALESCE(l.titolo, ext.titolo) AS titolo,
+                    COALESCE(l.copertina_url, ext.copertina_url) AS copertina_url,
+                    COALESCE(
+                        (SELECT GROUP_CONCAT(a.nome SEPARATOR ', ')
+                           FROM libri_autori la JOIN autori a ON a.id = la.autore_id
+                          WHERE la.libro_id = l.id),
+                        ext.autori
+                    ) AS autori,
+                    (cb.external_book_id IS NOT NULL) AS is_external,
+                    ext.isbn AS external_isbn,
                     COALESCE(SUM(v.value), 0) AS score,
                     COUNT(v.id) AS vote_count
                FROM bookclub_poll_options o
                JOIN bookclub_books cb ON cb.id = o.club_book_id
-               JOIN libri l ON l.id = cb.libro_id AND l.deleted_at IS NULL
+               LEFT JOIN libri l ON l.id = cb.libro_id AND l.deleted_at IS NULL
+               LEFT JOIN bookclub_external_books ext ON ext.id = cb.external_book_id
                LEFT JOIN bookclub_votes v ON v.option_id = o.id
               WHERE o.poll_id = ?
-              GROUP BY o.id, o.club_book_id, cb.state, cb.created_at, l.titolo, l.copertina_url, l.id
+                AND (l.id IS NOT NULL OR cb.external_book_id IS NOT NULL)
+              GROUP BY o.id, o.club_book_id, cb.state, cb.created_at, l.titolo, l.copertina_url, l.id,
+                       ext.titolo, ext.copertina_url, ext.autori, cb.external_book_id, ext.isbn
               ORDER BY score DESC, cb.created_at ASC, o.id ASC",
             'i',
             [$pollId]
@@ -810,12 +1116,13 @@ class Repo
     // Meetings
     // ------------------------------------------------------------------
 
-    private const MEETING_SELECT = "SELECT mt.*, l.titolo AS book_title,
+    private const MEETING_SELECT = "SELECT mt.*, COALESCE(l.titolo, ext.titolo) AS book_title,
                        (SELECT COUNT(*) FROM bookclub_meeting_rsvps r WHERE r.meeting_id = mt.id AND r.response = 'yes') AS yes_count,
                        (SELECT COUNT(*) FROM bookclub_meeting_rsvps r WHERE r.meeting_id = mt.id AND r.response = 'maybe') AS maybe_count
                   FROM bookclub_meetings mt
                   LEFT JOIN bookclub_books cb ON cb.id = mt.club_book_id
-                  LEFT JOIN libri l ON l.id = cb.libro_id AND l.deleted_at IS NULL";
+                  LEFT JOIN libri l ON l.id = cb.libro_id AND l.deleted_at IS NULL
+                  LEFT JOIN bookclub_external_books ext ON ext.id = cb.external_book_id";
 
     /** @return list<array<string, mixed>> */
     public function clubMeetings(int $clubId): array
@@ -868,6 +1175,37 @@ class Repo
             ]
         );
         return $ok ? (int) $this->db->insert_id : null;
+    }
+
+    /**
+     * Update an existing meeting's editable fields. Scoped by club_id so a
+     * crafted meetingId from another club can never be edited through a club's
+     * own form. Status/minutes have their own setters and are not touched here.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function updateMeeting(int $meetingId, int $clubId, array $data): bool
+    {
+        return $this->exec(
+            'UPDATE bookclub_meetings
+                SET club_book_id = ?, title = ?, agenda = ?, starts_at = ?, ends_at = ?,
+                    kind = ?, location = ?, video_url = ?, seats = ?
+              WHERE id = ? AND club_id = ?',
+            'isssssssiii',
+            [
+                $data['club_book_id'] !== null ? (int) $data['club_book_id'] : null,
+                (string) $data['title'],
+                (string) ($data['agenda'] ?? ''),
+                (string) $data['starts_at'],
+                $data['ends_at'] !== null ? (string) $data['ends_at'] : null,
+                (string) ($data['kind'] ?? 'in_person'),
+                (string) ($data['location'] ?? ''),
+                (string) ($data['video_url'] ?? ''),
+                $data['seats'] !== null ? (int) $data['seats'] : null,
+                $meetingId,
+                $clubId,
+            ]
+        );
     }
 
     public function setMeetingStatus(int $meetingId, string $status): bool
