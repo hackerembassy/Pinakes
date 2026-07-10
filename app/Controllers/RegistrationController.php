@@ -249,43 +249,51 @@ class RegistrationController
             return $response->withHeader('Location', RouteTranslator::route('login') . '?error=invalid_token')->withStatus(302);
         }
 
-        // Ensure timezone consistency
-        $db->query("SET SESSION time_zone = '+00:00'");
+        // mysqli runs in exception mode (ConfigStore), so prepare()/execute()
+        // throw on failure. Wrap the whole verification so a DB error becomes a
+        // handled redirect instead of a 500 on the verify link.
+        try {
+            // Ensure timezone consistency
+            $db->query("SET SESSION time_zone = '+00:00'");
 
-        // Check token: must exist, not be null, and not be expired
-        $stmt = $db->prepare("SELECT id FROM utenti WHERE token_verifica_email = ? AND data_token_verifica IS NOT NULL AND data_token_verifica > NOW() LIMIT 1");
-        $stmt->bind_param('s', $token);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        if ($row = $res->fetch_assoc()) {
-            $uid = (int) $row['id'];
-            $stmt->close();
-
-            // Whether new self-registrations still need an administrator to
-            // approve them AFTER they verify their email. Default true (the
-            // historical behaviour). When false, verifying the email is enough
-            // to activate the account.
-            $requireApproval = (bool) ConfigStore::get('registration.require_admin_approval', true);
-
-            if ($requireApproval) {
-                $stmt = $db->prepare("UPDATE utenti SET email_verificata = 1, token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
-            } else {
-                // No admin approval required: activate on email verification. The
-                // CASE WHEN only promotes a still-'sospeso' (freshly registered)
-                // account, so it never un-suspends one an admin later suspended,
-                // while email_verificata is set either way.
-                $stmt = $db->prepare("UPDATE utenti SET email_verificata = 1, stato = CASE WHEN stato = 'sospeso' THEN 'attivo' ELSE stato END, token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
-            }
-            $stmt->bind_param('i', $uid);
+            // Check token: must exist, not be null, and not be expired
+            $stmt = $db->prepare("SELECT id FROM utenti WHERE token_verifica_email = ? AND data_token_verifica IS NOT NULL AND data_token_verifica > NOW() LIMIT 1");
+            $stmt->bind_param('s', $token);
             $stmt->execute();
-            $stmt->close();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                $uid = (int) $row['id'];
+                $stmt->close();
 
-            // Pending-approval accounts get the "await approval" notice; auto-
-            // activated ones are told they can sign in immediately.
-            $verifiedQuery = $requireApproval ? '?verified=1' : '?verified=1&activated=1';
-            return $response->withHeader('Location', RouteTranslator::route('login') . $verifiedQuery)->withStatus(302);
+                // Whether new self-registrations still need an administrator to
+                // approve them AFTER they verify their email. Default true (the
+                // historical behaviour). When false, verifying the email is enough
+                // to activate the account.
+                $requireApproval = (bool) ConfigStore::get('registration.require_admin_approval', true);
+
+                if ($requireApproval) {
+                    $stmt = $db->prepare("UPDATE utenti SET email_verificata = 1, token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
+                } else {
+                    // No admin approval required: activate on email verification. The
+                    // CASE WHEN only promotes a still-'sospeso' (freshly registered)
+                    // account, so it never un-suspends one an admin later suspended,
+                    // while email_verificata is set either way.
+                    $stmt = $db->prepare("UPDATE utenti SET email_verificata = 1, stato = CASE WHEN stato = 'sospeso' THEN 'attivo' ELSE stato END, token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
+                }
+                $stmt->bind_param('i', $uid);
+                $stmt->execute();
+                $stmt->close();
+
+                // Pending-approval accounts get the "await approval" notice; auto-
+                // activated ones are told they can sign in immediately.
+                $verifiedQuery = $requireApproval ? '?verified=1' : '?verified=1&activated=1';
+                return $response->withHeader('Location', RouteTranslator::route('login') . $verifiedQuery)->withStatus(302);
+            }
+            $stmt->close();
+        } catch (\Throwable $e) {
+            \App\Support\SecureLogger::error('[registration] email verification failed', ['error' => $e->getMessage()]);
+            return $response->withHeader('Location', RouteTranslator::route('login') . '?error=server')->withStatus(302);
         }
-        $stmt->close();
 
         // Token is expired or invalid
         return $response->withHeader('Location', RouteTranslator::route('login') . '?error=token_expired')->withStatus(302);
