@@ -47,6 +47,38 @@
       </div>
     </div>
 
+    <!-- Max requestable loan duration (reservation-window cap) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="space-y-4">
+        <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
+          <i class="fas fa-hourglass-half text-gray-500"></i>
+          <?= __("Durata massima richiedibile") ?>
+        </h2>
+        <p class="text-sm text-gray-600"><?= __("Periodo massimo che un utente può richiedere per un prestito o una prenotazione. Le richieste che superano questo limite vengono rifiutate.") ?></p>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-2xl p-5 space-y-4 max-sm:!bg-transparent max-sm:!border-0 max-sm:!rounded-none max-sm:!shadow-none max-sm:!p-0">
+        <div>
+          <label for="max_loan_duration_days" class="block text-sm font-medium text-gray-700 mb-2">
+            <?= __("Durata massima prestito (giorni)") ?>
+          </label>
+          <div class="flex items-center gap-4">
+            <input type="number"
+                   id="max_loan_duration_days"
+                   name="max_loan_duration_days"
+                   min="1"
+                   max="3650"
+                   value="<?php echo (int) ($loansSettings['max_loan_duration_days'] ?? 90); ?>"
+                   class="block w-32 rounded-xl border-gray-300 focus:border-gray-500 focus:ring-gray-500 text-sm py-3 px-4 text-center font-semibold text-lg">
+            <span class="text-sm text-gray-600"><?= __("giorni") ?></span>
+          </div>
+          <p class="text-xs text-gray-500 mt-3">
+            <i class="fas fa-info-circle mr-1"></i>
+            <?= __("Valore compreso tra 1 e 3650 giorni. Predefinito: 90 giorni") ?>
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- Pickup expiry days -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="space-y-4">

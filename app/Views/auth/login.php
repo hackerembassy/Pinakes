@@ -60,7 +60,11 @@ $forgotPasswordRoute = route_path('forgot_password');
             <div class="flex items-center">
               <i class="fas fa-check-circle text-green-500 mr-3"></i>
               <div class="text-green-700 text-sm">
-                <?= __('Email verificata con successo! Il tuo account è ora in attesa di approvazione da parte dell\'amministratore. Riceverai un\'email quando sarà attivato.') ?>
+                <?php if (isset($_GET['activated']) && $_GET['activated'] === '1'): ?>
+                  <?= __('Email verificata con successo! Il tuo account è attivo: puoi accedere subito.') ?>
+                <?php else: ?>
+                  <?= __('Email verificata con successo! Il tuo account è ora in attesa di approvazione da parte dell\'amministratore. Riceverai un\'email quando sarà attivato.') ?>
+                <?php endif; ?>
               </div>
             </div>
           </div>

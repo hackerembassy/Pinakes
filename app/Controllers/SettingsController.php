@@ -271,6 +271,10 @@ class SettingsController
             'smtp_security' => ConfigStore::get('mail.smtp.encryption', 'tls'),
         ];
         $settings = array_merge($defaults, $stored);
+
+        // Registration approval flag lives in its own config group but is edited
+        // from this (email) form, so surface it here for the checkbox to pre-fill.
+        $settings['require_admin_approval'] = (bool) ConfigStore::get('registration.require_admin_approval', true);
         $driver = $stored['driver_mode'] ?? $settings['type'] ?? $defaults['type'];
         $settings['type'] = $driver;
 
@@ -515,8 +519,6 @@ class SettingsController
             'page_content' => $repository->get('privacy', 'page_content', $config['page_content'] ?? ''),
             'cookie_policy_content' => $repository->get('privacy', 'cookie_policy_content', $config['cookie_policy_content'] ?? ''),
             'cookie_banner_enabled' => $cookieBannerEnabled,
-            'cookie_banner_language' => $repository->get('privacy', 'cookie_banner_language', $config['cookie_banner_language'] ?? 'it'),
-            'cookie_banner_country' => $repository->get('privacy', 'cookie_banner_country', $config['cookie_banner_country'] ?? 'it'),
             'cookie_statement_link' => $repository->get('privacy', 'cookie_statement_link', $config['cookie_statement_link'] ?? ''),
             'cookie_technologies_link' => $repository->get('privacy', 'cookie_technologies_link', $config['cookie_technologies_link'] ?? ''),
             'show_analytics' => $showAnalytics,
@@ -529,6 +531,16 @@ class SettingsController
         $data = (array) $request->getParsedBody();
         // CSRF validated by CsrfMiddleware
 
+        $statementRaw = trim((string) ($data['cookie_statement_link'] ?? ''));
+        $technologiesRaw = trim((string) ($data['cookie_technologies_link'] ?? ''));
+        $statementUrl = HtmlHelper::sanitizePublicHttpUrl($statementRaw);
+        $technologiesUrl = HtmlHelper::sanitizePublicHttpUrl($technologiesRaw);
+        if (($statementRaw !== '' && $statementUrl === '')
+            || ($technologiesRaw !== '' && $technologiesUrl === '')) {
+            $_SESSION['error_message'] = __('I link cookie devono essere URL HTTP o HTTPS validi, senza credenziali incorporate.');
+            return $this->redirect($response, '/admin/settings?tab=privacy');
+        }
+
         $repository = new SettingsRepository($db);
         $repository->ensureTables();
 
@@ -537,10 +549,8 @@ class SettingsController
             'page_content' => HtmlHelper::sanitizeHtml((string) ($data['page_content'] ?? '')),
             'cookie_policy_content' => HtmlHelper::sanitizeHtml((string) ($data['cookie_policy_content'] ?? '')),
             'cookie_banner_enabled' => isset($data['cookie_banner_enabled']) && $data['cookie_banner_enabled'] === '1',
-            'cookie_banner_language' => strtolower(trim((string) ($data['cookie_banner_language'] ?? 'it'))),
-            'cookie_banner_country' => strtoupper(trim((string) ($data['cookie_banner_country'] ?? 'IT'))),
-            'cookie_statement_link' => trim((string) ($data['cookie_statement_link'] ?? '')),
-            'cookie_technologies_link' => trim((string) ($data['cookie_technologies_link'] ?? '')),
+            'cookie_statement_link' => $statementUrl,
+            'cookie_technologies_link' => $technologiesUrl,
         ];
 
         foreach ($settings as $key => $value) {
@@ -757,15 +767,15 @@ class SettingsController
 
             // Validate reasonable dimensions (between 10mm and 100mm)
             if ($width >= 10 && $width <= 100 && $height >= 10 && $height <= 100) {
-                $formatName = "{$width}×{$height}mm";
-
+                // NOTE: label.format_name is intentionally NOT persisted. It is a
+                // purely derived display string ("{w}×{h}mm") that nothing reads —
+                // the label PDF (LibriController) and the labels tab both work off
+                // width/height. Persisting it was a dead write; drop it.
                 $repository->set('label', 'width', (string) $width);
                 $repository->set('label', 'height', (string) $height);
-                $repository->set('label', 'format_name', $formatName);
 
                 ConfigStore::set('label.width', $width);
                 ConfigStore::set('label.height', $height);
-                ConfigStore::set('label.format_name', $formatName);
 
                 $_SESSION['success_message'] = __('Formato etichette aggiornato correttamente.');
             } else {
@@ -992,7 +1002,7 @@ class SettingsController
     }
 
     /**
-     * @return array{loan_duration_days: int, pickup_expiry_days: int, max_renewals: int, max_active_loans_per_user: int}
+     * @return array{loan_duration_days: int, pickup_expiry_days: int, max_renewals: int, max_active_loans_per_user: int, max_loan_duration_days: int}
      */
     private function resolveLoansSettings(SettingsRepository $repository): array
     {
@@ -1001,6 +1011,7 @@ class SettingsController
             'pickup_expiry_days'       => (int) ($repository->get('loans', 'pickup_expiry_days', '3') ?? 3),
             'max_renewals'             => (int) ($repository->get('loans', 'max_renewals', '3') ?? 3),
             'max_active_loans_per_user' => (int) ($repository->get('loans', 'max_active_loans_per_user', '0') ?? 0),
+            'max_loan_duration_days'   => (int) ($repository->get('loans', 'max_loan_duration_days', '90') ?? 90),
         ];
     }
 
@@ -1023,11 +1034,13 @@ class SettingsController
         $pickupExpiryDays = min(30,   max(1, (int) ($data['pickup_expiry_days'] ?? 3)));          // 1 … 30 days (matches the loans-tab input max)
         $maxRenewals      = min(100,  max(0, (int) ($data['max_renewals'] ?? 3)));                // 0 … 100
         $maxActiveLoans   = min(1000, max(0, (int) ($data['max_active_loans_per_user'] ?? 0)));   // 0 (unlimited) … 1000
+        $maxLoanDuration  = min(3650, max(1, (int) ($data['max_loan_duration_days'] ?? 90)));     // 1 day … 10 years (reservation-window cap enforced by ReservationsController)
 
         $repository->set('loans', 'loan_duration_days', (string) $loanDurationDays);
         $repository->set('loans', 'pickup_expiry_days', (string) $pickupExpiryDays);
         $repository->set('loans', 'max_renewals', (string) $maxRenewals);
         $repository->set('loans', 'max_active_loans_per_user', (string) $maxActiveLoans);
+        $repository->set('loans', 'max_loan_duration_days', (string) $maxLoanDuration);
 
         $_SESSION['success_message'] = __('Impostazioni prestiti aggiornate correttamente.');
         return $response->withHeader('Location', url('/admin/settings?tab=loans'))->withStatus(302);

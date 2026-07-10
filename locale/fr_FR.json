@@ -6465,5 +6465,17 @@
   "Impossibile accedere alla fotocamera. Controlla i permessi del browser.": "Impossible d'accéder à la caméra. Vérifiez les autorisations du navigateur.",
   "Nessuna fotocamera trovata su questo dispositivo.": "Aucune caméra détectée sur cet appareil.",
   "Questo browser non supporta l'accesso alla fotocamera.": "Ce navigateur ne prend pas en charge l'accès à la caméra.",
-  "Impossibile avviare lo scanner.": "Impossible de démarrer le scanner."
+  "Impossibile avviare lo scanner.": "Impossible de démarrer le scanner.",
+  "Email verificata con successo! Il tuo account è attivo: puoi accedere subito.": "E-mail vérifié avec succès ! Votre compte est actif : vous pouvez vous connecter immédiatement.",
+  "Registrazione utenti": "Inscription des utilisateurs",
+  "Richiedi l'approvazione dell'amministratore per le nuove registrazioni": "Exiger l'approbation de l'administrateur pour les nouvelles inscriptions",
+  "Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.": "Si activé, un nouvel utilisateur reste en attente jusqu'à ce qu'un administrateur approuve le compte. Si désactivé, le compte est activé automatiquement après la vérification de l'e-mail.",
+  "Durata massima richiedibile": "Durée maximale demandable",
+  "Periodo massimo che un utente può richiedere per un prestito o una prenotazione. Le richieste che superano questo limite vengono rifiutate.": "Période maximale qu'un utilisateur peut demander pour un prêt ou une réservation. Les demandes dépassant cette limite sont refusées.",
+  "Durata massima prestito (giorni)": "Durée maximale du prêt (jours)",
+  "Valore compreso tra 1 e 3650 giorni. Predefinito: 90 giorni": "Valeur comprise entre 1 et 3650 jours. Par défaut : 90 jours",
+  "Tecnologie e cookie utilizzati": "Technologies et cookies utilisés",
+  "I link cookie devono essere URL HTTP o HTTPS validi, senza credenziali incorporate.": "Les liens de cookies doivent être des URL HTTP ou HTTPS valides sans identifiants intégrés.",
+  "Registrazione ricevuta - verifica email": "Inscription reçue - vérification de l'e-mail",
+  "Inviata quando l'account si attiverà automaticamente dopo la verifica dell'email.": "Envoyé lorsque le compte sera activé automatiquement après la vérification de l'e-mail."
 }

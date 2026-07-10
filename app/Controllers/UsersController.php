@@ -485,6 +485,22 @@ class UsersController
         }
         $stmt->close();
 
+        // Hardening: when an admin sets a non-active state, invalidate any
+        // pending email-verification token so a stale verification link cannot
+        // silently re-activate a suspended/expired account (companion to the
+        // email_verificata gate in RegistrationController::verifyEmail). Best
+        // effort — a failure here must never break the successful edit.
+        if ($stato !== 'attivo') {
+            try {
+                $clr = $db->prepare("UPDATE utenti SET token_verifica_email = NULL, data_token_verifica = NULL WHERE id = ?");
+                $clr->bind_param('i', $id);
+                $clr->execute();
+                $clr->close();
+            } catch (\Throwable $e) {
+                \App\Support\SecureLogger::error('[Users] verify-token clear failed for user ' . $id . ' (errno ' . (int) $e->getCode() . ')');
+            }
+        }
+
         // Audit logging for critical actions
         if (($original['tipo_utente'] ?? '') !== $role) {
             \App\Support\SecureLogger::info('User role changed', [
