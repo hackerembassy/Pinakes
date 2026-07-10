@@ -1514,6 +1514,7 @@ $additional_css = "
         font-size: 1rem;
         line-height: 1;
         white-space: nowrap;
+        background: var(--success-color); /* fallback for browsers without color-mix() */
         background: color-mix(in srgb, var(--success-color) 95%, transparent);
         color: white;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);

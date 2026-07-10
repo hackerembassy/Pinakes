@@ -93,7 +93,7 @@ $getBookStatusBadge = static function ($book) {
     --dark-hover: #374151;
     --text-primary: var(--text-color);
     --text-secondary: var(--text-light);
-    --text-muted: #9ca3af;
+    --text-muted: #64748b;
     --bg-primary: var(--white);
     --bg-secondary: var(--light-bg);
     --bg-tertiary: var(--accent-color);

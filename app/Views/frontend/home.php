@@ -313,6 +313,7 @@ form.hero-search-form {
         letter-spacing: 0.025em;
         transition: all 0.3s ease;
         margin-left: 1rem;
+        min-height: 44px;
     }
 
     .hero-search-button:hover {
@@ -462,6 +463,7 @@ form.hero-search-form {
         .hero-quick-link {
             font-size: 0.75rem;
             padding: 0.375rem 0.75rem;
+            min-height: 44px;
         }
     }
         h6.search-section-title {

@@ -65,7 +65,7 @@ $additional_css = "
         --error-color: #ef4444;
         --text-primary: var(--text-color, #1f2937);
         --text-secondary: var(--text-light, #6b7280);
-        --text-muted: #9ca3af;
+        --text-muted: #64748b;
         --bg-primary: #ffffff;
         --bg-secondary: var(--light-bg, #f9fafb);
         --bg-tertiary: #f3f4f6;

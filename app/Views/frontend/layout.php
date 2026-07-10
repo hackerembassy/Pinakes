@@ -267,7 +267,8 @@ $htmlLang = substr($currentLocale, 0, 2);
             --accent-color: #f1f5f9;
             --text-color: #0f172a;
             --text-light: #6b7280;
-            --text-muted: #94a3b8;
+            /* WCAG AA on white for normal-size metadata text. */
+            --text-muted: #64748b;
             --light-bg: #f8f9fa;
             --white: #ffffff;
             /* Aliases so views that reference these names resolve globally
@@ -441,6 +442,8 @@ $htmlLang = substr($currentLocale, 0, 2);
             display: flex;
             align-items: center;
             justify-content: center;
+            width: 44px;
+            height: 44px;
             transition: color 0.3s ease;
         }
 
@@ -776,6 +779,8 @@ $htmlLang = substr($currentLocale, 0, 2);
             display: flex;
             align-items: center;
             justify-content: center;
+            width: 44px;
+            height: 44px;
             transition: color 0.3s ease;
         }
 
@@ -1207,6 +1212,8 @@ $htmlLang = substr($currentLocale, 0, 2);
             display: flex;
             align-items: center;
             justify-content: center;
+            min-width: 44px;
+            min-height: 44px;
             transition: color 0.3s ease;
         }
 
