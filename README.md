@@ -37,6 +37,41 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 
 ---
 
+## What's New in v0.7.32
+
+A hotfix for two bugs reported right after 0.7.31, and the systemic cause behind
+the recurring "a plugin's new table is missing after an upgrade" failures.
+
+### Plugin schema self-heals on upgrade (book-club 500 — [#138](https://github.com/fabiodalez-dev/Pinakes/discussions/138))
+
+- Upgrading with a plugin **already active** could leave one of its new tables
+  uncreated (`bookclub_external_books doesn't exist` → every Book Club page
+  500'd). The cause was generic: the plugin version was marked done in the DB
+  independently of its `ensureSchema()` actually running, and the "same version"
+  path then skipped `ensureSchema()` forever.
+- Fixed at the source: on boot the plugin manager now **re-runs `ensureSchema()`
+  whenever a plugin's declared tables are missing** — a cheap read-only check
+  that runs the schema DDL only when a table is actually absent, so healthy
+  installs pay nothing. A broken install heals itself on the very next page
+  load. One plugin's activation failure also no longer blocks the others.
+- No manual step: just upgrade and open the affected page once.
+
+### Loan list no longer leaks its script (Create Loan — [#238](https://github.com/fabiodalez-dev/Pinakes/discussions/238))
+
+- After creating a loan, the loans list could show a block of raw JavaScript as
+  page text (an inline `<script>` was closed early by a comment). Fixed.
+
+### Release safety
+
+- A mandatory schema gate (`scripts/verify-schema.sh`) now runs the migration
+  tests plus a per-plugin check that every plugin's declared tables match what
+  it creates, and a reproduction of the upgrade-while-active bug — so this class
+  of regression is caught before a release, not by a user after one.
+
+No schema migration in this release; the fix is runtime self-heal.
+
+---
+
 ## What's New in v0.7.31
 
 A feature + hardening release built from real user reports on the catalogue,
