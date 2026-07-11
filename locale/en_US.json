@@ -6519,8 +6519,6 @@
   "Larghezza (mm)": "Width (mm)",
   "Altezza (mm)": "Height (mm)",
   "Contenuto etichetta": "Label content",
-  "Nome applicazione": "Application name",
   "Sottotitolo libro": "Book subtitle",
-  "Autore ed editore": "Author and publisher",
-  "Stampa etichetta": "Print label"
+  "Autore ed editore": "Author and publisher"
 }

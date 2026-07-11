@@ -51,7 +51,7 @@ check($isCustom('locale/pt_BR.json') === true, 'locale/pt_BR.json IS custom');
 
 // --- Path normalisation: leading slash + Windows separators. ---
 check($isCustom('/locale/nb_NO.json') === true, 'leading-slash path is normalised and still custom');
-check($isCustom('locale\\\\nb_NO.json') === false || $isCustom('locale\\nb_NO.json') === true, 'backslash path is normalised to forward slashes');
+check($isCustom('locale\\nb_NO.json') === true, 'backslash (Windows) path is normalised to forward slashes and still custom');
 
 // --- Non-locale files must never be classified as custom locales. ---
 check($isCustom('locale/README.md') === false, 'locale/README.md is not a custom locale');

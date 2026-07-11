@@ -88,12 +88,34 @@ $hadFile = file_exists($localeFile);
 $backup = $hadFile ? (string) file_get_contents($localeFile) : null;
 file_put_contents($localeFile, json_encode($partial, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
+// Snapshot the FULL pre-test languages row (if any) so the cleanup can put it
+// back exactly as it was — deleting a user's real nb_NO registration and
+// re-inserting only our synthetic columns would silently lose their data.
+$preRow = null;
+$preRes = $db->query("SELECT * FROM languages WHERE code='{$code}' LIMIT 1");
+if ($preRes && ($r = $preRes->fetch_assoc())) {
+    $preRow = $r;
+}
 $db->query("DELETE FROM languages WHERE code='{$code}'");
 $db->query("INSERT INTO languages (code, name, native_name, is_active, translation_file, created_at)
             VALUES ('{$code}', 'Norwegian', 'Norsk', 1, '{$code}.json', NOW())");
 
-$cleanup = static function () use ($db, $code, $localeFile, $hadFile, $backup): void {
+$cleanup = static function () use ($db, $code, $localeFile, $hadFile, $backup, $preRow): void {
     $db->query("DELETE FROM languages WHERE code='{$code}'");
+    if ($preRow !== null) {
+        // Restore the original row column-by-column (whatever schema version).
+        $cols = array_keys($preRow);
+        $placeholders = implode(',', array_fill(0, count($cols), '?'));
+        $colList = '`' . implode('`,`', $cols) . '`';
+        $stmt = $db->prepare("INSERT INTO languages ({$colList}) VALUES ({$placeholders})");
+        if ($stmt !== false) {
+            $types = str_repeat('s', count($cols));
+            $vals = array_values($preRow);
+            $stmt->bind_param($types, ...$vals);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
     if ($hadFile && $backup !== null) {
         file_put_contents($localeFile, $backup);
     } elseif (file_exists($localeFile)) {
