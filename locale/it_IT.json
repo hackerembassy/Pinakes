@@ -6514,5 +6514,13 @@
   "Nuova proposta nel club \"%s\"": "Nuova proposta nel club \"%s\"",
   "%s ha proposto \"%s\" nel club \"%s\".": "%s ha proposto \"%s\" nel club \"%s\".",
   "Nuovo incontro nel club \"%s\"": "Nuovo incontro nel club \"%s\"",
-  "\"%s\" — %s": "\"%s\" — %s"
+  "\"%s\" — %s": "\"%s\" — %s",
+  "Dimensioni personalizzate": "Dimensioni personalizzate",
+  "Larghezza (mm)": "Larghezza (mm)",
+  "Altezza (mm)": "Altezza (mm)",
+  "Contenuto etichetta": "Contenuto etichetta",
+  "Nome applicazione": "Nome applicazione",
+  "Sottotitolo libro": "Sottotitolo libro",
+  "Autore ed editore": "Autore ed editore",
+  "Stampa etichetta": "Stampa etichetta"
 }

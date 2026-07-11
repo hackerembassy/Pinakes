@@ -583,6 +583,8 @@ $activeTab = $activeTab ?? 'general';
                   ['width' => 34, 'height' => 48, 'name' => '34×48mm', 'desc' => __("Formato quadrato Tirrenia")],
                   ['width' => 52, 'height' => 30, 'name' => '52×30mm', 'desc' => __("Formato biblioteche scolastiche (compatibili A4)")],
                 ];
+                $presetKeys = array_map(static fn(array $format): string => $format['width'] . 'x' . $format['height'], $labelFormats);
+                $isCustomFormat = !in_array($currentFormat, $presetKeys, true);
                 ?>
 
                 <div class="space-y-3">
@@ -606,8 +608,36 @@ $activeTab = $activeTab ?? 'general';
                       </div>
                     </label>
                   <?php endforeach; ?>
+                  <label class="flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all <?php echo $isCustomFormat ? 'border-gray-900 bg-gray-100' : 'border-gray-200 hover:border-gray-300 bg-white'; ?>">
+                    <input type="radio" name="label_format" value="custom" <?php echo $isCustomFormat ? 'checked' : ''; ?> class="mt-1 w-4 h-4">
+                    <div class="flex-1">
+                      <span class="font-semibold text-gray-900"><?= __('Dimensioni personalizzate') ?></span>
+                      <div class="grid grid-cols-2 gap-3 mt-3">
+                        <label class="text-sm"><?= __('Larghezza (mm)') ?><input type="number" name="custom_width" min="10" max="100" value="<?= $currentWidth ?>" class="form-input mt-1"></label>
+                        <label class="text-sm"><?= __('Altezza (mm)') ?><input type="number" name="custom_height" min="10" max="100" value="<?= $currentHeight ?>" class="form-input mt-1"></label>
+                      </div>
+                    </div>
+                  </label>
                 </div>
               </div>
+
+              <fieldset class="border-t border-gray-200 pt-5">
+                <legend class="font-semibold text-gray-900 mb-3"><?= __('Contenuto etichetta') ?></legend>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <?php foreach ([
+                    'show_app_name' => __('Nome applicazione'),
+                    'show_title' => __('Titolo libro'),
+                    'show_subtitle' => __('Sottotitolo libro'),
+                    'show_author_publisher' => __('Autore ed editore'),
+                    'show_dewey' => __('Codice Dewey'),
+                  ] as $settingKey => $settingLabel): ?>
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                      <input type="checkbox" name="<?= $settingKey ?>" value="1" <?= !empty($labelSettings[$settingKey]) ? 'checked' : '' ?> class="rounded border-gray-300">
+                      <?= HtmlHelper::e($settingLabel) ?>
+                    </label>
+                  <?php endforeach; ?>
+                </div>
+              </fieldset>
 
               <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <div class="flex gap-2">

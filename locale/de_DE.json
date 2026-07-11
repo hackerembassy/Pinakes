@@ -6514,5 +6514,13 @@
   "Nuova proposta nel club \"%s\"": "Neuer Vorschlag im Club „%s“",
   "%s ha proposto \"%s\" nel club \"%s\".": "%s hat „%s“ im Club „%s“ vorgeschlagen.",
   "Nuovo incontro nel club \"%s\"": "Neues Treffen im Club „%s“",
-  "\"%s\" — %s": "„%s“ — %s"
+  "\"%s\" — %s": "„%s“ — %s",
+  "Dimensioni personalizzate": "Benutzerdefinierte Abmessungen",
+  "Larghezza (mm)": "Breite (mm)",
+  "Altezza (mm)": "Höhe (mm)",
+  "Contenuto etichetta": "Etiketteninhalt",
+  "Nome applicazione": "Anwendungsname",
+  "Sottotitolo libro": "Buchuntertitel",
+  "Autore ed editore": "Autor und Verlag",
+  "Stampa etichetta": "Etikett drucken"
 }

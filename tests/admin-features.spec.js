@@ -169,29 +169,53 @@ test.describe.serial('Admin Settings: all tabs', () => {
     if (origTitle) dbQuery(`UPDATE system_settings SET setting_value='${origTitle.replace(/'/g, "\\'")}' WHERE category='privacy' AND setting_key='page_title'`);
   });
 
-  test('Labels tab: select a label format', async () => {
+  test('Labels tab: save custom 89x41 size and content choices', async () => {
     await page.goto(`${BASE}/admin/settings?tab=labels`);
     await page.waitForLoadState('networkidle');
 
     await page.locator('[data-settings-tab="labels"]').click();
     await expect(page.locator('section[data-settings-panel="labels"]')).toBeVisible();
 
-    // Select 70x36mm format
-    await page.locator('input[name="label_format"][value="70x36"]').check();
+    await page.locator('input[name="label_format"][value="custom"]').check();
+    await page.locator('input[name="custom_width"]').fill('89');
+    await page.locator('input[name="custom_height"]').fill('41');
+    await page.locator('input[name="show_app_name"]').uncheck();
+    await page.locator('input[name="show_subtitle"]').check();
 
     await page.locator('section[data-settings-panel="labels"] button[type="submit"]').click();
     await page.waitForLoadState('networkidle');
 
     // Verify in DB
     const width = dbQuery("SELECT setting_value FROM system_settings WHERE category='label' AND setting_key='width'");
-    expect(width).toBe('70');
+    const height = dbQuery("SELECT setting_value FROM system_settings WHERE category='label' AND setting_key='height'");
+    const showApp = dbQuery("SELECT setting_value FROM system_settings WHERE category='label' AND setting_key='show_app_name'");
+    expect(width).toBe('89');
+    expect(height).toBe('41');
+    expect(showApp).toBe('0');
 
     // Restore default
     await page.goto(`${BASE}/admin/settings?tab=labels`);
     await page.locator('[data-settings-tab="labels"]').click();
     await page.locator('input[name="label_format"][value="25x38"]').check();
+    await page.locator('input[name="show_app_name"]').check();
     await page.locator('section[data-settings-panel="labels"] button[type="submit"]').click();
     await page.waitForLoadState('networkidle');
+  });
+
+  test('Physical-copy table prints exactly the selected copy label', async () => {
+    const row = dbQuery("SELECT c.libro_id, c.id FROM copie c JOIN libri l ON l.id=c.libro_id WHERE l.deleted_at IS NULL ORDER BY c.id LIMIT 1");
+    const [bookId, copyId] = row.split(/\s+/).map(Number);
+    expect(bookId).toBeGreaterThan(0);
+    expect(copyId).toBeGreaterThan(0);
+
+    await page.goto(`${BASE}/admin/books/${bookId}`);
+    const printLink = page.locator(`a[href*="copy-labels-pdf?copy_id=${copyId}"]`);
+    await expect(printLink).toBeVisible();
+
+    const pdf = await page.request.get(`${BASE}/admin/books/${bookId}/copy-labels-pdf?copy_id=${copyId}`);
+    expect(pdf.status()).toBe(200);
+    expect(pdf.headers()['content-type']).toContain('application/pdf');
+    expect(pdf.headers()['content-disposition']).toContain(`_${copyId}.pdf`);
   });
 
   test('Advanced tab: set custom essential JS', async () => {

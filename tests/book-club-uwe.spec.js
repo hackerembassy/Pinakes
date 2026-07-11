@@ -320,11 +320,10 @@ test.describe.serial('Book Club — Uwe feedback', () => {
   test('⑥ Uwe #138 follow-up: heading, proposed-by, remove, PDF, and next-meeting card fields', async () => {
     const clubId = Number(dbQuery(`SELECT id FROM bookclub_clubs WHERE name=${sqlStr(CLUB_NAME)} ORDER BY id DESC LIMIT 1`) || '0');
     const memberUserId = Number(dbQuery(`SELECT id FROM utenti WHERE email=${sqlStr(MEMBER_EMAIL)} LIMIT 1`) || '0');
+    expect(clubId).toBeGreaterThan(0);
     expect(memberUserId).toBeGreaterThan(0);
     // The member must be ACTIVE to be a valid "proposed_by" target (⑤ left it suspended).
     dbQuery(`UPDATE bookclub_members SET status='active' WHERE club_id=${clubId} AND user_id=${memberUserId}`);
-    page.on('dialog', d => d.accept()); // the remove button asks for confirm()
-
     await page.goto(`${BASE}/book-club/${slug}`);
     await page.waitForLoadState('domcontentloaded');
 
@@ -352,6 +351,9 @@ test.describe.serial('Book Club — Uwe feedback', () => {
     expect(Number(dbQuery(
       `SELECT COUNT(*) FROM admin_notifications WHERE related_id=${clubId} AND type='general' AND title LIKE 'Nuova proposta%'`
     ) || '0'), 'a bell notification must be created for the new proposal').toBeGreaterThan(0);
+    expect(dbQuery(
+      `SELECT message FROM admin_notifications WHERE related_id=${clubId} AND type='general' AND title LIKE 'Nuova proposta%' ORDER BY id DESC LIMIT 1`
+    ), 'the notification names the selected proposer, not the acting manager').toContain('E2E Book Club Member');
 
     // item 5 — PDF export of the club's reading list.
     const pdf = await page.request.get(`${BASE}/book-club/${slug}/books.pdf`);
@@ -365,6 +367,16 @@ test.describe.serial('Book Club — Uwe feedback', () => {
     const removeForm = page.locator(`form[action$="/books/${cbId}/remove"]`);
     await expect(removeForm).toBeVisible();
     await removeForm.locator('button[type="submit"]').click();
+    const removePopup = page.locator('.swal2-popup');
+    await expect(removePopup).toBeVisible();
+    await expect(removePopup).toContainText('Rimuovere questo libro');
+    await removePopup.locator('.swal2-cancel').click();
+    expect(dbQuery(`SELECT COUNT(*) FROM bookclub_books WHERE id=${cbId}`),
+      'cancelling the SweetAlert must preserve the book').toBe('1');
+
+    await removeForm.locator('button[type="submit"]').click();
+    await expect(removePopup).toBeVisible();
+    await removePopup.locator('.swal2-confirm').click();
     await page.waitForLoadState('networkidle');
     expect(dbQuery(`SELECT COUNT(*) FROM bookclub_books WHERE id=${cbId}`), 'book must be removed').toBe('0');
     expect(dbQuery(`SELECT COUNT(*) FROM bookclub_external_books WHERE titolo='Uwe FollowUp Book'`),

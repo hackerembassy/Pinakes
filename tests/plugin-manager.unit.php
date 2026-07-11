@@ -28,12 +28,12 @@ $check($source !== false && str_contains($source, '$this->instantiatePlugin(['),
 $check($source !== false && str_contains($source, '$upgradeInstance->onActivate();'), 'upgrade path reruns onActivate');
 $check($source !== false && str_contains($source, 'UPDATE plugins SET version = ? WHERE id = ?'), 'failed upgrade rolls version back');
 $check($source !== false && str_contains($source, "bind_param('si', \$dbVersion, \$updId)"), 'rollback restores previous DB version for the same plugin id');
-$check($source !== false && str_contains($source, 'Bundled plugin upgrade lifecycle failed'), 'failed lifecycle propagates an explicit error');
+$check($source !== false && str_contains($source, 'onActivate failed during upgrade'), 'failed lifecycle logs an explicit error');
 
 echo "\nPluginManager same-version hook re-sync:\n";
 $check($source !== false && str_contains($source, "\$diskVersion === \$dbVersion"), 'same-version branch exists');
 $check($source !== false && str_contains($source, '$syncInstance->onActivate();'), 'same-version branch calls onActivate to re-sync hooks');
-$hasWarn = $source !== false && str_contains($source, 'Hook re-sync skipped');
+$hasWarn = $source !== false && str_contains($source, 'Schema/hook self-heal skipped');
 $check($hasWarn, 'same-version failure is non-fatal (warning, no rethrow)');
 
 echo "\n================================\n";

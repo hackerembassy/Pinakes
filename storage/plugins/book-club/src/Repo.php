@@ -430,6 +430,17 @@ class Repo
         ) !== null;
     }
 
+    /** Display label for a user, used when a manager acts on their behalf. */
+    public function userLabel(int $userId): ?string
+    {
+        $user = $this->row('SELECT nome, cognome, email FROM utenti WHERE id = ?', 'i', [$userId]);
+        if ($user === null) {
+            return null;
+        }
+        $name = trim((string) ($user['nome'] ?? '') . ' ' . (string) ($user['cognome'] ?? ''));
+        return $name !== '' ? $name : (string) ($user['email'] ?? '');
+    }
+
     /** @return list<array<string, mixed>> */
     public function listMembers(int $clubId, ?string $status = null): array
     {
@@ -945,22 +956,39 @@ class Repo
 
     public function deleteClubBook(int $clubBookId): bool
     {
-        // Capture the external link BEFORE deleting the club-book row: deleting
-        // the child bookclub_books row does not cascade up to its parent
-        // bookclub_external_books, so a never-acquired external proposal would
-        // otherwise leave an orphaned metadata row behind.
-        $row = $this->row('SELECT external_book_id FROM bookclub_books WHERE id = ?', 'i', [$clubBookId]);
-        $ok = $this->exec('DELETE FROM bookclub_books WHERE id = ?', 'i', [$clubBookId]);
-        $extId = $row !== null ? (int) ($row['external_book_id'] ?? 0) : 0;
-        if ($ok && $extId > 0) {
-            // Only when it was never acquired into the catalogue.
-            $this->exec(
+        $this->db->begin_transaction();
+        try {
+            // Serialize removal with acquireExternalBook(), which locks the same
+            // club-book row before repointing an external proposal to `libri`.
+            $row = $this->row(
+                'SELECT external_book_id FROM bookclub_books WHERE id = ? FOR UPDATE',
+                'i',
+                [$clubBookId]
+            );
+            if ($row === null) {
+                $this->db->rollback();
+                return false;
+            }
+
+            $externalId = (int) ($row['external_book_id'] ?? 0);
+            if ($this->execAffected('DELETE FROM bookclub_books WHERE id = ?', 'i', [$clubBookId]) !== 1) {
+                throw new \RuntimeException('club-book delete failed');
+            }
+            if ($externalId > 0 && $this->execAffected(
                 'DELETE FROM bookclub_external_books WHERE id = ? AND acquired_libro_id IS NULL',
                 'i',
-                [$extId]
-            );
+                [$externalId]
+            ) !== 1) {
+                throw new \RuntimeException('external-book cleanup failed');
+            }
+
+            $this->db->commit();
+            return true;
+        } catch (\Throwable $e) {
+            $this->db->rollback();
+            SecureLogger::error('[BookClub] club-book removal rolled back: ' . $e->getMessage());
+            return false;
         }
-        return $ok;
     }
 
     // ------------------------------------------------------------------

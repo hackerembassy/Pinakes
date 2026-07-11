@@ -407,7 +407,7 @@ class PublicController extends BaseController
             if (function_exists('do_action')) {
                 do_action('bookclub.book.proposed', $clubBookId);
             }
-            $this->notifyProposal($club, (string) ($catBook['titolo'] ?? ''), $slug);
+            $this->notifyProposal($club, (string) ($catBook['titolo'] ?? ''), $slug, $proposer);
             $this->flash('success', $moderated
                 ? __('Proposta inviata: sarà visibile dopo l\'approvazione di un moderatore.')
                 : __('Proposta aggiunta al club.'));
@@ -416,13 +416,14 @@ class PublicController extends BaseController
     }
 
     /** Notify the club managers that a new book was proposed. */
-    private function notifyProposal(array $club, string $title, string $slug): void
+    private function notifyProposal(array $club, string $title, string $slug, int $proposerId): void
     {
+        $proposerLabel = $this->repo->userLabel($proposerId) ?? $this->currentUserLabel();
         $this->notifyClubEvent(
             $club,
             'general',
             sprintf(__('Nuova proposta nel club "%s"'), (string) $club['name']),
-            sprintf(__('%s ha proposto "%s" nel club "%s".'), $this->currentUserLabel(), $title, (string) $club['name']),
+            sprintf(__('%s ha proposto "%s" nel club "%s".'), $proposerLabel, $title, (string) $club['name']),
             $slug
         );
     }
@@ -476,7 +477,7 @@ class PublicController extends BaseController
             if (function_exists('do_action')) {
                 do_action('bookclub.book.proposed', $clubBookId);
             }
-            $this->notifyProposal($club, $titolo, $slug);
+            $this->notifyProposal($club, $titolo, $slug, $proposer);
             $this->flash('success', $moderated
                 ? __('Proposta inviata: sarà visibile dopo l\'approvazione di un moderatore.')
                 : __('Proposta aggiunta al club.'));
@@ -616,10 +617,15 @@ class PublicController extends BaseController
 
         $states = $this->repo->workflowStates($club);
         $books = $this->repo->clubBooks((int) $club['id']);
-        if (!$canManage) {
+        if ($canManage) {
+            array_unshift($states, [
+                'key' => BookClubPlugin::STATE_PENDING,
+                'label' => __('In attesa di approvazione'),
+            ]);
+        } else {
             $books = array_values(array_filter(
                 $books,
-                static fn(array $b): bool => $b['state'] !== BookClubPlugin::STATE_PENDING
+                static fn(array $book): bool => $book['state'] !== BookClubPlugin::STATE_PENDING
             ));
         }
         $booksByState = [];

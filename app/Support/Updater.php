@@ -2791,6 +2791,16 @@ class Updater
         }
     }
 
+    /** Preserve user-installed locale catalogs while bundled locales keep updating. */
+    private function isCustomLocalePath(string $relativePath): bool
+    {
+        $path = ltrim(str_replace('\\', '/', $relativePath), '/');
+        if (preg_match('#^locale/(?:routes_)?([a-z]{2}_[A-Z]{2})\.json$#', $path, $matches) !== 1) {
+            return false;
+        }
+        return !in_array($matches[1], ['it_IT', 'en_US', 'de_DE', 'fr_FR'], true);
+    }
+
     /**
      * Clean up orphan files
      */
@@ -2824,6 +2834,10 @@ class Updater
             $relativePath = str_replace($currentDir . '/', '', $item->getPathname());
             $newPath = $newDir . '/' . $relativePath;
             $fullRelativePath = $basePath . '/' . $relativePath;
+
+            if ($this->isCustomLocalePath($fullRelativePath)) {
+                continue;
+            }
 
             foreach ($this->preservePaths as $preservePath) {
                 if (strpos($fullRelativePath, $preservePath) === 0) {
@@ -2930,6 +2944,10 @@ class Updater
 
             $targetPath = $dest . '/' . $relativePath;
 
+            if ($this->isCustomLocalePath($relativePath) && file_exists($targetPath)) {
+                continue;
+            }
+
             $skip = false;
             foreach ($this->skipPaths as $skipPath) {
                 if (strpos($relativePath, $skipPath) === 0) {
@@ -3008,6 +3026,10 @@ class Updater
             }
 
             $targetPath = $dest . '/' . $relativePath;
+
+            if ($this->isCustomLocalePath($relativePath) && file_exists($targetPath)) {
+                continue;
+            }
 
             $realDest = realpath($dest);
             if ($realDest !== false) {

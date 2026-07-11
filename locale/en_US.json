@@ -6514,5 +6514,13 @@
   "Nuova proposta nel club \"%s\"": "New proposal in the club \"%s\"",
   "%s ha proposto \"%s\" nel club \"%s\".": "%s proposed \"%s\" in the club \"%s\".",
   "Nuovo incontro nel club \"%s\"": "New meeting in the club \"%s\"",
-  "\"%s\" — %s": "\"%s\" — %s"
+  "\"%s\" — %s": "\"%s\" — %s",
+  "Dimensioni personalizzate": "Custom dimensions",
+  "Larghezza (mm)": "Width (mm)",
+  "Altezza (mm)": "Height (mm)",
+  "Contenuto etichetta": "Label content",
+  "Nome applicazione": "Application name",
+  "Sottotitolo libro": "Book subtitle",
+  "Autore ed editore": "Author and publisher",
+  "Stampa etichetta": "Print label"
 }

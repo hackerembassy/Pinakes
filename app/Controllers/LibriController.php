@@ -2597,6 +2597,10 @@ class LibriController
         $labelWidth = $settings['labelWidth'];
         $labelHeight = $settings['labelHeight'];
         $orientation = $settings['orientation'];
+        $libro = $this->applyLabelContentSettings($libro, $settings);
+        if (!$settings['showAppName']) {
+            $appName = '';
+        }
 
         // Get collocazione data
         $collocazione = $this->resolveCollocazione($db, $libro);
@@ -2677,14 +2681,21 @@ class LibriController
         // Load all copies of this book. `copie` has no deleted_at (it CASCADEs on
         // libri delete), so the soft-delete guard lives on the joined `libri` row.
         $copie = [];
+        $copyId = filter_var(($request->getQueryParams()['copy_id'] ?? null), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $copyFilter = $copyId !== false ? ' AND c.id = ?' : '';
         $copiesStmt = $db->prepare("
             SELECT c.*
             FROM copie c
             JOIN libri l ON l.id = c.libro_id
-            WHERE c.libro_id = ? AND l.deleted_at IS NULL
+            WHERE c.libro_id = ? AND l.deleted_at IS NULL{$copyFilter}
             ORDER BY c.numero_inventario ASC
         ");
-        $copiesStmt->bind_param('i', $id);
+        if ($copyFilter !== '') {
+            $copyIdInt = (int) $copyId;
+            $copiesStmt->bind_param('ii', $id, $copyIdInt);
+        } else {
+            $copiesStmt->bind_param('i', $id);
+        }
         $copiesStmt->execute();
         $copiesResult = $copiesStmt->get_result();
         while ($copyRow = $copiesResult->fetch_assoc()) {
@@ -2703,6 +2714,11 @@ class LibriController
         $labelWidth = $settings['labelWidth'];
         $labelHeight = $settings['labelHeight'];
         $orientation = $settings['orientation'];
+
+        $libro = $this->applyLabelContentSettings($libro, $settings);
+        if (!$settings['showAppName']) {
+            $appName = '';
+        }
 
         // Collocazione is the same for every copy of the book
         $collocazione = $this->resolveCollocazione($db, $libro);
@@ -2752,7 +2768,7 @@ class LibriController
         $response->getBody()->write($pdfContent);
         return $response
             ->withHeader('Content-Type', 'application/pdf')
-            ->withHeader('Content-Disposition', 'inline; filename="etichette_copie_' . $id . '.pdf"');
+            ->withHeader('Content-Disposition', 'inline; filename="etichette_copie_' . $id . ($copyFilter !== '' ? '_' . (int) $copyId : '') . '.pdf"');
     }
 
     /**
@@ -2760,7 +2776,7 @@ class LibriController
      * application name plus the clamped label width/height (mm) and derived
      * orientation. Single source of truth so both label routes read settings identically.
      *
-     * @return array{appName: string, labelWidth: int, labelHeight: int, orientation: string}
+     * @return array{appName: string, labelWidth: int, labelHeight: int, orientation: string, showAppName: bool, showTitle: bool, showSubtitle: bool, showAuthorPublisher: bool, showDewey: bool}
      */
     private function resolveLabelSettings(mysqli $db): array
     {
@@ -2783,7 +2799,35 @@ class LibriController
             'labelWidth' => $labelWidth,
             'labelHeight' => $labelHeight,
             'orientation' => $labelWidth > $labelHeight ? 'L' : 'P',
+            'showAppName' => $settingsRepo->get('label', 'show_app_name', '1') === '1',
+            'showTitle' => $settingsRepo->get('label', 'show_title', '1') === '1',
+            'showSubtitle' => $settingsRepo->get('label', 'show_subtitle', '1') === '1',
+            'showAuthorPublisher' => $settingsRepo->get('label', 'show_author_publisher', '1') === '1',
+            'showDewey' => $settingsRepo->get('label', 'show_dewey', '1') === '1',
         ];
+    }
+
+    /** Apply optional label fields without changing the shared renderers. */
+    private function applyLabelContentSettings(array $libro, array $settings): array
+    {
+        $titleParts = [];
+        if ($settings['showTitle'] && !empty($libro['titolo'])) {
+            $titleParts[] = (string) $libro['titolo'];
+        }
+        if ($settings['showSubtitle'] && !empty($libro['sottotitolo'])) {
+            $titleParts[] = (string) $libro['sottotitolo'];
+        }
+        $libro['titolo'] = implode(' — ', $titleParts);
+        if (!$settings['showAuthorPublisher']) {
+            $libro['autori'] = [];
+            $libro['editore_nome'] = '';
+        } else {
+            $libro['label_include_publisher'] = true;
+        }
+        if (!$settings['showDewey']) {
+            $libro['classificazione_dewey'] = '';
+        }
+        return $libro;
     }
 
     /**
@@ -2827,6 +2871,10 @@ class LibriController
             } else {
                 $autoriStr = (string) $libro['autori'];
             }
+        }
+        if (!empty($libro['label_include_publisher']) && !empty($libro['editore_nome'])) {
+            $publisher = (string) $libro['editore_nome'];
+            $autoriStr = $autoriStr !== '' ? $autoriStr . ' — ' . $publisher : $publisher;
         }
         return $autoriStr;
     }
@@ -2987,9 +3035,6 @@ class LibriController
         $autorEditore = [];
         if (!empty($autoriStr)) {
             $autorEditore[] = mb_substr($autoriStr, 0, 30);
-        }
-        if (!empty($libro['editore_nome'])) {
-            $autorEditore[] = mb_substr((string) $libro['editore_nome'], 0, 20);
         }
         $infoText = '';
         if (!empty($autorEditore)) {

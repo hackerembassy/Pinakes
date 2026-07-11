@@ -243,7 +243,8 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
                         </form>
                       <?php endif; ?>
                       <form method="post" action="<?= $e(url('/book-club/' . $slug . '/books/' . (int) $book['id'] . '/remove')) ?>"
-                            onsubmit="return confirm('<?= $e(__('Rimuovere questo libro dalla lista del club? L\'operazione non si può annullare.')) ?>');">
+                            data-swal-confirm="<?= $e(__('Rimuovere questo libro dalla lista del club? L\'operazione non si può annullare.')) ?>"
+                            data-swal-confirm-button="<?= $e(__('Rimuovi')) ?>">
                         <input type="hidden" name="csrf_token" value="<?= $e($csrf) ?>">
                         <button type="submit" class="bc-btn bc-btn-outline bc-btn-sm" title="<?= $e(__('Rimuovi dal club')) ?>"><i class="fas fa-trash-alt me-1"></i><?= $e(__('Rimuovi')) ?></button>
                       </form>
@@ -282,15 +283,25 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
             <textarea name="motivation" rows="2" maxlength="3000"
                       placeholder="<?= $e(__('Perché proponi questo libro? (facoltativo)')) ?>"
                       class="form-control mb-3"></textarea>
-            <?php if ($canManage && !empty($members)): ?>
-              <label class="form-label small bc-muted mb-1"><?= $e(__('Proposto da')) ?></label>
-              <select name="proposed_by" class="form-select mb-3">
-                <option value=""><?= $e(__('Me stesso')) ?></option>
-                <?php foreach ($members as $m): if (($m['status'] ?? '') !== 'active') continue; ?>
-                  <option value="<?= (int) $m['user_id'] ?>"><?= $e(trim(($m['nome'] ?? '') . ' ' . ($m['cognome'] ?? ''))) ?></option>
-                <?php endforeach; ?>
-              </select>
-            <?php endif; ?>
+            <?php
+            // Manager-only "attribute this proposal to a member" dropdown, shared
+            // by the catalogue and external forms (defined once, used in both).
+            $proposedByDropdown = static function () use ($canManage, $members, $e): void {
+                if (!$canManage || empty($members)) {
+                    return;
+                }
+                ?>
+                <label class="form-label small bc-muted mb-1"><?= $e(__('Proposto da')) ?></label>
+                <select name="proposed_by" class="form-select mb-3">
+                  <option value=""><?= $e(__('Me stesso')) ?></option>
+                  <?php foreach ($members as $mbr): if (($mbr['status'] ?? '') !== 'active') continue; ?>
+                    <option value="<?= (int) $mbr['user_id'] ?>"><?= $e(trim(($mbr['nome'] ?? '') . ' ' . ($mbr['cognome'] ?? ''))) ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <?php
+            };
+            $proposedByDropdown();
+            ?>
             <button type="submit" class="bc-btn"><?= $e(__('Invia proposta')) ?></button>
           </form>
 
@@ -308,15 +319,7 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
               </div>
               <input type="text" name="ext_editore" maxlength="255" placeholder="<?= $e(__('Editore (facoltativo)')) ?>" class="form-control mb-2">
               <textarea name="motivation" rows="2" maxlength="3000" placeholder="<?= $e(__('Perché proponi questo libro? (facoltativo)')) ?>" class="form-control mb-3"></textarea>
-              <?php if ($canManage && !empty($members)): ?>
-                <label class="form-label small bc-muted mb-1"><?= $e(__('Proposto da')) ?></label>
-                <select name="proposed_by" class="form-select mb-3">
-                  <option value=""><?= $e(__('Me stesso')) ?></option>
-                  <?php foreach ($members as $m): if (($m['status'] ?? '') !== 'active') continue; ?>
-                    <option value="<?= (int) $m['user_id'] ?>"><?= $e(trim(($m['nome'] ?? '') . ' ' . ($m['cognome'] ?? ''))) ?></option>
-                  <?php endforeach; ?>
-                </select>
-              <?php endif; ?>
+              <?php $proposedByDropdown(); ?>
               <button type="submit" class="bc-btn bc-btn-outline"><?= $e(__('Proponi libro esterno')) ?></button>
             </form>
           </details>
@@ -465,8 +468,9 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
                   <i class="far fa-clock me-1"></i><?= $e(date('d/m/Y H:i', (int) strtotime((string) $meeting['starts_at']))) ?>
                   · <?= $e($kindLabels[$meeting['kind']] ?? $meeting['kind']) ?>
                   <?php if (!empty($meeting['location'])): ?> · <i class="fas fa-map-marker-alt me-1"></i><?= $e($meeting['location']) ?><?php endif; ?>
-                  <?php if (!empty($meeting['video_url']) && ($isMember || $canManage)): ?>
-                    · <a class="bc-link" href="<?= $e($meeting['video_url']) ?>" target="_blank" rel="noopener"><?= $e(__('Collegati')) ?></a>
+                  <?php $bcMeetingVideoUrl = ($isMember || $canManage) ? \App\Support\HtmlHelper::sanitizePublicHttpUrl((string) ($meeting['video_url'] ?? '')) : ''; ?>
+                  <?php if ($bcMeetingVideoUrl !== ''): ?>
+                    · <a class="bc-link" href="<?= $e($bcMeetingVideoUrl) ?>" target="_blank" rel="noopener"><?= $e(__('Collegati')) ?></a>
                   <?php endif; ?>
                 </div>
                 <?php if (!empty($meeting['book_title'])): ?>
@@ -617,8 +621,9 @@ $kindLabels = ['in_person' => __('In presenza'), 'online' => __('Online'), 'hybr
           <?php if (!empty($nextMeeting['location'])): ?>
             <div class="bc-muted"><i class="fas fa-map-marker-alt me-1"></i><?= $e($nextMeeting['location']) ?></div>
           <?php endif; ?>
-          <?php if (!empty($nextMeeting['video_url'])): ?>
-            <div class="bc-muted"><i class="fas fa-video me-1"></i><a href="<?= $e(\App\Support\HtmlHelper::sanitizePublicHttpUrl((string) $nextMeeting['video_url'])) ?>" target="_blank" rel="noopener noreferrer"><?= $e(__('Partecipa online')) ?></a></div>
+          <?php $bcVideoUrl = \App\Support\HtmlHelper::sanitizePublicHttpUrl((string) ($nextMeeting['video_url'] ?? '')); ?>
+          <?php if ($bcVideoUrl !== ''): ?>
+            <div class="bc-muted"><i class="fas fa-video me-1"></i><a href="<?= $e($bcVideoUrl) ?>" target="_blank" rel="noopener noreferrer"><?= $e(__('Partecipa online')) ?></a></div>
           <?php endif; ?>
           <?php if (!empty($nextMeeting['agenda'])): ?>
             <div class="bc-muted small mt-2" style="white-space:pre-wrap;"><?= $e(mb_substr((string) $nextMeeting['agenda'], 0, 500)) ?></div>

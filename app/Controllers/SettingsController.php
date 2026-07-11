@@ -732,6 +732,11 @@ class SettingsController
             'width' => (int) ($repository->get('label', 'width', (string) ($config['width'] ?? 25))),
             'height' => (int) ($repository->get('label', 'height', (string) ($config['height'] ?? 38))),
             'format_name' => (string) ($repository->get('label', 'format_name', $config['format_name'] ?? '25x38mm (Standard)')),
+            'show_app_name' => $repository->get('label', 'show_app_name', '1') === '1',
+            'show_title' => $repository->get('label', 'show_title', '1') === '1',
+            'show_subtitle' => $repository->get('label', 'show_subtitle', '1') === '1',
+            'show_author_publisher' => $repository->get('label', 'show_author_publisher', '1') === '1',
+            'show_dewey' => $repository->get('label', 'show_dewey', '1') === '1',
         ];
     }
 
@@ -759,6 +764,10 @@ class SettingsController
         $repository->ensureTables();
 
         $labelFormat = trim((string) ($data['label_format'] ?? '25x38'));
+        if ($labelFormat === 'custom') {
+            $labelFormat = trim((string) ($data['custom_width'] ?? ''))
+                . 'x' . trim((string) ($data['custom_height'] ?? ''));
+        }
 
         // Parse the format (e.g., "25x38" or "50x25")
         if (preg_match('/^(\d+)x(\d+)$/', $labelFormat, $matches)) {
@@ -773,6 +782,9 @@ class SettingsController
                 // width/height. Persisting it was a dead write; drop it.
                 $repository->set('label', 'width', (string) $width);
                 $repository->set('label', 'height', (string) $height);
+                foreach (['show_app_name', 'show_title', 'show_subtitle', 'show_author_publisher', 'show_dewey'] as $option) {
+                    $repository->set('label', $option, isset($data[$option]) ? '1' : '0');
+                }
 
                 ConfigStore::set('label.width', $width);
                 ConfigStore::set('label.height', $height);
