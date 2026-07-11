@@ -1380,12 +1380,17 @@ class NotificationService {
      */
     public function notifyAdmins(string $type, string $title, string $message, ?string $link = null, ?int $relatedId = null, array $extraRecipients = []): void
     {
-        // 1. In-app admin bell.
-        $this->createNotification($type, $title, $message, $link, $relatedId);
-
-        // 2. Email the active admins/staff (same recipient query as sendToAdmins)
-        //    plus any extra recipients, de-duplicated by lower-cased email.
+        // Both channels are guarded by one try/catch so a failure in either the
+        // in-app bell or the email step is logged, never thrown (best-effort).
+        // $phase tags which channel a caught throwable came from.
+        $phase = 'in-app';
         try {
+            // 1. In-app admin bell.
+            $this->createNotification($type, $title, $message, $link, $relatedId);
+
+            // 2. Email the active admins/staff (same recipient query as sendToAdmins)
+            //    plus any extra recipients, de-duplicated by lower-cased email.
+            $phase = 'email';
             $recipients = [];
             $result = $this->db->query(
                 "SELECT email, nome, cognome, locale FROM utenti
@@ -1433,7 +1438,10 @@ class NotificationService {
                 );
             }
         } catch (\Throwable $e) {
-            SecureLogger::error('notifyAdmins email failed: ' . $e->getMessage());
+            $reason = $phase === 'in-app'
+                ? 'notifyAdmins: in-app notification failed: '
+                : 'notifyAdmins: email failed: ';
+            SecureLogger::error($reason . $e->getMessage());
         }
     }
 

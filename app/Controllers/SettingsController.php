@@ -763,6 +763,13 @@ class SettingsController
         $repository = new SettingsRepository($db);
         $repository->ensureTables();
 
+        // Persist the label content toggles on EVERY POST — they are independent
+        // of dimension validity. Nesting them inside the width/height branch made
+        // an invalid/empty custom format silently discard the user's toggle changes.
+        foreach (['show_app_name', 'show_title', 'show_subtitle', 'show_author_publisher', 'show_dewey'] as $option) {
+            $repository->set('label', $option, isset($data[$option]) ? '1' : '0');
+        }
+
         $labelFormat = trim((string) ($data['label_format'] ?? '25x38'));
         if ($labelFormat === 'custom') {
             $labelFormat = trim((string) ($data['custom_width'] ?? ''))
@@ -782,9 +789,6 @@ class SettingsController
                 // width/height. Persisting it was a dead write; drop it.
                 $repository->set('label', 'width', (string) $width);
                 $repository->set('label', 'height', (string) $height);
-                foreach (['show_app_name', 'show_title', 'show_subtitle', 'show_author_publisher', 'show_dewey'] as $option) {
-                    $repository->set('label', $option, isset($data[$option]) ? '1' : '0');
-                }
 
                 ConfigStore::set('label.width', $width);
                 ConfigStore::set('label.height', $height);
