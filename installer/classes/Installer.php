@@ -217,10 +217,19 @@ class Installer {
 
         $dsn .= "dbname={$database};charset=utf8mb4";
 
+        // PHP 8.5 deprecates the PDO::MYSQL_* constants in favour of the
+        // driver-specific Pdo\Mysql::* constants (added in 8.4). Pick whichever
+        // the running PHP provides so the installer stays warning-free on 8.5
+        // without breaking 8.2–8.3 (which have no Pdo\Mysql class). constant()
+        // keeps static analysis happy on the 8.2 platform baseline.
+        $mysqlInitCommand = defined('Pdo\\Mysql::ATTR_INIT_COMMAND')
+            ? constant('Pdo\\Mysql::ATTR_INIT_COMMAND')
+            : PDO::MYSQL_ATTR_INIT_COMMAND;
+
         $this->pdo = new PDO($dsn, $username, $password, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+            $mysqlInitCommand => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
         ]);
 
         return $this->pdo;
