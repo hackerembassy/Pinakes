@@ -37,6 +37,55 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 
 ---
 
+## What's New in v0.7.33
+
+Built from real user feedback on labels, language management and the Book Club
+([#238](https://github.com/fabiodalez-dev/Pinakes/discussions/238),
+[#138](https://github.com/fabiodalez-dev/Pinakes/discussions/138)).
+
+### Labels ([#238](https://github.com/fabiodalez-dev/Pinakes/discussions/238))
+
+- **Print a single copy's label**: each row in a book's physical-copies table
+  now has its own print action (`?copy_id=` on the existing label endpoint).
+- **Custom label size** (width × height) alongside the presets — e.g. Dymo
+  89×41mm — plus **per-field content checkboxes** (app name, title, subtitle,
+  author+publisher, Dewey) so a label carries only what you need.
+- The publisher is no longer clipped off landscape labels (the fixed 30-char
+  pre-truncation is gone; truncation is width-based only).
+
+### Language management ([#238](https://github.com/fabiodalez-dev/Pinakes/discussions/238))
+
+- **Custom locales survive updates**: a user-installed translation (e.g.
+  `nb_NO`) is no longer deleted by the updater's cleanup pass.
+- **"Download JSON" exports every current key**, with an empty string for
+  anything untranslated — so after an update you can spot and fill exactly the
+  new keys. Stats now count against the current key set.
+
+### Book Club follow-up ([#138](https://github.com/fabiodalez-dev/Pinakes/discussions/138))
+
+- Richer "Next meeting" card (book, end time, agenda, members-only join link),
+  clearer external-proposal heading, a "Proposed by" dropdown for managers,
+  a "Remove" action for club books, and a PDF export of the reading list by
+  workflow state.
+- Admins **and the club's owner/moderators** are notified (in-app bell + email,
+  de-duplicated) on join requests, new proposals and new meetings — via the
+  standard notification pipeline, now guarded by the SMTP circuit-breaker so a
+  down mail server can't stall user actions.
+
+### Review hardening
+
+- The meeting join link is members-only on every surface (it briefly leaked to
+  non-members on the next-meeting card during 0.7.33's development — caught and
+  fixed pre-release).
+- A manually-typed translator/illustrator value always wins over scraped data
+  (including the literal `"0"`), label content checkboxes persist even when the
+  size field is invalid, and `notifyAdmins()` honours its never-throws contract.
+
+No schema migration; the book-club plugin bumps to 1.4.1 (its boot self-heal
+re-runs `ensureSchema()` when needed).
+
+---
+
 ## What's New in v0.7.32
 
 A hotfix for two bugs reported right after 0.7.31, and the systemic cause behind
