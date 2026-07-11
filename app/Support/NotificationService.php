@@ -1365,6 +1365,87 @@ class NotificationService {
     }
 
     /**
+     * Generic admin notification for an app/plugin event that has no dedicated
+     * email template: creates the in-app admin-bell notification AND emails
+     * every active admin/staff — the same two channels every other admin
+     * notification uses (createNotification + the admin-email query in
+     * sendToAdmins), so callers don't hand-roll recipient selection or mail.
+     * The email body is wrapped in EmailService's branded base template like
+     * the rest of Pinakes. Best-effort: failures are logged, never thrown.
+     *
+     * @param string $type one of createNotification()'s allowed types
+     * @param list<array<string, mixed>> $extraRecipients extra people to email
+     *        besides the admins — each ['email','nome','cognome','locale'].
+     *        Merged and de-duplicated by email so nobody is emailed twice.
+     */
+    public function notifyAdmins(string $type, string $title, string $message, ?string $link = null, ?int $relatedId = null, array $extraRecipients = []): void
+    {
+        // Both channels are guarded by one try/catch so a failure in either the
+        // in-app bell or the email step is logged, never thrown (best-effort).
+        // $phase tags which channel a caught throwable came from.
+        $phase = 'in-app';
+        try {
+            // 1. In-app admin bell.
+            $this->createNotification($type, $title, $message, $link, $relatedId);
+
+            // 2. Email the active admins/staff (same recipient query as sendToAdmins)
+            //    plus any extra recipients, de-duplicated by lower-cased email.
+            $phase = 'email';
+            $recipients = [];
+            $result = $this->db->query(
+                "SELECT email, nome, cognome, locale FROM utenti
+                  WHERE tipo_utente IN ('admin', 'staff') AND stato = 'attivo'
+                    AND email IS NOT NULL AND email <> ''"
+            );
+            if ($result) {
+                while ($row = $result->fetch_assoc()) {
+                    $recipients[strtolower(trim((string) $row['email']))] = $row;
+                }
+            }
+            foreach ($extraRecipients as $extra) {
+                $key = strtolower(trim((string) ($extra['email'] ?? '')));
+                if ($key !== '' && !isset($recipients[$key])) {
+                    $recipients[$key] = $extra;
+                }
+            }
+            if ($recipients === []) {
+                return;
+            }
+            // Circuit-breaker: this method is called synchronously from user-facing
+            // request handlers (join-club, propose-book, create-meeting) and loops a
+            // blocking sendEmail() per recipient. If the SMTP server is unreachable,
+            // every send would time out the same way, hanging the acting user's request
+            // for N sequential connection timeouts. Mailer::isSmtpReachable() probes once
+            // per request (cached, and always true for the non-SMTP `mail` driver so it
+            // never blocks phpmail sends) and logs a single warning — same guard
+            // sendWithRetry() uses. The in-app admin bell above still fired regardless.
+            if (!\App\Support\Mailer::isSmtpReachable()) {
+                SecureLogger::warning('notifyAdmins: SMTP unreachable — skipping email to ' . count($recipients) . ' recipient(s), in-app notification still created');
+                return;
+            }
+            $bodyHtml = '<p>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p>';
+            if ($link !== null && $link !== '') {
+                $bodyHtml .= '<p><a href="' . htmlspecialchars($link, ENT_QUOTES, 'UTF-8') . '">'
+                    . htmlspecialchars($link, ENT_QUOTES, 'UTF-8') . '</a></p>';
+            }
+            foreach ($recipients as $row) {
+                $this->emailService->sendEmail(
+                    (string) $row['email'],
+                    $title,
+                    $bodyHtml,
+                    trim((string) ($row['nome'] ?? '') . ' ' . (string) ($row['cognome'] ?? '')),
+                    $row['locale'] ?? null
+                );
+            }
+        } catch (\Throwable $e) {
+            $reason = $phase === 'in-app'
+                ? 'notifyAdmins: in-app notification failed: '
+                : 'notifyAdmins: email failed: ';
+            SecureLogger::error($reason . $e->getMessage());
+        }
+    }
+
+    /**
      * Get unread notifications count
      */
     public function getUnreadCount(): int

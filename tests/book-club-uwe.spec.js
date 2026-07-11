@@ -131,6 +131,7 @@ test.describe.serial('Book Club — Uwe feedback', () => {
       dbQuery(`DELETE FROM bookclub_members WHERE club_id=${Number(clubId)}`);
       dbQuery(`DELETE FROM bookclub_books WHERE club_id=${Number(clubId)}`);
       dbQuery(`DELETE FROM bookclub_external_books WHERE club_id=${Number(clubId)}`);
+      dbQuery(`DELETE FROM admin_notifications WHERE related_id=${Number(clubId)} AND (title LIKE 'Nuova proposta%' OR title LIKE 'Richiesta di adesione%' OR title LIKE 'Nuovo incontro%')`);
       dbQuery(`DELETE FROM bookclub_clubs WHERE id=${Number(clubId)}`);
     }
     // The acquisition test creates a real libri row + its physical copy — remove both.
@@ -314,5 +315,90 @@ test.describe.serial('Book Club — Uwe feedback', () => {
     expect(searchIndex).toContain(EXT_PUBLISHER);
     expect(dbQuery(`SELECT COUNT(*) FROM libri WHERE titolo=${sqlStr(EXT_TITLE_2)}`),
       'the other external poll option is still not a catalog book').toBe('0');
+  });
+
+  test('⑥ Uwe #138 follow-up: heading, proposed-by, remove, PDF, and next-meeting card fields', async () => {
+    const clubId = Number(dbQuery(`SELECT id FROM bookclub_clubs WHERE name=${sqlStr(CLUB_NAME)} ORDER BY id DESC LIMIT 1`) || '0');
+    const memberUserId = Number(dbQuery(`SELECT id FROM utenti WHERE email=${sqlStr(MEMBER_EMAIL)} LIMIT 1`) || '0');
+    expect(clubId).toBeGreaterThan(0);
+    expect(memberUserId).toBeGreaterThan(0);
+    // The member must be ACTIVE to be a valid "proposed_by" target (⑤ left it suspended).
+    dbQuery(`UPDATE bookclub_members SET status='active' WHERE club_id=${clubId} AND user_id=${memberUserId}`);
+    await page.goto(`${BASE}/book-club/${slug}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    // item 2 — clearer, action-oriented heading on the external-propose section.
+    const ext = page.locator('details.bc-external-propose');
+    await expect(ext.locator('summary')).toContainText('Proponi un libro non ancora in catalogo');
+
+    // item 3 — manager-only "Proposto da" dropdown attributes the proposal to a member.
+    await ext.locator('summary').click();
+    const proposedBy = ext.locator('select[name="proposed_by"]');
+    await expect(proposedBy).toBeVisible();
+    await ext.locator('input[name="ext_titolo"]').fill('Uwe FollowUp Book');
+    await proposedBy.selectOption(String(memberUserId));
+    await ext.locator('button:has-text("Proponi libro esterno")').click();
+    await page.waitForLoadState('networkidle');
+    const cbId = Number(dbQuery(
+      `SELECT id FROM bookclub_books WHERE club_id=${clubId} AND external_book_id IN ` +
+      `(SELECT id FROM bookclub_external_books WHERE titolo='Uwe FollowUp Book') ORDER BY id DESC LIMIT 1`
+    ) || '0');
+    expect(cbId, 'external proposal must exist').toBeGreaterThan(0);
+    expect(dbQuery(`SELECT proposed_by FROM bookclub_books WHERE id=${cbId}`),
+      'proposed_by must be the chosen member, not the manager').toBe(String(memberUserId));
+
+    // A new proposal must reach the admins via the Pinakes notification bell.
+    expect(Number(dbQuery(
+      `SELECT COUNT(*) FROM admin_notifications WHERE related_id=${clubId} AND type='general' AND title LIKE 'Nuova proposta%'`
+    ) || '0'), 'a bell notification must be created for the new proposal').toBeGreaterThan(0);
+    expect(dbQuery(
+      `SELECT message FROM admin_notifications WHERE related_id=${clubId} AND type='general' AND title LIKE 'Nuova proposta%' ORDER BY id DESC LIMIT 1`
+    ), 'the notification names the selected proposer, not the acting manager').toContain('E2E Book Club Member');
+
+    // item 5 — PDF export of the club's reading list.
+    const pdf = await page.request.get(`${BASE}/book-club/${slug}/books.pdf`);
+    expect(pdf.status()).toBe(200);
+    expect(pdf.headers()['content-type']).toContain('application/pdf');
+    expect((await pdf.body()).length).toBeGreaterThan(500);
+
+    // item 4 — remove the book from the club (and clean up its orphan external row).
+    await page.goto(`${BASE}/book-club/${slug}`);
+    await page.waitForLoadState('domcontentloaded');
+    const removeForm = page.locator(`form[action$="/books/${cbId}/remove"]`);
+    await expect(removeForm).toBeVisible();
+    await removeForm.locator('button[type="submit"]').click();
+    const removePopup = page.locator('.swal2-popup');
+    await expect(removePopup).toBeVisible();
+    await expect(removePopup).toContainText('Rimuovere questo libro');
+    await removePopup.locator('.swal2-cancel').click();
+    expect(dbQuery(`SELECT COUNT(*) FROM bookclub_books WHERE id=${cbId}`),
+      'cancelling the SweetAlert must preserve the book').toBe('1');
+
+    await removeForm.locator('button[type="submit"]').click();
+    await expect(removePopup).toBeVisible();
+    await removePopup.locator('.swal2-confirm').click();
+    await page.waitForLoadState('networkidle');
+    expect(dbQuery(`SELECT COUNT(*) FROM bookclub_books WHERE id=${cbId}`), 'book must be removed').toBe('0');
+    expect(dbQuery(`SELECT COUNT(*) FROM bookclub_external_books WHERE titolo='Uwe FollowUp Book'`),
+      'orphan external metadata must be cleaned').toBe('0');
+
+    // item 1 — the Next-meeting card shows agenda + an online link, not just title/time.
+    await page.goto(`${BASE}/book-club/${slug}`);
+    await page.waitForLoadState('domcontentloaded');
+    const plan = page.locator('details:has-text("Pianifica un incontro")');
+    await plan.locator('summary').click();
+    await plan.locator('input[name="title"]').fill('Sooner online meeting');
+    await plan.locator('input[name="starts_at"]').fill(futureLocal(3, 18));
+    await plan.locator('select[name="kind"]').selectOption('online').catch(() => {});
+    await plan.locator('input[name="video_url"]').fill('https://meet.example.com/room');
+    await plan.locator('textarea[name="agenda"]').fill('Agenda: discuss chapter 1');
+    await plan.locator('button:has-text("Crea incontro")').click();
+    await page.waitForLoadState('networkidle');
+
+    await page.goto(`${BASE}/book-club/${slug}`);
+    await page.waitForLoadState('domcontentloaded');
+    const card = page.locator('section:has-text("Prossimo incontro")');
+    await expect(card).toContainText('Agenda: discuss chapter 1');
+    await expect(card.locator('a:has-text("Partecipa online")')).toBeVisible();
   });
 });

@@ -386,6 +386,7 @@ class LanguagesController
 
         $updated = 0;
         $errors = [];
+        $canonical = $this->loadCanonicalTranslations();
 
         foreach ($languages as $lang) {
             $code = I18n::normalizeLocaleCode((string) $lang['code']);
@@ -401,8 +402,11 @@ class LanguagesController
 
                 if (json_last_error() === JSON_ERROR_NONE) {
                     $sanitized = $this->sanitizeTranslations($decoded);
-                    $totalKeys = count($sanitized);
-                    $translatedKeys = count(array_filter($sanitized, fn($v) => !empty($v)));
+                    $totalKeys = count($canonical);
+                    $translatedKeys = count(array_filter(
+                        array_intersect_key($sanitized, $canonical),
+                        static fn($value): bool => is_string($value) && trim($value) !== ''
+                    ));
 
                     try {
                         $languageModel->updateStats($code, $totalKeys, $translatedKeys);
@@ -471,8 +475,19 @@ class LanguagesController
                 ->withStatus(302);
         }
 
-        // Pretty print JSON for download
-        $prettyJson = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        // Export every current application key. Missing translations are empty;
+        // custom extra keys remain at the end for backwards compatibility.
+        $translations = $this->sanitizeTranslations(is_array($decoded) ? $decoded : []);
+        $complete = [];
+        foreach ($this->loadCanonicalTranslations() as $key => $_default) {
+            $complete[$key] = isset($translations[$key]) && is_string($translations[$key])
+                ? $translations[$key]
+                : '';
+        }
+        foreach (array_diff_key($translations, $complete) as $key => $value) {
+            $complete[$key] = $value;
+        }
+        $prettyJson = json_encode($complete, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         // Set headers for download
         $filename = $code . '.json';
@@ -486,6 +501,14 @@ class LanguagesController
 
         $response->getBody()->write($prettyJson);
         return $response;
+    }
+
+    /** @return array<string, string> */
+    private function loadCanonicalTranslations(): array
+    {
+        $path = $this->getLocaleFilePath('it_IT');
+        $decoded = is_file($path) ? json_decode((string) file_get_contents($path), true) : [];
+        return $this->sanitizeTranslations(is_array($decoded) ? $decoded : []);
     }
 
     private function normalizeRouteLocale($code): ?string

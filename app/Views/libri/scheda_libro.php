@@ -1041,6 +1041,11 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div class="flex items-center justify-end gap-2">
+                    <a href="<?= htmlspecialchars(url('/admin/books/' . (int) $libro['id'] . '/copy-labels-pdf?copy_id=' . (int) $copia['id']), ENT_QUOTES, 'UTF-8') ?>"
+                       target="_blank" rel="noopener" class="text-gray-700 hover:text-gray-900 transition-colors"
+                       title="<?= __('Stampa etichetta') ?>" aria-label="<?= __('Stampa etichetta') ?>">
+                      <i class="fas fa-print"></i>
+                    </a>
                     <?php
                     // Allow editing if no active loan OR if loan is da_ritirare/prenotato (book still at library)
                     // Only block editing when book is physically with the user (in_corso, in_ritardo)

@@ -419,6 +419,28 @@ class Repo
         );
     }
 
+    /** True if $userId is an ACTIVE member of the club (used to validate a
+     *  manager-chosen "proposed_by"). */
+    public function isActiveMember(int $clubId, int $userId): bool
+    {
+        return $this->row(
+            "SELECT 1 FROM bookclub_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+            'ii',
+            [$clubId, $userId]
+        ) !== null;
+    }
+
+    /** Display label for a user, used when a manager acts on their behalf. */
+    public function userLabel(int $userId): ?string
+    {
+        $user = $this->row('SELECT nome, cognome, email FROM utenti WHERE id = ?', 'i', [$userId]);
+        if ($user === null) {
+            return null;
+        }
+        $name = trim((string) ($user['nome'] ?? '') . ' ' . (string) ($user['cognome'] ?? ''));
+        return $name !== '' ? $name : (string) ($user['email'] ?? '');
+    }
+
     /** @return list<array<string, mixed>> */
     public function listMembers(int $clubId, ?string $status = null): array
     {
@@ -715,7 +737,7 @@ class Repo
      */
     public function proposeExternalBook(int $clubId, array $data, string $state, ?int $proposedBy, string $motivation): ?int
     {
-        $titolo = trim((string) ($data['titolo'] ?? ''));
+        $titolo = trim((string) $data['titolo']);
         if ($titolo === '') {
             return null;
         }
@@ -934,7 +956,39 @@ class Repo
 
     public function deleteClubBook(int $clubBookId): bool
     {
-        return $this->exec('DELETE FROM bookclub_books WHERE id = ?', 'i', [$clubBookId]);
+        $this->db->begin_transaction();
+        try {
+            // Serialize removal with acquireExternalBook(), which locks the same
+            // club-book row before repointing an external proposal to `libri`.
+            $row = $this->row(
+                'SELECT external_book_id FROM bookclub_books WHERE id = ? FOR UPDATE',
+                'i',
+                [$clubBookId]
+            );
+            if ($row === null) {
+                $this->db->rollback();
+                return false;
+            }
+
+            $externalId = (int) ($row['external_book_id'] ?? 0);
+            if ($this->execAffected('DELETE FROM bookclub_books WHERE id = ?', 'i', [$clubBookId]) !== 1) {
+                throw new \RuntimeException('club-book delete failed');
+            }
+            if ($externalId > 0 && $this->execAffected(
+                'DELETE FROM bookclub_external_books WHERE id = ? AND acquired_libro_id IS NULL',
+                'i',
+                [$externalId]
+            ) !== 1) {
+                throw new \RuntimeException('external-book cleanup failed');
+            }
+
+            $this->db->commit();
+            return true;
+        } catch (\Throwable $e) {
+            $this->db->rollback();
+            SecureLogger::error('[BookClub] club-book removal rolled back: ' . $e->getMessage());
+            return false;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -1258,6 +1312,28 @@ class Repo
             "SELECT u.id, u.nome, u.cognome, u.email, u.locale
                FROM bookclub_members m JOIN utenti u ON u.id = m.user_id
               WHERE m.club_id = ? AND m.status = 'active' AND u.email IS NOT NULL AND u.email <> ''",
+            'i',
+            [$clubId]
+        );
+    }
+
+    /**
+     * Active owner/moderator members with a usable email — the people who
+     * moderate THIS club. Notified alongside the Pinakes admins so a club
+     * owner who isn't a Pinakes admin still hears about join requests/proposals.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function clubManagerEmails(int $clubId): array
+    {
+        return $this->rows(
+            "SELECT u.nome, u.cognome, u.email, u.locale
+               FROM bookclub_members m
+               JOIN bookclub_roles r ON r.id = m.role_id
+               JOIN utenti u ON u.id = m.user_id
+              WHERE m.club_id = ? AND m.status = 'active'
+                AND r.slug IN ('owner','moderator')
+                AND u.email IS NOT NULL AND u.email <> ''",
             'i',
             [$clubId]
         );

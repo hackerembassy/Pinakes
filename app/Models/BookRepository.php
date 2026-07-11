@@ -1254,11 +1254,16 @@ class BookRepository
         }
         // Manual values are mapped into $cols above. Scraped values are only a
         // fallback, otherwise a form submit carrying both fields would silently
-        // overwrite the librarian's typed translator/illustrator.
-        if ($this->hasColumn('traduttore') && !array_key_exists('traduttore', $cols) && !empty($data['scraped_translator'])) {
+        // overwrite the librarian's typed translator/illustrator. The admission
+        // test mirrors the field loop above (array_key_exists + !== '' + !== null),
+        // so a manually-entered literal "0" counts as present and is NOT overwritten
+        // by the scraped value (empty("0") === true would treat it as absent).
+        $traduttoreProvided = array_key_exists('traduttore', $data) && $data['traduttore'] !== '' && $data['traduttore'] !== null;
+        if ($this->hasColumn('traduttore') && !$traduttoreProvided && !empty($data['scraped_translator'])) {
             $cols['traduttore'] = \App\Support\AuthorNormalizer::normalize((string) $data['scraped_translator']);
         }
-        if ($this->hasColumn('illustratore') && !array_key_exists('illustratore', $cols) && !empty($data['scraped_illustrator'])) {
+        $illustratoreProvided = array_key_exists('illustratore', $data) && $data['illustratore'] !== '' && $data['illustratore'] !== null;
+        if ($this->hasColumn('illustratore') && !$illustratoreProvided && !empty($data['scraped_illustrator'])) {
             $cols['illustratore'] = \App\Support\AuthorNormalizer::normalize((string) $data['scraped_illustrator']);
         }
         if ($this->hasColumn('tipo_media') && !array_key_exists('tipo_media', $cols)) {
