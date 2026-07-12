@@ -731,6 +731,7 @@ class SettingsController
         return [
             'width' => (int) ($repository->get('label', 'width', (string) ($config['width'] ?? 25))),
             'height' => (int) ($repository->get('label', 'height', (string) ($config['height'] ?? 38))),
+            'padding' => (float) ($repository->get('label', 'padding', '0')),
             'format_name' => (string) ($repository->get('label', 'format_name', $config['format_name'] ?? '25x38mm (Standard)')),
             'show_app_name' => $repository->get('label', 'show_app_name', '1') === '1',
             'show_title' => $repository->get('label', 'show_title', '1') === '1',
@@ -769,6 +770,16 @@ class SettingsController
         foreach (['show_app_name', 'show_title', 'show_subtitle', 'show_author_publisher', 'show_dewey'] as $option) {
             $repository->set('label', $option, isset($data[$option]) ? '1' : '0');
         }
+
+        // Configurable padding (mm) applied on every side of the label (#238).
+        // Clamp to 0..30; the renderer clamps again against the actual label size.
+        $padding = (float) ($data['label_padding'] ?? 0);
+        if ($padding < 0) {
+            $padding = 0.0;
+        } elseif ($padding > 30) {
+            $padding = 30.0;
+        }
+        $repository->set('label', 'padding', (string) $padding);
 
         $labelFormat = trim((string) ($data['label_format'] ?? '25x38'));
         if ($labelFormat === 'custom') {

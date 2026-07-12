@@ -425,6 +425,7 @@ class LibriController
         // Recupera tutte le copie del libro con informazioni sui prestiti
         $copyRepo = new \App\Models\CopyRepository($db);
         $copie = $copyRepo->getByBookId($id);
+        $copySchedule = $copyRepo->getScheduleByBookId($id);
 
         // Get loan history for this book
         $loanHistoryQuery = "
@@ -1085,12 +1086,13 @@ class LibriController
                 ? $fields['numero_inventario']
                 : "LIB-{$id}";
 
-            for ($i = 1; $i <= $copieTotali; $i++) {
-                $numeroInventario = $copieTotali > 1
-                    ? "{$baseInventario}-C{$i}"
-                    : $baseInventario;
-
-                $note = $copieTotali > 1 ? "Copia {$i} di {$copieTotali}" : null;
+            // Uniform "-C{N}" codes for every copy (#238): even a single copy is
+            // "{base}-C1", so later adding a 2nd copy yields a consistent C1/C2 pair
+            // instead of a bare base plus a "-C2". allocateInventoryCodes guarantees
+            // no collision with any existing numero_inventario.
+            $codes = $copyRepo->allocateInventoryCodes($baseInventario, $copieTotali);
+            foreach ($codes as $i => $numeroInventario) {
+                $note = "Copia " . ($i + 1) . " di {$copieTotali}";
                 $copyRepo->create($id, $numeroInventario, 'disponibile', $note);
             }
 
@@ -1329,7 +1331,14 @@ class LibriController
         $fields['editore_id'] = empty($fields['editore_id']) || $fields['editore_id'] == 0 ? null : (int) $fields['editore_id'];
         $fields['genere_id'] = empty($fields['genere_id']) || $fields['genere_id'] == 0 ? null : (int) $fields['genere_id'];
         $fields['sottogenere_id'] = empty($fields['sottogenere_id']) || $fields['sottogenere_id'] == 0 ? null : (int) $fields['sottogenere_id'];
+        // Clamp to the same 1..9999 range as store(): an unbounded value would build
+        // a huge allocation loop / copy set. (#252 CodeRabbit)
         $fields['copie_totali'] = (int) $fields['copie_totali'];
+        if ($fields['copie_totali'] < 1) {
+            $fields['copie_totali'] = 1;
+        } elseif ($fields['copie_totali'] > 9999) {
+            $fields['copie_totali'] = 9999;
+        }
 
         // Validazione copie: verifica che sia possibile ridurre il numero di copie
         $copyRepo = new \App\Models\CopyRepository($db);
@@ -1722,17 +1731,18 @@ class LibriController
             $newCopieCount = (int) $fields['copie_totali'];
 
             if ($newCopieCount > $currentCopieCount) {
-                // Aggiungi nuove copie
+                // Aggiungi nuove copie. #238: generate gap-filling, collision-free
+                // "-C{N}" codes instead of "-C{count+1}" (which duplicated an existing
+                // code after a copy had been removed). allocateInventoryCodes checks
+                // every candidate against the whole `copie` table.
                 $baseInventario = !empty($fields['numero_inventario'])
                     ? $fields['numero_inventario']
                     : "LIB-{$id}";
 
-                for ($i = $currentCopieCount + 1; $i <= $newCopieCount; $i++) {
-                    $numeroInventario = $newCopieCount > 1
-                        ? "{$baseInventario}-C{$i}"
-                        : $baseInventario;
-
-                    $note = "Copia {$i} di {$newCopieCount}";
+                $howMany = $newCopieCount - $currentCopieCount;
+                $codes = $copyRepo->allocateInventoryCodes($baseInventario, $howMany);
+                foreach ($codes as $numeroInventario) {
+                    $note = "Copia {$numeroInventario}";
                     $newCopyId = $copyRepo->create($id, $numeroInventario, 'disponibile', $note);
 
                     // Case 1: Reassign pending reservations to this new copy
@@ -1756,18 +1766,21 @@ class LibriController
                     }
                 }
             } elseif ($newCopieCount < $currentCopieCount) {
-                // Rimuovi copie in eccesso (solo quelle disponibili, non in prestito)
-                $copie = $copyRepo->getByBookId($id);
+                // Rimuovi copie in eccesso DALLA CODA (le ultime aggiunte), solo quelle
+                // disponibili e senza impegni (#238: prima si rimuoveva la PRIMA della
+                // lista ASC, lasciando codici col suffisso più alto → collisioni dopo).
+                $removable = $copyRepo->getRemovableCopiesNewestFirst($id);
                 $toRemove = $currentCopieCount - $newCopieCount;
                 $removed = 0;
 
-                foreach ($copie as $copia) {
-                    if ($removed >= $toRemove)
+                foreach ($removable as $copia) {
+                    if ($removed >= $toRemove) {
                         break;
-
-                    // Rimuovi solo copie disponibili senza prestiti attivi
-                    if ($copia['stato'] === 'disponibile' && empty($copia['prestito_id'])) {
-                        $copyRepo->delete($copia['id']);
+                    }
+                    // Conditional delete: only counts if the copy is still removable
+                    // (a loan may have claimed it since the SELECT). Miscounting is
+                    // thus impossible; the FK RESTRICT is the hard backstop.
+                    if ($copyRepo->deleteIfRemovable($copia['id'])) {
                         $removed++;
                     }
                 }
@@ -2629,8 +2642,12 @@ class LibriController
         $pdf->AddPage();
 
         // Calculate available space
-        $availableWidth = $labelWidth - ($margin * 2);
-        $availableHeight = $labelHeight - ($margin * 2);
+        // Fold the configurable padding (#238) into the inset so the proportional
+        // renderer lays content out inside the reduced, padded area.
+        $padding = (float) $settings['padding'];
+        $margin += $padding;
+        $availableWidth = max(1.0, $labelWidth - ($margin * 2));
+        $availableHeight = max(1.0, $labelHeight - ($margin * 2));
 
         // Handle autori
         $autoriStr = $this->buildAuthorString($libro);
@@ -2646,13 +2663,9 @@ class LibriController
             $positionText = 'Pos. ' . $libro['posizione_progressiva'];
         }
 
-        if ($isPortrait) {
-            // PORTRAIT LAYOUT (vertical label - most common for book spines)
-            $this->renderPortraitLabel($pdf, $appName, $libro, $autoriStr, $collocazione, $barcodePayload, $positionText, $availableWidth, $availableHeight, $margin);
-        } else {
-            // LANDSCAPE LAYOUT (horizontal label - for larger internal labels)
-            $this->renderLandscapeLabel($pdf, $appName, $libro, $autoriStr, $collocazione, $barcodePayload, $positionText, $availableWidth, $availableHeight, $margin);
-        }
+        // One proportional renderer for both orientations: content scales to fill
+        // the label area instead of sitting fixed-size amid growing margins (#238).
+        $this->renderScaledLabel($pdf, $appName, $libro, $autoriStr, $collocazione, $barcodePayload, $positionText, $availableWidth, $availableHeight, $margin);
 
         // Output PDF
         $pdfContent = $pdf->Output('', 'S');
@@ -2746,8 +2759,12 @@ class LibriController
         $pdf->SetMargins($margin, $margin, $margin);
         $pdf->SetAutoPageBreak(false, 0);
 
-        $availableWidth = $labelWidth - ($margin * 2);
-        $availableHeight = $labelHeight - ($margin * 2);
+        // Fold the configurable padding (#238) into the inset so the proportional
+        // renderer lays content out inside the reduced, padded area.
+        $padding = (float) $settings['padding'];
+        $margin += $padding;
+        $availableWidth = max(1.0, $labelWidth - ($margin * 2));
+        $availableHeight = max(1.0, $labelHeight - ($margin * 2));
 
         foreach ($copie as $copia) {
             $numeroInventario = (string) ($copia['numero_inventario'] ?? '');
@@ -2757,11 +2774,7 @@ class LibriController
             $barcodePayload = ['value' => $numeroInventario, 'type' => 'C128'];
 
             $pdf->AddPage();
-            if ($isPortrait) {
-                $this->renderPortraitLabel($pdf, $appName, $libro, $autoriStr, $collocazione, $barcodePayload, $positionText, $availableWidth, $availableHeight, $margin, $numeroInventario);
-            } else {
-                $this->renderLandscapeLabel($pdf, $appName, $libro, $autoriStr, $collocazione, $barcodePayload, $positionText, $availableWidth, $availableHeight, $margin, $numeroInventario);
-            }
+            $this->renderScaledLabel($pdf, $appName, $libro, $autoriStr, $collocazione, $barcodePayload, $positionText, $availableWidth, $availableHeight, $margin, $numeroInventario);
         }
 
         $pdfContent = $pdf->Output('', 'S');
@@ -2776,7 +2789,7 @@ class LibriController
      * application name plus the clamped label width/height (mm) and derived
      * orientation. Single source of truth so both label routes read settings identically.
      *
-     * @return array{appName: string, labelWidth: int, labelHeight: int, orientation: string, showAppName: bool, showTitle: bool, showSubtitle: bool, showAuthorPublisher: bool, showDewey: bool}
+     * @return array{appName: string, labelWidth: int, labelHeight: int, padding: float, orientation: string, showAppName: bool, showTitle: bool, showSubtitle: bool, showAuthorPublisher: bool, showDewey: bool}
      */
     private function resolveLabelSettings(mysqli $db): array
     {
@@ -2793,11 +2806,23 @@ class LibriController
         if ($labelHeight < 10 || $labelHeight > 100)
             $labelHeight = 38;
 
+        // Configurable extra padding (mm) applied on every side, on top of the
+        // automatic margin — lets staff fine-tune the printable inset per label
+        // type (#238). Clamped so it can never swallow the whole label.
+        $padding = (float) ($settingsRepo->get('label', 'padding', '0'));
+        $maxPad = min($labelWidth, $labelHeight) / 3;
+        if ($padding < 0) {
+            $padding = 0.0;
+        } elseif ($padding > $maxPad) {
+            $padding = $maxPad;
+        }
+
         // Determine orientation based on dimensions
         return [
             'appName' => $appName,
             'labelWidth' => $labelWidth,
             'labelHeight' => $labelHeight,
+            'padding' => $padding,
             'orientation' => $labelWidth > $labelHeight ? 'L' : 'P',
             'showAppName' => $settingsRepo->get('label', 'show_app_name', '1') === '1',
             'showTitle' => $settingsRepo->get('label', 'show_title', '1') === '1',
@@ -2880,289 +2905,119 @@ class LibriController
     }
 
     /**
-     * Render portrait (vertical) label layout
-     * Optimized for narrow spine labels like 25x38mm, 25x40mm, 34x48mm
-     * Includes: App name, Title, Author, EAN barcode, EAN text, Dewey, Collocazione
+     * Proportional label renderer (#238): lays the active content out as a stack
+     * of weighted blocks that together fill the whole label area, so text and the
+     * barcode scale with the label's real dimensions instead of staying a fixed
+     * size surrounded by growing margins. Works for both portrait and landscape.
+     *
+     * Each text block auto-fits: its font starts from the height allocated to the
+     * block, then shrinks until the text fits the width (never overflows). The
+     * barcode fills the width and its allocated height. Blocks are centered.
      */
-    private function renderPortraitLabel($pdf, string $appName, array $libro, string $autoriStr, string $collocazione, array $barcode, string $positionText, float $availableWidth, float $availableHeight, float $margin, ?string $barcodeTextOverride = null): void
+    private function renderScaledLabel($pdf, string $appName, array $libro, string $autoriStr, string $collocazione, array $barcode, string $positionText, float $availableWidth, float $availableHeight, float $margin, ?string $barcodeTextOverride = null): void
     {
-        // Calculate font sizes proportional to label width
-        $fontSizeApp = max(4, min(7, $availableWidth * 0.25));
-        $fontSizeTitle = max(4, min(6, $availableWidth * 0.22));
-        $fontSizeAuthor = max(3, min(5, $availableWidth * 0.18));
-        $fontSizeSmall = max(3, min(4, $availableWidth * 0.15));
-        $fontSizePosition = max(4, min(6, $availableWidth * 0.20));
+        if ($availableWidth <= 0 || $availableHeight <= 0) {
+            return;
+        }
+        $family = 'dejavusans';
 
-        // Prepare text content
-        $appNameShort = mb_substr($appName, 0, 12);
-        $maxTitleChars = (int) ($availableWidth * 1.8);
-        $titolo = mb_substr($libro['titolo'], 0, $maxTitleChars);
-        if (mb_strlen($libro['titolo']) > $maxTitleChars)
-            $titolo .= '...';
+        // Build the ordered list of active blocks with a relative weight (how much
+        // of the height each should claim). The barcode dominates.
+        $blocks = [];
 
-        $maxAuthorChars = (int) ($availableWidth * 1.5);
-        $autoreShort = !empty($autoriStr) ? mb_substr($autoriStr, 0, $maxAuthorChars) : '';
-
-        // EAN/ISBN text (for display under barcode). When an override is supplied
-        // (per-copy labels), show the copy's inventory code instead of the ISBN.
-        $eanText = $barcodeTextOverride ?? ($libro['ean'] ?? $libro['isbn13'] ?? $libro['isbn10'] ?? '');
-
-        // Dewey classification
-        $dewey = $libro['classificazione_dewey'] ?? '';
-
-        // Calculate total content height
-        $totalHeight = 0;
-        $totalHeight += 3.5; // App name
-
-        // Calculate title height (using getStringHeight)
-        $pdf->SetFont('dejavusans', 'B', $fontSizeTitle);
-        $titleHeight = $pdf->getStringHeight($availableWidth, $titolo);
-        $totalHeight += $titleHeight + 0.5;
-
-        // Author
-        $includeAuthor = !empty($autoreShort);
-        if ($includeAuthor) {
-            $totalHeight += 2.5;
+        $appName = trim($appName);
+        if ($appName !== '') {
+            // Secondary info → lighter weight so the title stays the prominent line.
+            $blocks[] = ['type' => 'text', 'text' => $appName, 'style' => 'B', 'weight' => 0.8];
         }
 
-        // Barcode + EAN text
-        $includeBarcode = !empty($barcode['value']);
-        $barcodeHeight = 0;
-        if ($includeBarcode) {
-            $barcodeHeight = min(8, $availableHeight * 0.18);
-            $totalHeight += $barcodeHeight + 1;
-            if (!empty($eanText)) {
-                $totalHeight += 2; // EAN text under barcode
+        $titolo = trim((string) ($libro['titolo'] ?? ''));
+        if ($titolo !== '') {
+            $blocks[] = ['type' => 'text', 'text' => $titolo, 'style' => 'B', 'weight' => 1.5];
+        }
+
+        $info = trim($autoriStr);
+        if ($info !== '') {
+            $blocks[] = ['type' => 'text', 'text' => $info, 'style' => '', 'weight' => 1.0];
+        }
+
+        $hasBarcode = !empty($barcode['value']);
+        if ($hasBarcode) {
+            $blocks[] = ['type' => 'barcode', 'weight' => 3.0];
+            $eanText = (string) ($barcodeTextOverride ?? ($libro['ean'] ?? $libro['isbn13'] ?? $libro['isbn10'] ?? ''));
+            $eanText = trim($eanText);
+            if ($eanText !== '') {
+                $blocks[] = ['type' => 'text', 'text' => $eanText, 'style' => '', 'weight' => 0.7];
             }
         }
 
-        // Dewey
-        $includeDewey = !empty($dewey);
-        if ($includeDewey) {
-            $totalHeight += 2.5;
+        $dewey = trim((string) ($libro['classificazione_dewey'] ?? ''));
+        if ($dewey !== '') {
+            $blocks[] = ['type' => 'text', 'text' => 'Dewey: ' . $dewey, 'style' => 'I', 'weight' => 0.7];
         }
 
-        // Position/Collocazione
-        $posColText = $collocazione ?: $positionText;
-        if ($posColText) {
-            $totalHeight += 3;
+        $posColText = trim((string) ($collocazione !== '' ? $collocazione : $positionText));
+        if ($posColText !== '') {
+            $blocks[] = ['type' => 'text', 'text' => $posColText, 'style' => 'B', 'weight' => 1.0];
         }
 
-        // Calculate vertical centering offset
-        $verticalOffset = ($availableHeight - $totalHeight) / 2;
-        if ($verticalOffset < 0)
-            $verticalOffset = 0;
-
-        // Start rendering with vertical centering
-        $currentY = $margin + $verticalOffset;
-
-        // App name
-        $pdf->SetFont('dejavusans', 'B', $fontSizeApp);
-        $pdf->SetXY($margin, $currentY);
-        $pdf->Cell($availableWidth, 3, $appNameShort, 0, 0, 'C');
-        $currentY += 3.5;
-
-        // Titolo libro (wrapped)
-        $pdf->SetFont('dejavusans', 'B', $fontSizeTitle);
-        $pdf->SetXY($margin, $currentY);
-        $pdf->MultiCell($availableWidth, 2.5, $titolo, 0, 'C', false, 1);
-        $currentY = $pdf->GetY() + 0.5;
-
-        // Autore
-        if ($includeAuthor) {
-            $pdf->SetFont('dejavusans', '', $fontSizeAuthor);
-            $pdf->SetXY($margin, $currentY);
-            $pdf->Cell($availableWidth, 2, $autoreShort, 0, 0, 'C');
-            $currentY += 2.5;
+        $n = count($blocks);
+        if ($n === 0) {
+            return;
         }
 
-        // Barcode
-        if ($includeBarcode) {
-            $barcodeWidth = $availableWidth * 0.85;
-            $barcodeX = $margin + (($availableWidth - $barcodeWidth) / 2);
-            $currentY += 0.5;
-            $pdf->write1DBarcode($barcode['value'], $barcode['type'], $barcodeX, $currentY, $barcodeWidth, $barcodeHeight, 0.3, ['stretch' => true, 'fitwidth' => true]);
-            $currentY += $barcodeHeight;
+        // Inter-block gap proportional to height; distribute the rest by weight so
+        // the stack always fills exactly the available height (→ true centering).
+        $gap = $availableHeight * 0.03;
+        $gapsTotal = $gap * ($n - 1);
+        $usableHeight = max(0.1, $availableHeight - $gapsTotal);
+        $totalWeight = 0.0;
+        foreach ($blocks as $b) {
+            $totalWeight += $b['weight'];
+        }
 
-            // EAN text under barcode
-            if (!empty($eanText)) {
-                $pdf->SetFont('dejavusans', '', $fontSizeSmall);
-                $pdf->SetXY($margin, $currentY);
-                $pdf->Cell($availableWidth, 2, $eanText, 0, 0, 'C');
-                $currentY += 2;
+        $x = $margin;
+        $y = $margin;
+        foreach ($blocks as $i => $b) {
+            $blockHeight = $usableHeight * ($b['weight'] / $totalWeight);
+
+            if ($b['type'] === 'barcode') {
+                // Fill the width; the allocated height scales with the label.
+                $barcodeWidth = $availableWidth;
+                $barcodeX = $margin;
+                // stretch (no fitwidth) so the bars actually fill the given width —
+                // fitwidth would cap them at the symbol's natural width on wide labels.
+                $pdf->write1DBarcode(
+                    $barcode['value'],
+                    $barcode['type'],
+                    $barcodeX,
+                    $y,
+                    $barcodeWidth,
+                    $blockHeight,
+                    0.4,
+                    ['stretch' => true],
+                    'N'
+                );
+            } else {
+                // Auto-fit font: start from the block height (mm→pt via /0.3528,
+                // ×0.68 for cap height + a little breathing room), then shrink until
+                // the text fits the width so it can never overflow horizontally.
+                $fontPt = ($blockHeight / 0.3528) * 0.68;
+                $fontPt = max(3.0, min(60.0, $fontPt));
+                $pdf->SetFont($family, $b['style'], $fontPt);
+                while ($fontPt > 3.0 && $pdf->GetStringWidth($b['text']) > $availableWidth) {
+                    $fontPt -= 0.5;
+                    $pdf->SetFont($family, $b['style'], $fontPt);
+                }
+                // Vertically centered within the block, horizontally centered.
+                $pdf->SetXY($x, $y);
+                $pdf->Cell($availableWidth, $blockHeight, $b['text'], 0, 0, 'C', false, '', 0, false, 'T', 'M');
             }
-        }
 
-        // Dewey classification
-        if ($includeDewey) {
-            $pdf->SetFont('dejavusans', 'I', $fontSizeSmall);
-            $pdf->SetXY($margin, $currentY);
-            $deweyShort = mb_substr($dewey, 0, 15);
-            $pdf->Cell($availableWidth, 2, "Dewey: {$deweyShort}", 0, 0, 'C');
-            $currentY += 2.5;
-        }
-
-        // Position/Collocazione
-        if ($posColText) {
-            $pdf->SetFont('dejavusans', 'B', $fontSizePosition);
-            $pdf->SetXY($margin, $currentY);
-            $posShort = mb_substr($posColText, 0, 12);
-            $pdf->Cell($availableWidth, 3, $posShort, 0, 0, 'C');
-        }
-    }
-
-    /**
-     * Render landscape (horizontal) label layout
-     * Optimized for larger labels like 70x36mm, 50x25mm, 52x30mm
-     * Includes: App name, Title, Author/Publisher, EAN barcode, EAN text, Dewey, Collocazione
-     */
-    private function renderLandscapeLabel($pdf, string $appName, array $libro, string $autoriStr, string $collocazione, array $barcode, string $positionText, float $availableWidth, float $availableHeight, float $margin, ?string $barcodeTextOverride = null): void
-    {
-        // Calculate font sizes proportional to label height
-        $fontSizeApp = max(6, min(10, $availableHeight * 0.25));
-        $fontSizeTitle = max(5, min(8, $availableHeight * 0.20));
-        $fontSizeAuthor = max(4, min(6, $availableHeight * 0.15));
-        $fontSizeSmall = max(3, min(5, $availableHeight * 0.12));
-        $fontSizePosition = max(5, min(8, $availableHeight * 0.22));
-
-        // Prepare text content
-        $maxTitleChars = (int) ($availableWidth * 0.8);
-        $titolo = mb_substr($libro['titolo'], 0, $maxTitleChars);
-        if (mb_strlen($libro['titolo']) > $maxTitleChars)
-            $titolo .= '...';
-
-        // Autore ed editore
-        // NOTE: do not pre-truncate $autoriStr with a fixed cap here — since it now
-        // includes the publisher (concatenated in buildAuthorString via
-        // label_include_publisher), a fixed cap would clip the publisher away
-        // regardless of label size. Let the width-based truncation below be the
-        // sole truncation point (mirrors how $maxTitleChars is derived from width).
-        $autorEditore = [];
-        if (!empty($autoriStr)) {
-            $autorEditore[] = $autoriStr;
-        }
-        $infoText = '';
-        if (!empty($autorEditore)) {
-            $infoText = implode(' - ', $autorEditore);
-            $maxInfoChars = (int) ($availableWidth * 0.9);
-            $infoText = mb_substr($infoText, 0, $maxInfoChars);
-        }
-
-        // EAN/ISBN text (for display under barcode). When an override is supplied
-        // (per-copy labels), show the copy's inventory code instead of the ISBN.
-        $eanText = $barcodeTextOverride ?? ($libro['ean'] ?? $libro['isbn13'] ?? $libro['isbn10'] ?? '');
-
-        // Dewey classification
-        $dewey = $libro['classificazione_dewey'] ?? '';
-
-        // Calculate total content height
-        $totalHeight = 0;
-        $totalHeight += 4.5; // App name
-
-        $totalHeight += 4; // Title
-
-        // Author/Publisher
-        $includeInfo = !empty($infoText);
-        if ($includeInfo) {
-            $totalHeight += 3;
-        }
-
-        // Barcode + EAN text
-        $includeBarcode = !empty($barcode['value']);
-        $barcodeHeight = 0;
-        if ($includeBarcode) {
-            $barcodeHeight = min(10, $availableHeight * 0.25);
-            $totalHeight += $barcodeHeight + 0.5;
-            if (!empty($eanText)) {
-                $totalHeight += 2.5; // EAN text under barcode
+            $y += $blockHeight;
+            if ($i < $n - 1) {
+                $y += $gap;
             }
-        }
-
-        // Dewey
-        $includeDewey = !empty($dewey);
-        if ($includeDewey) {
-            $totalHeight += 2.5;
-        }
-
-        // Position text
-        $includePosition = !empty($positionText) && !$collocazione;
-        if ($includePosition) {
-            $totalHeight += 3.5;
-        }
-
-        // Collocazione
-        $includeCollocazione = !empty($collocazione);
-        if ($includeCollocazione) {
-            $totalHeight += 4;
-        }
-
-        // Calculate vertical centering offset
-        $verticalOffset = ($availableHeight - $totalHeight) / 2;
-        if ($verticalOffset < 0)
-            $verticalOffset = 0;
-
-        // Start rendering with vertical centering
-        $currentY = $margin + $verticalOffset;
-
-        // App name
-        $pdf->SetFont('dejavusans', 'B', $fontSizeApp);
-        $pdf->SetXY($margin, $currentY);
-        $pdf->Cell($availableWidth, 4, $appName, 0, 0, 'C');
-        $currentY += 4.5;
-
-        // Titolo libro
-        $pdf->SetFont('dejavusans', 'B', $fontSizeTitle);
-        $pdf->SetXY($margin, $currentY);
-        $pdf->Cell($availableWidth, 3.5, $titolo, 0, 0, 'C');
-        $currentY += 4;
-
-        // Autore ed editore
-        if ($includeInfo) {
-            $pdf->SetFont('dejavusans', '', $fontSizeAuthor);
-            $pdf->SetXY($margin, $currentY);
-            $pdf->Cell($availableWidth, 2.5, $infoText, 0, 0, 'C');
-            $currentY += 3;
-        }
-
-        // Barcode (centered horizontally)
-        if ($includeBarcode) {
-            $barcodeWidth = min($availableWidth * 0.65, 44);
-            $barcodeX = $margin + (($availableWidth - $barcodeWidth) / 2);
-            $currentY += 0.5;
-            $pdf->write1DBarcode($barcode['value'], $barcode['type'], $barcodeX, $currentY, $barcodeWidth, $barcodeHeight, 0.4, ['stretch' => true]);
-            $currentY += $barcodeHeight;
-
-            // EAN text under barcode
-            if (!empty($eanText)) {
-                $pdf->SetFont('dejavusans', '', $fontSizeSmall);
-                $pdf->SetXY($margin, $currentY);
-                $pdf->Cell($availableWidth, 2.5, $eanText, 0, 0, 'C');
-                $currentY += 2.5;
-            }
-        }
-
-        // Dewey classification
-        if ($includeDewey) {
-            $pdf->SetFont('dejavusans', 'I', $fontSizeSmall);
-            $pdf->SetXY($margin, $currentY);
-            $deweyShort = mb_substr($dewey, 0, 20);
-            $pdf->Cell($availableWidth, 2.5, "Dewey: {$deweyShort}", 0, 0, 'C');
-            $currentY += 2.5;
-        }
-
-        // Position text
-        if ($includePosition) {
-            $pdf->SetFont('dejavusans', 'B', $fontSizeAuthor);
-            $pdf->SetXY($margin, $currentY);
-            $pdf->Cell($availableWidth, 3, $positionText, 0, 0, 'C');
-            $currentY += 3.5;
-        }
-
-        // Collocazione
-        if ($includeCollocazione) {
-            $pdf->SetFont('dejavusans', 'B', $fontSizePosition);
-            $pdf->SetXY($margin, $currentY);
-            $pdf->Cell($availableWidth, 4, $collocazione, 0, 0, 'C');
         }
     }
 

@@ -1,32 +1,44 @@
 <?php
 declare(strict_types=1);
 
+// Read both phpdotenv-populated $_ENV and real process variables. With
+// createImmutable(), an already exported variable is intentionally not copied
+// into $_ENV; reading only $_ENV made CLI cron/container runs connect as user ''.
+$envValue = static function (string $key, mixed $default = null): mixed {
+    if (array_key_exists($key, $_ENV)) {
+        $v = $_ENV[$key];
+        // Treat an explicitly empty string as "unset" so e.g. DB_PORT="" falls
+        // back to the default (3306) instead of casting to 0 → mysqli connect fail.
+        return ($v === '') ? $default : $v;
+    }
+    $value = getenv($key);
+    return ($value === false || $value === '') ? $default : $value;
+};
+
 // Basic settings; expand as needed
+$appDebug = $envValue('APP_DEBUG');
+$appEnv = $envValue('APP_ENV');
+$displayErrorsEnv = $envValue('DISPLAY_ERRORS');
 $settings = [
-    'displayErrorDetails' => isset($_ENV['APP_DEBUG']) ? filter_var($_ENV['APP_DEBUG'], FILTER_VALIDATE_BOOL) : false,
-    'canonicalUrl' => $_ENV['APP_CANONICAL_URL'] ?? null,
+    'displayErrorDetails' => $appDebug !== null ? filter_var($appDebug, FILTER_VALIDATE_BOOL) : false,
+    'canonicalUrl' => $envValue('APP_CANONICAL_URL'),
     'db' => [
-        'hostname' => $_ENV['DB_HOST'] ?? 'localhost',
-        'username' => $_ENV['DB_USER'] ?? null,
-        'password' => $_ENV['DB_PASS'] ?? null,
-        'database' => $_ENV['DB_NAME'] ?? null,
-        'port'     => (int)($_ENV['DB_PORT'] ?? 3306),
+        'hostname' => $envValue('DB_HOST', 'localhost'),
+        'username' => $envValue('DB_USER'),
+        'password' => $envValue('DB_PASS'),
+        'database' => $envValue('DB_NAME'),
+        'port'     => (int) $envValue('DB_PORT', 3306),
         'charset'  => 'utf8mb4',
-        'socket'   => $_ENV['DB_SOCKET'] ?? null, // Optional socket path
+        'socket'   => $envValue('DB_SOCKET'), // Optional socket path
     ],
 ];
 
-// Allow override via env
-if (isset($_ENV['APP_DEBUG'])) {
-    $settings['displayErrorDetails'] = filter_var($_ENV['APP_DEBUG'], FILTER_VALIDATE_BOOL);
-}
-
 // Configure PHP error display based on DISPLAY_ERRORS env variable
-if (isset($_ENV['DISPLAY_ERRORS'])) {
-    $displayErrors = filter_var($_ENV['DISPLAY_ERRORS'], FILTER_VALIDATE_BOOL);
+if ($displayErrorsEnv !== null) {
+    $displayErrors = filter_var($displayErrorsEnv, FILTER_VALIDATE_BOOL);
     ini_set('display_errors', $displayErrors ? '1' : '0');
     ini_set('display_startup_errors', $displayErrors ? '1' : '0');
-} elseif (isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production') {
+} elseif ($appEnv === 'production') {
     // Force disable error display in production
     ini_set('display_errors', '0');
     ini_set('display_startup_errors', '0');

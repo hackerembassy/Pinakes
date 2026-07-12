@@ -259,6 +259,17 @@ class LoanRepository
                 // keep promoting while freed capacity converts the next queued reservation
             }
 
+            // Final recalc so libri.copie_disponibili reflects the copy states AFTER
+            // Layer-1 reassignment (which can re-bind the freed copy to a 'prenotato'
+            // hold without a further recalc when Layer 2 promotes nothing). Without
+            // this, the post-commit wishlist gate in PrestitiController::close reads a
+            // stale counter and can fire a false "book available" notification.
+            // No existence guard here: the book was already locked FOR UPDATE and
+            // recalculated successfully above in this same transaction, so it cannot
+            // have vanished (recalculateBookAvailability only returns false when the
+            // book row is missing).
+            $integrity->recalculateBookAvailability($bookId, true);
+
             $this->db->commit();
 
         } catch (\Throwable $e) {

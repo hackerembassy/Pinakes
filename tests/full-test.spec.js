@@ -924,7 +924,19 @@ test.describe.serial('Phase 5: Scraping-Pro Plugin', () => {
     )).trim() || '0');
     expect(bcId, 'book-club must be auto-registered as a bundled plugin').toBeGreaterThan(0);
 
-    await page.goto(`${BASE}/admin/plugins`);
+    // 5.2's plugin activation reloads the plugins list asynchronously; let that
+    // navigation settle, then retry once so this goto isn't interrupted by it
+    // (same guard as 5.3 — "Navigation ... is interrupted by another navigation").
+    await page.waitForLoadState('load').catch(() => {});
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await page.goto(`${BASE}/admin/plugins`);
+        break;
+      } catch (e) {
+        if (attempt === 1) throw e;
+        await page.waitForTimeout(500);
+      }
+    }
     await page.waitForLoadState('domcontentloaded');
     await page.waitForSelector('[data-plugin-id]', { timeout: 10000 }).catch(() => {});
     const card = page.locator(`[data-plugin-id="${bcId}"]`).first();
@@ -932,8 +944,19 @@ test.describe.serial('Phase 5: Scraping-Pro Plugin', () => {
 
     // If it isn't already active, activate it and make sure NO error dialog appears
     // ("Schema activation failed for: bookclub_review_meta" was the reported failure).
-    const activateBtn = card.locator('button:has-text("Attiva")');
-    if (await activateBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+    // The activation is an async POST; the swal timing is racy, so retry the whole
+    // click→confirm→settle up to 3 times and gate on the DB truth (is_active=1)
+    // rather than on the transient success dialog.
+    const isActive = () =>
+      String(dbQuery(`SELECT is_active FROM plugins WHERE id=${bcId}`)).trim() === '1';
+    for (let attempt = 0; attempt < 3 && !isActive(); attempt++) {
+      const activateBtn = card.locator('button:has-text("Attiva")');
+      if (!await activateBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+        // No Attiva button and not yet active → reload the list and re-check.
+        await page.goto(`${BASE}/admin/plugins`);
+        await page.waitForLoadState('domcontentloaded');
+        continue;
+      }
       await activateBtn.click();
       const confirmBtn = page.locator('.swal2-confirm:visible');
       if (await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -948,6 +971,8 @@ test.describe.serial('Phase 5: Scraping-Pro Plugin', () => {
       ).catch(() => {});
       await page.keyboard.press('Enter').catch(() => {});
       await page.waitForLoadState('domcontentloaded');
+      // Give the activation POST a moment to commit before the next DB check.
+      await page.waitForTimeout(500);
     }
 
     // The plugin is active and its schema — including the previously-failing table — exists.
@@ -3366,7 +3391,19 @@ async function ensureArchivesActive(page) {
 
 /** Create an archival unit via the admin form. Returns its DB id (0 on failure). */
 async function createArchiveUnit(page, fields) {
-  await page.goto(`${BASE}/admin/archives/new`);
+  // A prior phase's async page reload can interrupt this goto ("Navigation ...
+  // is interrupted by another navigation to /admin/plugins"). Let it settle,
+  // then retry once — same guard as the plugin-activation steps.
+  await page.waitForLoadState('load').catch(() => {});
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await page.goto(`${BASE}/admin/archives/new`);
+      break;
+    } catch (e) {
+      if (attempt === 1) throw e;
+      await page.waitForTimeout(500);
+    }
+  }
   await page.waitForLoadState('domcontentloaded');
   await page.fill('input[name="reference_code"]', fields.reference_code);
   // Set selects via the DOM (the form may enhance them with Choices.js, which

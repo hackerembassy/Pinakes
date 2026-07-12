@@ -33,7 +33,7 @@ register_shutdown_function(static function () use ($lockHandle) {
 
 // Load environment
 $dotenv = Dotenv::createImmutable(__DIR__ . '/..');
-$dotenv->load();
+$dotenv->safeLoad();  // safeLoad: no .env is OK — container/CLI runs rely on real env vars (getenv fallback in config/settings.php)
 
 // Connect to DB via the shared cron bootstrap helper (handles DB_SOCKET
 // host normalisation so the socket is actually used on macOS installs).
@@ -69,6 +69,7 @@ while ($reservation = $result->fetch_assoc()) {
     $reassignmentService->setExternalTransaction(true);
 
     $id = (int) $reservation['id'];
+    $libroId = (int) $reservation['libro_id'];
     $copiaId = $reservation['copia_id'] ? (int) $reservation['copia_id'] : null;
     $utenteId = (int) $reservation['utente_id'];
 
@@ -76,6 +77,17 @@ while ($reservation = $result->fetch_assoc()) {
 
     $db->begin_transaction();
     try {
+        // Canonical lock order libri → prestiti → copie: take the book row lock
+        // FIRST, before claiming the prestiti row and the copie row below (and
+        // before reassignOnReturn re-locks the same book row, reentrantly). Without
+        // this, a concurrent MaintenanceService/web-maintenance run that locks libri
+        // first and then this loan row would deadlock against us.
+        $lockBook = $db->prepare("SELECT id FROM libri WHERE id = ? FOR UPDATE");
+        $lockBook->bind_param('i', $libroId);
+        $lockBook->execute();
+        $lockBook->get_result();
+        $lockBook->close();
+
         // Mark as expired — mark-then-act: the state guard + affected_rows check make
         // this idempotent, so a concurrent run (or a row whose state changed since the
         // SELECT) does NOT re-free the copy and re-run reassignment.

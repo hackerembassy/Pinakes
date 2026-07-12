@@ -639,6 +639,14 @@ $activeTab = $activeTab ?? 'general';
                 </div>
               </fieldset>
 
+              <fieldset class="border-t border-gray-200 pt-5">
+                <legend class="font-semibold text-gray-900 mb-1"><?= __('Spaziatura') ?></legend>
+                <p class="text-sm text-gray-500 mb-3"><?= __('Il contenuto si adatta automaticamente alle dimensioni dell\'etichetta. Aggiungi un margine interno extra per rifinire il layout.') ?></p>
+                <label class="text-sm text-gray-700"><?= __('Margine interno (mm)') ?>
+                  <input type="number" name="label_padding" min="0" max="30" step="0.5" value="<?= htmlspecialchars((string) ($labelSettings['padding'] ?? 0), ENT_QUOTES, 'UTF-8') ?>" class="form-input mt-1 w-32">
+                </label>
+              </fieldset>
+
               <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <div class="flex gap-2">
                   <i class="fas fa-info-circle text-blue-600 mt-0.5"></i>

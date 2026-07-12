@@ -71,7 +71,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 // Load environment variables from .env file
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../');
 try {
-    $dotenv->load();
+    $dotenv->safeLoad();  // safeLoad: no .env is OK — container/CLI runs rely on real env vars (getenv fallback in config/settings.php)
 } catch (Throwable $e) {
     fwrite(STDERR, "ERROR: Failed to load .env file: " . $e->getMessage() . "\n");
     exit(1);

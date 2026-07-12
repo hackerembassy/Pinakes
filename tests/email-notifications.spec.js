@@ -16,6 +16,14 @@ const DB_PASS = process.env.E2E_DB_PASS || '';
 const DB_SOCKET = process.env.E2E_DB_SOCKET || '';
 const DB_NAME = process.env.E2E_DB_NAME || '';
 let mailpitAvailable = true;
+const phpMailRoutesToMailpit = (() => {
+  try {
+    const sendmailPath = execFileSync('php', ['-r', 'echo (string) ini_get("sendmail_path");'], { encoding: 'utf-8' });
+    return /mailpit|1025/i.test(sendmailPath);
+  } catch {
+    return false;
+  }
+})();
 
 // Skip all tests when credentials are not configured
 test.skip(
@@ -798,6 +806,7 @@ test.describe.serial('Email Notifications E2E', () => {
   // Phase C: phpmail driver — verify PHP mail() routes through Mailpit
   // ══════════════════════════════════════════════════════════════════
   test('C.1 — Switch to mail driver and test contact form', async () => {
+    test.skip(!phpMailRoutesToMailpit, 'PHP mail() is not routed to Mailpit in this environment');
     // Switch to PHP mail() driver
     dbQuery(`UPDATE system_settings SET setting_value = 'mail' WHERE category = 'email' AND setting_key = 'type'`);
     dbQuery(`UPDATE system_settings SET setting_value = 'mail' WHERE category = 'email' AND setting_key = 'driver_mode'`);
@@ -840,6 +849,7 @@ test.describe.serial('Email Notifications E2E', () => {
   });
 
   test('C.2 — Mail driver: registration email via phpmail', async () => {
+    test.skip(!phpMailRoutesToMailpit, 'PHP mail() is not routed to Mailpit in this environment');
     await clearMailpit();
     clearRateLimits(); // registration has a 3/hour rate limit
 
@@ -895,7 +905,6 @@ test.describe.serial('Email Notifications E2E', () => {
             try { dbQuery(`DELETE FROM recensioni WHERE utente_id = ${uid}`); } catch { /* */ }
             try { dbQuery(`DELETE FROM wishlist WHERE utente_id = ${uid}`); } catch { /* */ }
             try { dbQuery(`DELETE FROM consent_log WHERE utente_id = ${uid}`); } catch { /* */ }
-            try { dbQuery(`DELETE FROM notifications WHERE utente_id = ${uid}`); } catch { /* */ }
           }
         } catch { /* user doesn't exist */ }
       }

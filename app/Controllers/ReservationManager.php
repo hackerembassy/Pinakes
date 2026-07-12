@@ -371,7 +371,7 @@ class ReservationManager
                     SELECT 1 FROM prestiti p
                     WHERE p.copia_id = c.id
                     AND p.data_prestito <= ?
-                    AND p.data_scadenza >= ?
+                    AND (p.stato = 'in_ritardo' OR p.data_scadenza >= ?)
                     AND (
                         (p.attivo = 1 AND p.stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo'))
                         OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL)  -- pending conversion holds this copy (#157, model A-refined)
@@ -402,7 +402,7 @@ class ReservationManager
             $overlapCopyStmt = $this->db->prepare("
                 SELECT 1 FROM prestiti
                 WHERE copia_id = ?
-                AND data_prestito <= ? AND data_scadenza >= ?
+                AND data_prestito <= ? AND (stato = 'in_ritardo' OR data_scadenza >= ?)
                 AND (
                     (attivo = 1 AND stato IN ('in_corso','da_ritirare','prenotato','in_ritardo'))
                     OR (stato = 'pendente' AND copia_id IS NOT NULL)  -- pending conversion holds this copy (#157, model A-refined)
@@ -769,6 +769,40 @@ class ReservationManager
             // UPDATE garantisce anche che le due query vedano le stesse righe.
             $now = \App\Support\DateHelper::now();
 
+            // Resolve affected books first, then lock them in deterministic order
+            // BEFORE locking reservation rows. The previous reservations->libri
+            // order crossed every create/cancel path (libri->prenotazioni).
+            $booksStmt = $this->db->prepare("
+                SELECT DISTINCT libro_id
+                FROM prenotazioni
+                WHERE stato = 'attiva'
+                  AND data_scadenza_prenotazione IS NOT NULL
+                  AND data_scadenza_prenotazione < ?
+                ORDER BY libro_id
+            ");
+            $booksStmt->bind_param('s', $now);
+            $booksStmt->execute();
+            $booksResult = $booksStmt->get_result();
+            $affectedBooks = [];
+            while ($book = $booksResult->fetch_assoc()) {
+                $affectedBooks[] = (int) $book['libro_id'];
+            }
+            $booksStmt->close();
+
+            if ($affectedBooks === []) {
+                $this->commitIfOwned($ownTransaction);
+                return 0;
+            }
+
+            $bookLock = $this->db->prepare('SELECT id FROM libri WHERE id = ? FOR UPDATE');
+            foreach ($affectedBooks as $bookId) {
+                $bookLock->bind_param('i', $bookId);
+                $bookLock->execute();
+                $bookLock->get_result();
+            }
+            $bookLock->close();
+            $bookIdsSql = implode(',', $affectedBooks);
+
             // First, lock the expiring rows BEFORE updating (FOR UPDATE, solo su
             // prenotazioni: nessuna JOIN qui per non estendere il lock ad altre
             // tabelle) and collect the data needed for queue reordering and for
@@ -779,6 +813,7 @@ class ReservationManager
                 WHERE stato = 'attiva'
                 AND data_scadenza_prenotazione IS NOT NULL
                 AND data_scadenza_prenotazione < ?
+                AND libro_id IN ($bookIdsSql)
                 FOR UPDATE
             ");
             $selectStmt->bind_param('s', $now);
@@ -786,12 +821,6 @@ class ReservationManager
             $result = $selectStmt->get_result();
             $expiring = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
             $selectStmt->close();
-
-            $affectedBooks = [];
-            foreach ($expiring as $row) {
-                $affectedBooks[(int) $row['libro_id']] = true;
-            }
-            $affectedBooks = array_keys($affectedBooks);
 
             // Dati utente/titolo per le notifiche, letti ora (prima dell'UPDATE)
             // con le righe già lockate. Libri soft-deleted esclusi: la prenotazione
@@ -833,6 +862,7 @@ class ReservationManager
                 WHERE stato = 'attiva'
                 AND data_scadenza_prenotazione IS NOT NULL
                 AND data_scadenza_prenotazione < ?
+                AND libro_id IN ($bookIdsSql)
             ");
             $stmt->bind_param('s', $now);
             $stmt->execute();

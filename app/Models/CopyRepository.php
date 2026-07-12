@@ -20,21 +20,8 @@ class CopyRepository
     public function getByBookId(int $bookId): array
     {
         $stmt = $this->db->prepare("
-            SELECT c.*,
-                   p.id as prestito_id,
-                   p.utente_id,
-                   p.data_prestito,
-                   p.data_scadenza,
-                   p.stato as prestito_stato,
-                   u.nome as utente_nome,
-                   u.cognome as utente_cognome,
-                   u.email as utente_email
+            SELECT c.*
             FROM copie c
-            -- #157: a copy is held by an active loan OR a reservation-conversion
-            -- pending (attivo=0 with a copia_id); both must appear on the per-copy
-            -- calendar so a pending pickup is visible.
-            LEFT JOIN prestiti p ON c.id = p.copia_id AND ((p.attivo = 1 AND p.stato IN ('prenotato', 'da_ritirare', 'in_corso', 'in_ritardo')) OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL))
-            LEFT JOIN utenti u ON p.utente_id = u.id
             WHERE c.libro_id = ?
             ORDER BY c.numero_inventario ASC
         ");
@@ -44,11 +31,73 @@ class CopyRepository
 
         $copie = [];
         while ($row = $result->fetch_assoc()) {
+            // The physical-copy table must contain exactly one row per copy. Loan
+            // schedule rows live separately (getScheduleByBookId); attach only the
+            // most relevant commitment for the compact status columns.
+            $row += [
+                'prestito_id' => null,
+                'utente_id' => null,
+                'data_prestito' => null,
+                'data_scadenza' => null,
+                'prestito_stato' => null,
+                'utente_nome' => null,
+                'utente_cognome' => null,
+                'utente_email' => null,
+            ];
             $copie[] = $row;
         }
 
         $stmt->close();
+
+        $copyIndexes = [];
+        foreach ($copie as $index => $copy) {
+            $copyIndexes[(int) $copy['id']] = $index;
+        }
+        foreach ($this->getScheduleByBookId($bookId) as $commitment) {
+            $copyId = (int) $commitment['id'];
+            if (!isset($copyIndexes[$copyId])) {
+                continue;
+            }
+            $index = $copyIndexes[$copyId];
+            if ($copie[$index]['prestito_id'] !== null) {
+                continue;
+            }
+            foreach (['prestito_id', 'utente_id', 'data_prestito', 'data_scadenza', 'prestito_stato', 'utente_nome', 'utente_cognome', 'utente_email'] as $field) {
+                $copie[$index][$field] = $commitment[$field];
+            }
+        }
+
         return $copie;
+    }
+
+    /**
+     * All HOLDING commitments for the per-copy calendar. Kept separate from
+     * getByBookId so two non-overlapping future loans never duplicate a physical
+     * copy in the admin table or in copy-count/removal logic.
+     */
+    public function getScheduleByBookId(int $bookId): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT c.id, c.numero_inventario,
+                   p.id AS prestito_id, p.utente_id, p.data_prestito,
+                   p.data_scadenza, p.stato AS prestito_stato,
+                   u.nome AS utente_nome, u.cognome AS utente_cognome,
+                   u.email AS utente_email
+            FROM copie c
+            JOIN prestiti p ON p.copia_id = c.id
+             AND ( (p.attivo = 1 AND p.stato IN ('prenotato','da_ritirare','in_corso','in_ritardo'))
+                   OR (p.attivo = 0 AND p.stato = 'pendente') )
+            LEFT JOIN utenti u ON u.id = p.utente_id
+            WHERE c.libro_id = ?
+            ORDER BY c.numero_inventario ASC,
+                     FIELD(p.stato, 'in_ritardo','in_corso','da_ritirare','prenotato','pendente'),
+                     p.data_prestito ASC, p.id ASC
+        ");
+        $stmt->bind_param('i', $bookId);
+        $stmt->execute();
+        $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+        return $rows;
     }
 
     /**
@@ -90,6 +139,83 @@ class CopyRepository
     }
 
     /**
+     * True if a numero_inventario already exists anywhere (the uniq_numero_inventario
+     * index is global, not per-book), so callers can avoid the duplicate-key crash.
+     */
+    public function inventoryCodeExists(string $numeroInventario): bool
+    {
+        $stmt = $this->db->prepare("SELECT 1 FROM copie WHERE numero_inventario = ? LIMIT 1");
+        $stmt->bind_param('s', $numeroInventario);
+        $stmt->execute();
+        $exists = (bool) $stmt->get_result()->fetch_row();
+        $stmt->close();
+        return $exists;
+    }
+
+    /**
+     * Allocate $howMany collision-free inventory codes of the form "{base}-C{N}".
+     *
+     * Fixes the copy-count bug (#238): the old code appended "-C{currentCount+1}",
+     * which collided with a still-present higher code after copies were removed from
+     * the wrong end (Duplicate entry '…-C2'). Here N walks up from 1, filling any
+     * gap left by a removed copy, and every candidate is checked against BOTH the
+     * codes generated in this batch and the whole `copie` table (global unique key),
+     * so the returned codes can never duplicate an existing one. The "-C{N}" suffix
+     * is applied uniformly (never a bare base), keeping the naming consistent.
+     *
+     * @return list<string>
+     */
+    public function allocateInventoryCodes(string $base, int $howMany): array
+    {
+        // numero_inventario is VARCHAR(100); reserve room for the "-C{N}" suffix so
+        // a very long base can never overflow the column (worst case "-C9999" = 6).
+        $base = mb_substr($base, 0, 90);
+        $codes = [];
+        $needed = max(0, $howMany);
+        for ($index = 1; count($codes) < $needed; $index++) {
+            $candidate = "{$base}-C{$index}";
+            if (!in_array($candidate, $codes, true) && !$this->inventoryCodeExists($candidate)) {
+                $codes[] = $candidate;
+            }
+        }
+        return $codes;
+    }
+
+    /**
+     * Removable (available, loan-free) copies of a book, ordered so the ones added
+     * LAST come first — reducing the copy count must trim from the end of the
+     * sequence, not the beginning (#238). Ordering by id DESC tracks creation order
+     * robustly without parsing the "-C{N}" suffix.
+     *
+     * @return list<array{id:int, numero_inventario:string}>
+     */
+    public function getRemovableCopiesNewestFirst(int $bookId): array
+    {
+        $stmt = $this->db->prepare("
+            SELECT c.id, c.numero_inventario
+            FROM copie c
+            WHERE c.libro_id = ?
+              AND c.stato = 'disponibile'
+              AND NOT EXISTS (
+                  SELECT 1 FROM prestiti p
+                  WHERE p.copia_id = c.id
+                    AND ( (p.attivo = 1 AND p.stato IN ('prenotato','da_ritirare','in_corso','in_ritardo'))
+                          OR (p.attivo = 0 AND p.stato = 'pendente') )
+              )
+            ORDER BY c.id DESC
+        ");
+        $stmt->bind_param('i', $bookId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $rows = [];
+        while ($row = $res->fetch_assoc()) {
+            $rows[] = ['id' => (int) $row['id'], 'numero_inventario' => (string) $row['numero_inventario']];
+        }
+        $stmt->close();
+        return $rows;
+    }
+
+    /**
      * Aggiorna lo stato di una copia
      */
     public function updateStatus(int $id, string $stato): bool
@@ -113,6 +239,36 @@ class CopyRepository
         $stmt->close();
 
         return $result;
+    }
+
+    /**
+     * Delete a copy ONLY if it is still removable (available, no active/pending
+     * loan). Closes the race between selecting removable copies and deleting them
+     * (#252): if a loan claimed the copy in between, the conditional DELETE removes
+     * nothing and returns false, so the caller can try the next candidate instead
+     * of miscounting. The prestiti.copia_id FK is ON DELETE RESTRICT, so this can
+     * never orphan a loan even under the race — this just makes the outcome clean.
+     *
+     * @return bool True only if a row was actually deleted.
+     */
+    public function deleteIfRemovable(int $id): bool
+    {
+        $stmt = $this->db->prepare("
+            DELETE FROM copie
+            WHERE id = ?
+              AND stato = 'disponibile'
+              AND NOT EXISTS (
+                  SELECT 1 FROM prestiti p
+                  WHERE p.copia_id = copie.id
+                    AND ( (p.attivo = 1 AND p.stato IN ('prenotato','da_ritirare','in_corso','in_ritardo'))
+                          OR (p.attivo = 0 AND p.stato = 'pendente') )
+              )
+        ");
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $deleted = $stmt->affected_rows === 1;
+        $stmt->close();
+        return $deleted;
     }
 
     /**
@@ -161,7 +317,7 @@ class CopyRepository
                 SELECT 1 FROM prestiti p
                 WHERE p.copia_id = c.id
                 AND p.data_prestito <= ?
-                AND p.data_scadenza >= ?
+                AND (p.stato = 'in_ritardo' OR p.data_scadenza >= ?)
                 AND ((p.attivo = 1 AND p.stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo'))
                      OR (p.stato = 'pendente' AND p.copia_id IS NOT NULL))
             )

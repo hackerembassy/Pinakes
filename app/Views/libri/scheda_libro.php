@@ -1399,7 +1399,12 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
   $copyColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
   $calendarEventsJson = [];
 
-  foreach ($copie as $idx => $cal_copia) {
+  $copyColorIndexes = [];
+  foreach ($copie as $idx => $physicalCopy) {
+      $copyColorIndexes[(int) $physicalCopy['id']] = $idx;
+  }
+  foreach (($copySchedule ?? []) as $cal_copia) {
+      $idx = $copyColorIndexes[(int) $cal_copia['id']] ?? 0;
       $copyColor = $copyColors[$idx % 8];
       $inventario = $cal_copia['numero_inventario'] ?? '';
 
@@ -1410,6 +1415,11 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
           $endDate = !empty($cal_copia['data_scadenza'])
               ? substr((string)$cal_copia['data_scadenza'], 0, 10)
               : $startDate;
+          // An overdue loan still occupies the physical copy until it is
+          // returned. Do not draw it as if it ended on the missed due date.
+          if ($stato === 'in_ritardo') {
+              $endDate = max($endDate, \App\Support\DateHelper::today());
+          }
 
           // Determine event color based on status
           $eventColor = match($stato) {
@@ -1437,7 +1447,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
           $endDateExclusive = $endDateObj->format('Y-m-d');
 
           $calendarEventsJson[] = [
-              'id' => 'copy_' . $cal_copia['id'],
+              'id' => 'copy_' . $cal_copia['id'] . '_loan_' . $cal_copia['prestito_id'],
               'title' => $inventario . ' - ' . $statusLabel,
               'start' => $startDate,
               'end' => $endDateExclusive,
@@ -1779,7 +1789,8 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
             <label for="modal-stato" class="form-label"><?= __("Esito restituzione") ?></label>
             <select id="modal-stato" name="stato" class="form-input" required aria-required="true">
               <option value="restituito" selected><?= __("Restituito") ?></option>
-              <option value="in_ritardo"><?= __("Mantieni in ritardo") ?></option>
+              <option value="manutenzione"><?= __("Restituito — copia in manutenzione") ?></option>
+              <option value="in_restauro"><?= __("Restituito — copia in restauro") ?></option>
               <option value="danneggiato"><?= __("Danneggiato") ?></option>
               <option value="perso"><?= __("Perso") ?></option>
             </select>

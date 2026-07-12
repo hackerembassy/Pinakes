@@ -208,8 +208,8 @@ class DashboardStats
     public function calendarEvents(): array
     {
         $events = [];
-        $today = date('Y-m-d');
-        $sixMonthsLater = date('Y-m-d', strtotime('+6 months'));
+        $today = \App\Support\DateHelper::today();
+        $sixMonthsLater = (new \DateTimeImmutable($today))->modify('+6 months')->format('Y-m-d');
 
         // Fetch active/scheduled loans (in_corso, prenotato, in_ritardo, pendente)
         // Include pendente loans with attivo=0 (waiting for admin approval)
@@ -221,7 +221,7 @@ class DashboardStats
                     JOIN utenti u ON p.utente_id = u.id
                     WHERE (p.attivo = 1 OR p.stato = 'pendente')
                       AND p.stato IN ('in_corso', 'da_ritirare', 'prenotato', 'in_ritardo', 'pendente')
-                      AND p.data_scadenza >= ?
+                      AND (p.stato = 'in_ritardo' OR p.data_scadenza >= ?)
                       AND p.data_prestito <= ?
                     ORDER BY p.data_prestito ASC";
         $stmt = $this->db->prepare($loanSql);
@@ -234,7 +234,9 @@ class DashboardStats
                 'title' => $row['titolo'],
                 'user' => $row['utente_nome'],
                 'start' => $row['data_prestito'],
-                'end' => $row['data_scadenza'],
+                'end' => $row['stato'] === 'in_ritardo'
+                    ? max((string) $row['data_scadenza'], $today)
+                    : $row['data_scadenza'],
                 'type' => 'prestito',
                 'status' => $row['stato']
             ];

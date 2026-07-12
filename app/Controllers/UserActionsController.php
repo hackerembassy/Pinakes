@@ -76,7 +76,7 @@ class UserActionsController
                        EXISTS(SELECT 1 FROM recensioni r WHERE r.libro_id = pr.libro_id AND r.utente_id = ?) as has_review
                 FROM prestiti pr
                 JOIN libri l ON l.id = pr.libro_id AND l.deleted_at IS NULL
-                WHERE pr.utente_id = ? AND pr.attivo = 0 AND pr.stato != 'prestato'
+                WHERE pr.utente_id = ? AND pr.attivo = 0 AND pr.stato IN ('restituito','perso','danneggiato')
                 ORDER BY pr.data_restituzione DESC, pr.data_prestito DESC
                 LIMIT 20";
         $stmt = $db->prepare($sql);
@@ -375,13 +375,16 @@ class UserActionsController
 
         $uid = (int) $user['id'];
         $startDate = $date;
-        $endDate = date('Y-m-d', strtotime($date . ' +1 month'));
+        $loanDays = (int) ((new \App\Models\SettingsRepository($db))->get('loans', 'loan_duration_days', '30') ?? 30);
+        $loanDays = $loanDays > 0 ? $loanDays : 30;
+        $endDate = (new \DateTimeImmutable($date))->modify("+{$loanDays} days")->format('Y-m-d');
 
         $db->begin_transaction();
 
         try {
-            // Get reservation details and lock
-            $getStmt = $db->prepare("SELECT libro_id FROM prenotazioni WHERE id = ? AND utente_id = ? AND stato = 'attiva' FOR UPDATE");
+            // Resolve without locking, then follow the canonical book->reservation
+            // lock order used by create/cancel/promotion.
+            $getStmt = $db->prepare("SELECT libro_id FROM prenotazioni WHERE id = ? AND utente_id = ? AND stato = 'attiva'");
             $getStmt->bind_param('ii', $rid, $uid);
             $getStmt->execute();
             $result = $getStmt->get_result();
@@ -395,37 +398,30 @@ class UserActionsController
 
             $libroId = (int) $reservation['libro_id'];
 
-            // Lock book row to prevent race conditions
+            // Lock book row first to serialize every capacity decision.
             $lockStmt = $db->prepare("SELECT id FROM libri WHERE id = ? AND deleted_at IS NULL FOR UPDATE");
             $lockStmt->bind_param('i', $libroId);
             $lockStmt->execute();
-            $lockResult = $lockStmt->get_result();
-            if (!$lockResult->fetch_assoc()) {
+            if (!$lockStmt->get_result()->fetch_assoc()) {
+                $lockStmt->close();
                 $db->rollback();
                 return $response->withHeader('Location', RouteTranslator::route('reservations') . '?error=book_not_found')->withStatus(302);
             }
             $lockStmt->close();
 
-            // Check availability for the new date range (excluding this user's reservation)
-            $reservationsController = new \App\Controllers\ReservationsController($db);
-            $availability = $reservationsController->getBookAvailabilityData($libroId, $startDate, 35, $uid);
-
-            // Check each day in the new range
-            $currentDate = new \DateTime($startDate);
-            $endDateTime = new \DateTime($endDate);
-            $hasConflict = false;
-
-            while ($currentDate <= $endDateTime) {
-                $dateStr = $currentDate->format('Y-m-d');
-                $dayData = $availability['by_date'][$dateStr] ?? null;
-                if ($dayData !== null && ($dayData['available'] ?? 0) <= 0) {
-                    $hasConflict = true;
-                    break;
-                }
-                $currentDate->add(new \DateInterval('P1D'));
+            // Re-lock and revalidate the reservation after acquiring the book.
+            $getStmt = $db->prepare("SELECT libro_id FROM prenotazioni WHERE id = ? AND utente_id = ? AND stato = 'attiva' FOR UPDATE");
+            $getStmt->bind_param('ii', $rid, $uid);
+            $getStmt->execute();
+            $lockedReservation = $getStmt->get_result()->fetch_assoc();
+            $getStmt->close();
+            if (!$lockedReservation || (int) $lockedReservation['libro_id'] !== $libroId) {
+                $db->rollback();
+                return $response->withHeader('Location', RouteTranslator::route('reservations') . '?error=not_found')->withStatus(302);
             }
-
-            if ($hasConflict) {
+            // Canonical peak-capacity check, excluding the row being moved.
+            $capacity = new \App\Services\CapacityService($db);
+            if (!$capacity->hasFreeCapacity($libroId, $startDate, $endDate, excludeReservationId: $rid, excludeUserId: $uid)) {
                 $db->rollback();
                 return $response->withHeader('Location', RouteTranslator::route('reservations') . '?error=not_available')->withStatus(302);
             }
@@ -653,7 +649,9 @@ class UserActionsController
 
         // Calculate date range for availability check
         $start = ($desired !== '') ? $desired : $today;
-        $end = date('Y-m-d', strtotime($start . ' +1 month'));
+        $loanDays = (int) ((new \App\Models\SettingsRepository($db))->get('loans', 'loan_duration_days', '30') ?? 30);
+        $loanDays = $loanDays > 0 ? $loanDays : 30;
+        $end = (new \DateTimeImmutable($start))->modify("+{$loanDays} days")->format('Y-m-d');
 
         // Start transaction for concurrency control
         $db->begin_transaction();
@@ -702,26 +700,10 @@ class UserActionsController
             }
             $dupLoanStmt->close();
 
-            // Check availability for the requested date range (excluding this user's existing reservations)
-            $reservationsController = new ReservationsController($db);
-            $availability = $reservationsController->getBookAvailabilityData($libroId, $start, 35, $utenteId);
-
-            // Check each day in the range for conflicts
-            $currentDate = new \DateTime($start);
-            $endDateTime = new \DateTime($end);
-            $hasConflict = false;
-
-            while ($currentDate <= $endDateTime) {
-                $dateStr = $currentDate->format('Y-m-d');
-                $dayData = $availability['by_date'][$dateStr] ?? null;
-                if ($dayData !== null && ($dayData['available'] ?? 0) <= 0) {
-                    $hasConflict = true;
-                    break;
-                }
-                $currentDate->add(new \DateInterval('P1D'));
-            }
-
-            if ($hasConflict) {
+            // Canonical peak-capacity decision (same service as admin create,
+            // approval, renew and audit), excluding this user defensively.
+            $capacity = new \App\Services\CapacityService($db);
+            if (!$capacity->hasFreeCapacity($libroId, $start, $end, excludeUserId: $utenteId)) {
                 $db->rollback();
                 return $this->back($response, ['reserve_error' => 'not_available']);
             }

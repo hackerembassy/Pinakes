@@ -127,14 +127,23 @@ final class CapacityService
      */
     private function holdingLoanIntervals(int $libroId, string $start, string $end, ?int $excludePrestitoId, ?int $excludeUserId): array
     {
-        $sql = "SELECT GREATEST(p.data_prestito, ?) AS s, LEAST(p.data_scadenza, ?) AS e
+        // An unreturned overdue loan has no known end yet. Its contractual due
+        // date is in the past, but the physical copy remains out of the library:
+        // clamp it to the requested window end instead of freeing capacity after
+        // data_scadenza. This mirrors the DB trigger and the public calendar.
+        $sql = "SELECT GREATEST(p.data_prestito, ?) AS s,
+                       LEAST(CASE
+                           WHEN p.attivo = 1 AND p.stato = 'in_ritardo' THEN ?
+                           ELSE p.data_scadenza
+                       END, ?) AS e
                 FROM prestiti p
                 WHERE p.libro_id = ?
-                  AND p.data_prestito <= ? AND p.data_scadenza >= ?
+                  AND p.data_prestito <= ?
+                  AND (p.stato = 'in_ritardo' OR p.data_scadenza >= ?)
                   AND ( (p.attivo = 1 AND p.stato IN ('prenotato','da_ritirare','in_corso','in_ritardo'))
                         OR (p.attivo = 0 AND p.stato = 'pendente' AND p.copia_id IS NOT NULL) )";
-        $types = 'ssiss';
-        $params = [$start, $end, $libroId, $end, $start];
+        $types = 'sssiss';
+        $params = [$start, $end, $end, $libroId, $end, $start];
         if ($excludePrestitoId !== null) {
             $sql .= ' AND p.id <> ?';
             $types .= 'i';
@@ -156,12 +165,18 @@ final class CapacityService
     {
         // Canonical 3-step coalesce chain for the reservation end (no 2-step variants).
         $rEnd = 'COALESCE(r.data_fine_richiesta, DATE(r.data_scadenza_prenotazione), r.data_inizio_richiesta)';
-        $sql = "SELECT GREATEST(r.data_inizio_richiesta, ?) AS s, LEAST($rEnd, ?) AS e
+        // Start falls back to the reservation deadline for legacy 'attiva' rows whose
+        // data_inizio_richiesta is NULL (nullable column). For normal rows the COALESCE
+        // returns data_inizio_richiesta unchanged, so this is behaviour-preserving; it
+        // only stops such legacy holds from silently vanishing from the occupancy peak
+        // (they never promote either, so they'd otherwise allow overbooking their copy).
+        $rStart = 'COALESCE(r.data_inizio_richiesta, DATE(r.data_scadenza_prenotazione))';
+        $sql = "SELECT GREATEST($rStart, ?) AS s, LEAST($rEnd, ?) AS e
                 FROM prenotazioni r
                 WHERE r.libro_id = ?
                   AND r.stato = 'attiva'
-                  AND r.data_inizio_richiesta IS NOT NULL
-                  AND r.data_inizio_richiesta <= ?
+                  AND $rStart IS NOT NULL
+                  AND $rStart <= ?
                   AND $rEnd >= ?";
         $types = 'ssiss';
         $params = [$start, $end, $libroId, $end, $start];

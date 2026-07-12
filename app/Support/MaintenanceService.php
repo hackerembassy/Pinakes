@@ -341,6 +341,39 @@ class MaintenanceService
             $this->db->begin_transaction();
 
             try {
+                $bookId = (int) $loan['libro_id'];
+                $loanId = (int) $loan['id'];
+
+                // Same lock order as web writes: book first, then loan/copy.
+                // The old cron updated prestiti first and later touched libri via
+                // DataIntegrity, crossing approve/return paths and risking a deadlock.
+                $lockBook = $this->db->prepare('SELECT id FROM libri WHERE id = ? AND deleted_at IS NULL FOR UPDATE');
+                $lockBook->bind_param('i', $bookId);
+                $lockBook->execute();
+                $bookExists = (bool) $lockBook->get_result()->fetch_assoc();
+                $lockBook->close();
+                if (!$bookExists) {
+                    $this->db->rollback();
+                    continue;
+                }
+
+                $lockLoan = $this->db->prepare("
+                    SELECT id, copia_id, libro_id, data_scadenza
+                    FROM prestiti
+                    WHERE id = ? AND stato = 'prenotato' AND attivo = 1
+                      AND data_prestito <= ? AND data_scadenza >= ?
+                    FOR UPDATE
+                ");
+                $lockLoan->bind_param('iss', $loanId, $today, $today);
+                $lockLoan->execute();
+                $lockedLoan = $lockLoan->get_result()->fetch_assoc();
+                $lockLoan->close();
+                if (!$lockedLoan || (int) $lockedLoan['libro_id'] !== $bookId) {
+                    $this->db->rollback();
+                    continue;
+                }
+                $loan = $lockedLoan;
+
                 // Calculate pickup deadline dal "oggi" applicativo, cappata a
                 // data_scadenza (L1): senza il cap un prestito con finestra corta
                 // restava ritirabile (e la copia bloccata) oltre la fine del
@@ -355,7 +388,7 @@ class MaintenanceService
                 $updateStmt = $this->db->prepare("
                     UPDATE prestiti
                     SET stato = 'da_ritirare', pickup_deadline = ?
-                    WHERE id = ? AND stato = 'prenotato' AND data_scadenza >= ?
+                    WHERE id = ? AND stato = 'prenotato' AND attivo = 1 AND data_scadenza >= ?
                 ");
                 $updateStmt->bind_param('sis', $pickupDeadline, $loan['id'], $today);
                 $updateStmt->execute();
@@ -566,6 +599,32 @@ class MaintenanceService
                 $copiaId = $reservation['copia_id'] ? (int) $reservation['copia_id'] : null;
                 $libroId = (int) $reservation['libro_id'];
 
+                $lockBook = $this->db->prepare('SELECT id FROM libri WHERE id = ? FOR UPDATE');
+                $lockBook->bind_param('i', $libroId);
+                $lockBook->execute();
+                $bookExists = (bool) $lockBook->get_result()->fetch_assoc();
+                $lockBook->close();
+                if (!$bookExists) {
+                    $this->db->rollback();
+                    continue;
+                }
+
+                $lockLoan = $this->db->prepare("
+                    SELECT id, libro_id, copia_id, utente_id
+                    FROM prestiti
+                    WHERE id = ? AND stato = 'prenotato' AND attivo = 1 AND data_scadenza < ?
+                    FOR UPDATE
+                ");
+                $lockLoan->bind_param('is', $id, $today);
+                $lockLoan->execute();
+                $lockedReservation = $lockLoan->get_result()->fetch_assoc();
+                $lockLoan->close();
+                if (!$lockedReservation || (int) $lockedReservation['libro_id'] !== $libroId) {
+                    $this->db->rollback();
+                    continue;
+                }
+                $copiaId = $lockedReservation['copia_id'] ? (int) $lockedReservation['copia_id'] : null;
+
                 // Build note suffix safely with bound parameter
                 $noteSuffix = "\n[System] " . __('Scaduta il') . ' ' . date('d/m/Y');
 
@@ -714,6 +773,33 @@ class MaintenanceService
                 $copiaId = $pickup['copia_id'] ? (int) $pickup['copia_id'] : null;
                 $libroId = (int) $pickup['libro_id'];
 
+                $lockBook = $this->db->prepare('SELECT id FROM libri WHERE id = ? FOR UPDATE');
+                $lockBook->bind_param('i', $libroId);
+                $lockBook->execute();
+                $bookExists = (bool) $lockBook->get_result()->fetch_assoc();
+                $lockBook->close();
+                if (!$bookExists) {
+                    $this->db->rollback();
+                    continue;
+                }
+
+                $lockLoan = $this->db->prepare("
+                    SELECT id, libro_id, copia_id, utente_id, pickup_deadline
+                    FROM prestiti
+                    WHERE id = ? AND stato = 'da_ritirare' AND attivo = 1
+                      AND pickup_deadline IS NOT NULL AND pickup_deadline < ?
+                    FOR UPDATE
+                ");
+                $lockLoan->bind_param('is', $id, $today);
+                $lockLoan->execute();
+                $lockedPickup = $lockLoan->get_result()->fetch_assoc();
+                $lockLoan->close();
+                if (!$lockedPickup || (int) $lockedPickup['libro_id'] !== $libroId) {
+                    $this->db->rollback();
+                    continue;
+                }
+                $copiaId = $lockedPickup['copia_id'] ? (int) $lockedPickup['copia_id'] : null;
+
                 // Build note suffix safely with bound parameter
                 $noteSuffix = "\n[System] " . __('Ritiro scaduto il') . ' ' . date('d/m/Y');
 
@@ -724,7 +810,7 @@ class MaintenanceService
                         attivo = 0,
                         updated_at = NOW(),
                         note = CONCAT(COALESCE(note, ''), ?)
-                    WHERE id = ? AND stato = 'da_ritirare'
+                    WHERE id = ? AND stato = 'da_ritirare' AND attivo = 1
                 ");
                 $updateStmt->bind_param('si', $noteSuffix, $id);
                 $updateStmt->execute();

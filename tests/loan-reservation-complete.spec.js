@@ -317,7 +317,7 @@ function performMaintenance() {
     const code = /** @type {any} */ (err).status ?? 1;
     // Exit code 2 = completed with non-fatal errors (still ran all tasks)
     if (code === 2) return { status: 2, output: /** @type {any} */ (err).stdout || '' };
-    throw new Error(`Maintenance cron failed (exit ${code}):\n${/** @type {any} */ (err).stderr || err.message}`);
+    throw new Error(`Maintenance cron failed (exit ${code}):\n${/** @type {any} */ (err).stderr || /** @type {any} */ (err).stdout || err.message}`);
   }
 }
 

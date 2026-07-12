@@ -69,6 +69,41 @@ async function inspectLabel(page, urlPath) {
   return { text, widthPt: m ? parseFloat(m[1]) : 0, heightPt: m ? parseFloat(m[2]) : 0 };
 }
 
+/**
+ * Height (pt) of the tallest occurrence of `word` in the label PDF, via
+ * pdftotext -bbox glyph boxes. Used to prove the content SCALES with the label
+ * size (#238) rather than staying a fixed size amid growing margins.
+ */
+async function measureWordHeight(page, urlPath, word) {
+  const resp = await page.request.get(`${BASE}${urlPath}`);
+  expect(resp.status(), `GET ${urlPath}`).toBe(200);
+  const file = path.join(os.tmpdir(), `bbox-${RUN}-${Math.random().toString(36).slice(2)}.pdf`);
+  fs.writeFileSync(file, await resp.body());
+  const bbox = execFileSync('pdftotext', ['-bbox', file, '-'], { encoding: 'utf-8' });
+  fs.unlinkSync(file);
+  let maxH = 0;
+  const re = new RegExp(`<word xMin="([\\d.]+)" yMin="([\\d.]+)" xMax="([\\d.]+)" yMax="([\\d.]+)">${word}</word>`, 'gi');
+  let mm;
+  while ((mm = re.exec(bbox)) !== null) {
+    maxH = Math.max(maxH, parseFloat(mm[4]) - parseFloat(mm[2]));
+  }
+  return maxH;
+}
+
+/** Set label size + padding directly in system_settings (the scaling under test
+ *  is a property of the renderer; the settings form save path is covered by the
+ *  first test). Keeps this test fast and free of UI-timing flakiness. */
+function setLabelSize(w, h, padding = 0) {
+  const up = (k, v) => dbExec(
+    `INSERT INTO system_settings (category, setting_key, setting_value) VALUES ('label', ${sqlStr(k)}, ${sqlStr(String(v))})
+     ON DUPLICATE KEY UPDATE setting_value=${sqlStr(String(v))}`
+  );
+  up('width', w);
+  up('height', h);
+  up('padding', padding);
+  up('show_title', '1');
+}
+
 test.describe.serial('Copy-label PDF content (#238)', () => {
   let bookId = 0, copyAId = 0, copyBId = 0;
   /** @type {Record<string,string>} */
@@ -83,7 +118,7 @@ test.describe.serial('Copy-label PDF content (#238)', () => {
     copyAId = Number(dbQuery(`SELECT id FROM copie WHERE numero_inventario=${sqlStr(CODE_A)}`));
     copyBId = Number(dbQuery(`SELECT id FROM copie WHERE numero_inventario=${sqlStr(CODE_B)}`));
     // Snapshot label settings so we can restore them.
-    for (const k of ['width', 'height', 'format_name', 'show_app_name', 'show_title', 'show_subtitle', 'show_author_publisher', 'show_dewey']) {
+    for (const k of ['width', 'height', 'padding', 'format_name', 'show_app_name', 'show_title', 'show_subtitle', 'show_author_publisher', 'show_dewey']) {
       savedLabel[k] = dbQuery(`SELECT COALESCE((SELECT setting_value FROM system_settings WHERE category='label' AND setting_key=${sqlStr(k)} LIMIT 1),'')`);
     }
   });
@@ -137,5 +172,37 @@ test.describe.serial('Copy-label PDF content (#238)', () => {
     const all = await inspectLabel(page, `/admin/books/${bookId}/copy-labels-pdf`);
     expect(all.text).toContain(CODE_A);
     expect(all.text).toContain(CODE_B);
+  });
+
+  test('content scales with the label size (#238) and padding insets it', async ({ page }) => {
+    // Fresh page → authenticate before hitting the (admin-only) label endpoint.
+    await page.goto(`${BASE}/accedi`);
+    await page.fill('input[name="email"]', ADMIN_EMAIL);
+    await page.fill('input[name="password"]', ADMIN_PASS);
+    await page.locator('button[type="submit"]').click();
+    await page.waitForURL(u => u.toString().includes('/admin'), { timeout: 15000 });
+
+    // The title word we measure. TITLE is `ZLabelTitle ${RUN}`.
+    const word = 'ZLabelTitle';
+
+    // Small label vs a much larger one: the title must grow substantially, not
+    // stay a fixed size (the reported bug was fixed-size content + growing margins).
+    setLabelSize(25, 38, 0);
+    const small = await measureWordHeight(page, `/admin/books/${bookId}/copy-labels-pdf?copy_id=${copyAId}`, word);
+
+    setLabelSize(89, 41, 0);
+    const large = await measureWordHeight(page, `/admin/books/${bookId}/copy-labels-pdf?copy_id=${copyAId}`, word);
+
+    expect(small, 'title measurable on the small label').toBeGreaterThan(0);
+    expect(large, 'title measurable on the large label').toBeGreaterThan(0);
+    // Proportional scaling: the title on the ~3× taller/wider label is clearly bigger.
+    expect(large).toBeGreaterThan(small * 1.8);
+
+    // Padding must shrink the drawn content vs no padding on the same size.
+    const noPad = await measureWordHeight(page, `/admin/books/${bookId}/copy-labels-pdf?copy_id=${copyAId}`, word);
+    setLabelSize(89, 41, 10);
+    const withPad = await measureWordHeight(page, `/admin/books/${bookId}/copy-labels-pdf?copy_id=${copyAId}`, word);
+    expect(withPad, 'title still present with padding').toBeGreaterThan(0);
+    expect(withPad).toBeLessThan(noPad);
   });
 });

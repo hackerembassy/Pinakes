@@ -146,8 +146,12 @@ function formatLoanStatus($status) {
         </button>
       <?php endif; ?>
       <?php if ((int)($prestito['attivo'] ?? 0) === 1 && ($prestito['stato'] ?? '') !== 'pendente'): ?>
+        <?php // Return is only valid once the copy is physically out (in_corso / in_ritardo);
+              // returnForm() 404s on prenotato/da_ritirare, so don't offer a dead link there. ?>
+        <?php if (in_array($prestito['stato'] ?? '', ['in_corso', 'in_ritardo'], true)): ?>
         <a href="<?= htmlspecialchars(url('/admin/loans/returned/' . (int)$prestito['id']), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-800 text-white hover:bg-gray-700 rounded-lg transition-colors duration-200 inline-flex items-center">
             <i class="fas fa-undo-alt mr-2"></i><?= __("Gestisci Restituzione") ?></a>
+        <?php endif; ?>
         <a href="<?= htmlspecialchars(url('/admin/loans/edit/' . (int)$prestito['id']), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 bg-gray-100 text-gray-900 hover:bg-gray-200 rounded-lg transition-colors duration-200 inline-flex items-center border border-gray-300">
             <i class="fas fa-pencil-alt mr-2"></i>
             <?= __("Modifica") ?>
