@@ -23,3 +23,10 @@ node_modules/ export-ignore
 .vscode/ export-ignore
 .idea/ export-ignore
 internal/ export-ignore
+.coderabbit.yaml export-ignore
+.rsync-filter export-ignore
+.semgrepignore export-ignore
+STATUS.md export-ignore
+MOBILE_API_SPEC.md export-ignore
+phpstan.neon export-ignore
+phpstan-baseline.neon export-ignore
