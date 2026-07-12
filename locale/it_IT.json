@@ -6520,5 +6520,8 @@
   "Altezza (mm)": "Altezza (mm)",
   "Contenuto etichetta": "Contenuto etichetta",
   "Sottotitolo libro": "Sottotitolo libro",
-  "Autore ed editore": "Autore ed editore"
+  "Autore ed editore": "Autore ed editore",
+  "Spaziatura": "Spaziatura",
+  "Margine interno (mm)": "Margine interno (mm)",
+  "Il contenuto si adatta automaticamente alle dimensioni dell'etichetta. Aggiungi un margine interno extra per rifinire il layout.": "Il contenuto si adatta automaticamente alle dimensioni dell'etichetta. Aggiungi un margine interno extra per rifinire il layout."
 }

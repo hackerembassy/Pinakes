@@ -6520,5 +6520,8 @@
   "Altezza (mm)": "Height (mm)",
   "Contenuto etichetta": "Label content",
   "Sottotitolo libro": "Book subtitle",
-  "Autore ed editore": "Author and publisher"
+  "Autore ed editore": "Author and publisher",
+  "Spaziatura": "Spacing",
+  "Margine interno (mm)": "Inner padding (mm)",
+  "Il contenuto si adatta automaticamente alle dimensioni dell'etichetta. Aggiungi un margine interno extra per rifinire il layout.": "Content scales automatically to the label size. Add extra inner padding to fine-tune the layout."
 }

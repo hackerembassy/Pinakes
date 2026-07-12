@@ -6520,5 +6520,8 @@
   "Altezza (mm)": "Höhe (mm)",
   "Contenuto etichetta": "Etiketteninhalt",
   "Sottotitolo libro": "Buchuntertitel",
-  "Autore ed editore": "Autor und Verlag"
+  "Autore ed editore": "Autor und Verlag",
+  "Spaziatura": "Abstand",
+  "Margine interno (mm)": "Innenabstand (mm)",
+  "Il contenuto si adatta automaticamente alle dimensioni dell'etichetta. Aggiungi un margine interno extra per rifinire il layout.": "Der Inhalt passt sich automatisch an die Etikettengröße an. Fügen Sie zusätzlichen Innenabstand hinzu, um das Layout zu optimieren."
 }
