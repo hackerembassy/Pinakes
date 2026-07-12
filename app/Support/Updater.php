@@ -2249,6 +2249,14 @@ class Updater
             $unwritable = $this->verifyWritableTargets($sourcePath, $this->rootPath);
             if ($unwritable !== []) {
                 $this->debugLog('ERROR', 'Preflight: percorsi non scrivibili', ['paths' => $unwritable]);
+                // On the Docker image the app files belong to the image and are not
+                // writable by the web-server user — the in-app updater is the wrong
+                // tool there (its changes would live only in the ephemeral container
+                // layer anyway). Point the operator at the image-pull path instead of
+                // the generic permission error.
+                if ($this->isRunningInContainer()) {
+                    throw new Exception(__('Sembra che tu stia eseguendo l\'immagine Docker: i file dell\'applicazione appartengono all\'immagine e non sono modificabili da questo pulsante. Aggiorna spostando il container alla nuova immagine con «docker compose pull && docker compose up -d» (i tuoi dati nel database e nei volumi storage/uploads restano al sicuro). Il pulsante di aggiornamento è pensato per installazioni classiche/hosting condiviso dove l\'utente del web server è proprietario dei file.'));
+                }
                 throw new Exception(sprintf(
                     __('Aggiornamento annullato prima di ogni modifica: il processo PHP non può scrivere in questi percorsi: %s. Correggi i permessi (proprietario/scrittura per l\'utente del web server) e riprova, oppure esegui l\'aggiornamento da riga di comando come proprietario dei file: php scripts/manual-upgrade.php <zip-release>'),
                     implode(', ', array_slice($unwritable, 0, 15)) . (count($unwritable) > 15 ? ', …' : '')
@@ -2875,6 +2883,30 @@ class Updater
      * intervention at all. Paths owned by another user cannot be chmod-ed from
      * PHP and are reported for manual fixing (or for the CLI upgrade path).
      *
+     * True when the app is running inside a container (Docker/Podman/Kubernetes).
+     * On the official image the app files are baked in and owned by the image, so
+     * the in-app updater cannot (and must not) overwrite them — the operator moves
+     * the container to the new image instead. Detection is best-effort across the
+     * common signals; a false negative only falls back to the generic permission
+     * message, never a wrong action.
+     */
+    private function isRunningInContainer(): bool
+    {
+        if (is_file('/.dockerenv') || is_file('/run/.containerenv')) {
+            return true;
+        }
+        $flag = $_ENV['PINAKES_DOCKER'] ?? (getenv('PINAKES_DOCKER') ?: '');
+        if (is_string($flag) && $flag !== '' && $flag !== '0') {
+            return true;
+        }
+        $cgroup = @file_get_contents('/proc/1/cgroup');
+        if (is_string($cgroup) && preg_match('/\b(docker|containerd|kubepods|libpod)\b/', $cgroup) === 1) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * @return array<string> relative paths (deduplicated, sorted) that are not writable
      */
     private function verifyWritableTargets(string $source, string $dest, bool $attemptRepair = true): array
