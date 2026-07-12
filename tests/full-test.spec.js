@@ -3391,7 +3391,19 @@ async function ensureArchivesActive(page) {
 
 /** Create an archival unit via the admin form. Returns its DB id (0 on failure). */
 async function createArchiveUnit(page, fields) {
-  await page.goto(`${BASE}/admin/archives/new`);
+  // A prior phase's async page reload can interrupt this goto ("Navigation ...
+  // is interrupted by another navigation to /admin/plugins"). Let it settle,
+  // then retry once — same guard as the plugin-activation steps.
+  await page.waitForLoadState('load').catch(() => {});
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await page.goto(`${BASE}/admin/archives/new`);
+      break;
+    } catch (e) {
+      if (attempt === 1) throw e;
+      await page.waitForTimeout(500);
+    }
+  }
   await page.waitForLoadState('domcontentloaded');
   await page.fill('input[name="reference_code"]', fields.reference_code);
   // Set selects via the DOM (the form may enhance them with Choices.js, which
