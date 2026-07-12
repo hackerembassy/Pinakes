@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Behavioral integration suite — 52 loan ("prestiti") edge cases for Pinakes.
+ * Behavioral integration suite — 59 loan ("prestiti") edge cases for Pinakes.
  *
  * Runs against the LIVE local MySQL but only ever touches data it creates,
  * marked with: book titles `ZZ_LOANEDGE_%`, copy numero_inventario `ZZLE-%`,
@@ -17,11 +17,15 @@ declare(strict_types=1);
  *   - installer/database/triggers.sql (copy-occupancy invariants)
  *
  * Run:   php tests/loan-edge-cases.unit.php
- * Exit:  0 only if all 52 pass; prints "ALL 52 PASS".
+ * Exit:  0 only if all 59 pass; prints "ALL 59 PASS".
  */
 
 use App\Models\CopyRepository;
+use App\Services\CapacityService;
+use App\Services\ReservationReassignmentService;
 use App\Support\DataIntegrity;
+use App\Support\DateHelper;
+use App\Support\IcsGenerator;
 
 $root = dirname(__DIR__);
 require $root . '/vendor/autoload.php';
@@ -131,7 +135,7 @@ function pass(string $desc): void
 {
     global $TESTNO;
     $TESTNO++;
-    printf("[%02d/52] PASS: %s\n", $TESTNO, $desc);
+    printf("[%02d/59] PASS: %s\n", $TESTNO, $desc);
 }
 
 function assertEq($exp, $got, string $msg): void
@@ -669,8 +673,130 @@ assertEq('disponibile', bookStato($b), 'recalc overwrites manually-wrong libri.s
 pass('misc: libri.stato is derived (recalc overwrites wrong value)');
 
 /* ==========================================================================
+ * 53-59  Canonical capacity, schedules, integrity and calendars
+ * ====================================================================== */
+// 53: an unreturned overdue loan is open-ended for future capacity decisions.
+$b = mkBook('capacity_overdue_open');
+$c = mkCopies($b, 1, 'prestato')[0];
+$u = mkUser();
+loan($b, $c, $u, date('Y-m-d', strtotime('-30 days')), date('Y-m-d', strtotime('-10 days')), 'in_ritardo', 1);
+$futureStart = date('Y-m-d', strtotime('+5 days'));
+$futureEnd = date('Y-m-d', strtotime('+12 days'));
+assertEq(false, (new CapacityService($db))->hasFreeCapacity($b, $futureStart, $futureEnd), 'overdue copy must block future capacity');
+pass('capacity: overdue unreturned loan remains open-ended');
+
+// 54: capacity is the daily PEAK, not the raw number of intervals.
+$b = mkBook('capacity_peak');
+[$c1, $c2] = mkCopies($b, 2);
+$u1 = mkUser();
+$u2 = mkUser();
+$start = date('Y-m-d', strtotime('+10 days'));
+$middle = date('Y-m-d', strtotime('+15 days'));
+$afterMiddle = date('Y-m-d', strtotime('+16 days'));
+$end = date('Y-m-d', strtotime('+21 days'));
+loan($b, $c1, $u1, $start, $middle, 'prenotato', 1);
+loan($b, $c1, $u2, $afterMiddle, $end, 'prenotato', 1);
+assertEq(true, (new CapacityService($db))->hasFreeCapacity($b, $start, $end), 'two disjoint intervals use peak=1 of two copies');
+pass('capacity: disjoint commitments use daily peak, not raw count');
+
+// 55: physical-copy lists stay unique while the calendar retains every slot.
+$b = mkBook('copy_schedule_unique');
+$c = mkCopies($b, 1)[0];
+$u1 = mkUser();
+$u2 = mkUser();
+loan($b, $c, $u1, date('Y-m-d', strtotime('+30 days')), date('Y-m-d', strtotime('+35 days')), 'prenotato', 1);
+loan($b, $c, $u2, date('Y-m-d', strtotime('+36 days')), date('Y-m-d', strtotime('+42 days')), 'prenotato', 1);
+$copyRepo = new CopyRepository($db);
+assertEq(1, count($copyRepo->getByBookId($b)), 'copy table must have one row per physical copy');
+assertEq(2, count($copyRepo->getScheduleByBookId($b)), 'calendar must retain both non-overlapping commitments');
+pass('copies: one physical row and all scheduled calendar events');
+
+// 56: the integrity report detects terminal rows that are still active.
+$b = mkBook('integrity_terminal_active');
+$c = mkCopies($b, 1)[0];
+$u = mkUser();
+$badLoanId = loan($b, $c, $u, date('Y-m-d', strtotime('-5 days')), date('Y-m-d', strtotime('-1 day')), 'restituito', 1);
+$issues = (new DataIntegrity($db))->verifyDataConsistency();
+$found = false;
+foreach ($issues as $issue) {
+    if (($issue['type'] ?? '') === 'terminated_loan_active' && str_contains((string) ($issue['message'] ?? ''), (string) $badLoanId)) {
+        $found = true;
+        break;
+    }
+}
+assertEq(true, $found, 'integrity report must identify active terminal loan row');
+pass('integrity: active terminal loan is reported');
+
+// 57: every non-overlapping future hold moves off a damaged physical copy.
+$b = mkBook('reassign_damaged_copy');
+[$damagedCopy, $replacementCopy] = mkCopies($b, 2);
+$u1 = mkUser();
+$u2 = mkUser();
+$u3 = mkUser();
+$hold1 = loan($b, $damagedCopy, $u1, date('Y-m-d', strtotime('+50 days')), date('Y-m-d', strtotime('+55 days')), 'prenotato', 1);
+$hold2 = loan($b, $damagedCopy, $u2, date('Y-m-d', strtotime('+56 days')), date('Y-m-d', strtotime('+62 days')), 'prenotato', 1);
+$hold3 = loan($b, $damagedCopy, $u3, date('Y-m-d', strtotime('+63 days')), date('Y-m-d', strtotime('+69 days')), 'pendente', 0);
+$db->query("UPDATE prestiti SET origine = 'prenotazione' WHERE id = {$hold3}");
+(new CopyRepository($db))->updateStatus($damagedCopy, 'danneggiato');
+$reassignment = new ReservationReassignmentService($db);
+$reassignment->reassignOnCopyLost($damagedCopy);
+$reassignment->reassignOnCopyLost($damagedCopy);
+$reassignment->reassignOnCopyLost($damagedCopy);
+$assigned = $db->query("SELECT COUNT(*) AS n FROM prestiti WHERE id IN ({$hold1},{$hold2},{$hold3}) AND copia_id = {$replacementCopy}")->fetch_assoc();
+assertEq(3, (int) $assigned['n'], 'active and converted-pending disjoint holds must move to the replacement copy');
+pass('copies: damaged copy reassigns active and converted-pending future holds');
+
+// 58: ICS keeps an unreturned overdue event open through today (exclusive end tomorrow).
+$b = mkBook('ics_overdue_open');
+$c = mkCopies($b, 1, 'prestato')[0];
+$u = mkUser();
+$icsLoan = loan($b, $c, $u, date('Y-m-d', strtotime('-20 days')), date('Y-m-d', strtotime('-5 days')), 'in_ritardo', 1);
+$ics = (new IcsGenerator($db))->generate();
+$pattern = '/BEGIN:VEVENT.*?UID:loan-' . $icsLoan . '@pinakes.*?END:VEVENT/s';
+if (!preg_match($pattern, $ics, $eventMatch)) {
+    throw new \RuntimeException('ICS event for overdue loan not found');
+}
+$tomorrow = (new \DateTimeImmutable(DateHelper::today()))->modify('+1 day')->format('Ymd');
+assertEq(true, str_contains($eventMatch[0], 'DTEND;VALUE=DATE:' . $tomorrow), 'overdue ICS event must remain open through today');
+pass('calendar: overdue ICS event remains open through today');
+
+// 59: a title without any physical copy can never remain available.
+$b = mkBook('zero_copies_status');
+recalc($b);
+assertEq('non_disponibile', bookStato($b), 'zero-copy book must derive non_disponibile');
+pass('availability: zero physical copies derives non_disponibile');
+
+// 60: overbooking involving OVERDUE loans must be detected. The open-ended
+// overdue sentinel used to become endExclusive '10000-01-01', which ksort's
+// lexicographic order placed BEFORE every real date, zeroing overdue occupancy
+// in the peak scan — two overdue loans on a single-copy book went unreported.
+$b = mkBook('integrity_overdue_overbook');
+[$oc1, $oc2] = mkCopies($b, 2, 'prestato');
+$ou1 = mkUser();
+$ou2 = mkUser();
+// One overdue loan per physical copy (the trigger forbids two on one copy)…
+loan($b, $oc1, $ou1, date('Y-m-d', strtotime('-30 days')), date('Y-m-d', strtotime('-10 days')), 'in_ritardo', 1);
+loan($b, $oc2, $ou2, date('Y-m-d', strtotime('-20 days')), date('Y-m-d', strtotime('-5 days')), 'in_ritardo', 1);
+// …then one copy is damaged: loanable capacity drops to 1 while both overdue
+// loans are still physically out → occupancy 2 > capacity 1 for the whole
+// open-ended overdue window. (No reassignment: overdue loans are in a user's
+// hands, not future holds.)
+(new CopyRepository($db))->updateStatus($oc2, 'danneggiato');
+$issues = (new DataIntegrity($db))->verifyDataConsistency();
+$foundOverbook = false;
+foreach ($issues as $issue) {
+    if (($issue['type'] ?? '') === 'overbooked_circulation_period'
+        && str_contains((string) ($issue['message'] ?? ''), (string) $b)) {
+        $foundOverbook = true;
+        break;
+    }
+}
+assertEq(true, $foundOverbook, 'integrity report must detect overbooking that involves overdue loans');
+pass('integrity: overbooked period with overdue loans is reported');
+
+/* ==========================================================================
  * Done
  * ====================================================================== */
 cleanup($db);
-echo "ALL 52 PASS\n";
+echo "ALL 60 PASS\n";
 $db->close();

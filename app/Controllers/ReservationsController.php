@@ -67,8 +67,8 @@ class ReservationsController
             SELECT data_prestito, data_scadenza, data_restituzione, pickup_deadline, stato, copia_id
             FROM prestiti
             WHERE libro_id = ? AND (
-                stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')
-                OR (stato = 'pendente' AND copia_id IS NOT NULL)
+                (attivo = 1 AND stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato'))
+                OR (attivo = 0 AND stato = 'pendente' AND copia_id IS NOT NULL)
             )
             ORDER BY data_prestito
         ");
@@ -518,8 +518,8 @@ class ReservationsController
             SELECT data_prestito, data_scadenza, data_restituzione, pickup_deadline, stato, copia_id
             FROM prestiti
             WHERE libro_id = ? AND (
-                stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')
-                OR (stato = 'pendente' AND copia_id IS NOT NULL)
+                (attivo = 1 AND stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato'))
+                OR (attivo = 0 AND stato = 'pendente' AND copia_id IS NOT NULL)
             )
             ORDER BY data_prestito
         ");

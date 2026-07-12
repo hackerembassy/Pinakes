@@ -27,6 +27,14 @@ class DataIntegrity {
                 $this->db->begin_transaction();
             }
 
+            // Global maintenance still obeys the circulation lock order. Lock
+            // every book deterministically before touching copies; otherwise a
+            // bulk copies->books update crosses web requests using books->copies.
+            $lockBooks = $this->db->prepare('SELECT id FROM libri ORDER BY id FOR UPDATE');
+            $lockBooks->execute();
+            $lockBooks->get_result()->fetch_all(MYSQLI_NUM);
+            $lockBooks->close();
+
             // Aggiorna stato copie basandosi sui prestiti attivi
             // - 'in_corso' e 'in_ritardo' → copia prestata (libro fisicamente fuori)
             // - 'prenotato' e 'da_ritirare' → copia prenotata (libro fisicamente in biblioteca ma riservato)
@@ -131,7 +139,8 @@ class DataIntegrity {
                     -- prestata/prenotata → non è disponibile. Senza questo ramo lo stato
                     -- resterebbe sul valore precedente (es. 'disponibile' stantio).
                     WHEN (SELECT COUNT(*) FROM copie c WHERE c.libro_id = l.id) > 0 THEN 'non_disponibile'
-                    ELSE l.stato
+                    -- A catalogue record with zero physical copies is not lendable.
+                    ELSE 'non_disponibile'
                 END
                 WHERE l.deleted_at IS NULL
             ");
@@ -170,40 +179,6 @@ class DataIntegrity {
         }
 
         $results = ['updated' => 0, 'errors' => [], 'total' => 0];
-
-        // Prima aggiorna tutte le copie (operazione veloce)
-        // - 'in_corso' e 'in_ritardo' → copia prestata (libro fisicamente fuori)
-        // - 'prenotato' e 'da_ritirare' → copia prenotata (libro fisicamente in biblioteca ma riservato)
-        // - Nessun prestito attivo → copia disponibile
-        // IMPORTANT: Use EXISTS with priority to handle copies with multiple loans
-        try {
-            $this->db->begin_transaction();
-            $stmt = $this->db->prepare("
-                UPDATE copie c
-                SET c.stato = CASE
-                    WHEN EXISTS (
-                        SELECT 1 FROM prestiti p
-                        WHERE p.copia_id = c.id AND p.attivo = 1
-                        AND p.stato IN ('in_corso', 'in_ritardo')
-                    ) THEN 'prestato'
-                    WHEN EXISTS (
-                        SELECT 1 FROM prestiti p
-                        WHERE p.copia_id = c.id
-                        AND ( (p.attivo = 1 AND p.stato IN ('prenotato', 'da_ritirare'))
-                              OR (p.attivo = 0 AND p.stato = 'pendente' AND p.copia_id IS NOT NULL) )
-                    ) THEN 'prenotato'
-                    ELSE 'disponibile'
-                END
-                WHERE c.stato IN ('disponibile', 'prestato', 'prenotato')
-            ");
-            $stmt->execute();
-            $stmt->close();
-            $this->db->commit();
-        } catch (\Throwable $e) {
-            $this->db->rollback();
-            $results['errors'][] = "Errore aggiornamento copie: " . $e->getMessage();
-            return $results;
-        }
 
         // Conta totale libri (prepared statement for consistency)
         $stmt = $this->db->prepare("SELECT COUNT(*) as total FROM libri WHERE deleted_at IS NULL");
@@ -283,6 +258,23 @@ class DataIntegrity {
         try {
             if (!$insideTransaction) {
                 $this->db->begin_transaction();
+            }
+
+            // Canonical lock order is libri -> prestiti/copie. Standalone
+            // recalculation used to update copie first and libri last, crossing
+            // every circulation write path and making deadlocks possible. Callers
+            // already inside a transaction follow the same order; taking the book
+            // lock again is harmless and makes that contract explicit.
+            $lockBook = $this->db->prepare('SELECT id FROM libri WHERE id = ? FOR UPDATE');
+            $lockBook->bind_param('i', $bookId);
+            $lockBook->execute();
+            $bookExists = (bool) $lockBook->get_result()->fetch_assoc();
+            $lockBook->close();
+            if (!$bookExists) {
+                if (!$insideTransaction) {
+                    $this->db->rollback();
+                }
+                return false;
             }
 
             // Aggiorna stato copie del libro basandosi sui prestiti attivi
@@ -390,7 +382,7 @@ class DataIntegrity {
                     -- Come nel ricalcolo globale: copie presenti ma tutte fuori
                     -- circolazione e nessuna prestata/prenotata → 'non_disponibile'.
                     WHEN (SELECT COUNT(*) FROM copie c WHERE c.libro_id = ?) > 0 THEN 'non_disponibile'
-                    ELSE l.stato
+                    ELSE 'non_disponibile'
                 END
                 WHERE id = ?
             ");
@@ -591,13 +583,15 @@ class DataIntegrity {
 
         // 10. Verifica prestiti pendenti da prenotazione vecchi di più di 7 giorni
         $stmt = $this->db->prepare("
-            SELECT id, libro_id, utente_id, data_prestito, DATEDIFF(CURDATE(), data_prestito) as days_pending
+            SELECT id, libro_id, utente_id, data_prestito, DATEDIFF(?, data_prestito) as days_pending
             FROM prestiti
             WHERE stato = 'pendente'
             AND origine = 'prenotazione'
             AND attivo = 0
-            AND data_prestito < DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+            AND data_prestito < DATE_SUB(?, INTERVAL 7 DAY)
         ");
+        $today = \App\Support\DateHelper::today();
+        $stmt->bind_param('ss', $today, $today);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result && $result->num_rows > 0) {
@@ -611,11 +605,13 @@ class DataIntegrity {
         }
         $stmt->close();
 
-        // 11. Verifica prestiti annullati/scaduti che hanno ancora attivo = 1
+        // 11. Ogni stato terminale deve avere attivo=0. La vecchia verifica
+        // copriva solo annullato/scaduto e lasciava invisibili proprio le
+        // incoerenze più pericolose (restituito/perso/danneggiato ancora attivi).
         $stmt = $this->db->prepare("
             SELECT id, libro_id, utente_id, stato
             FROM prestiti
-            WHERE stato IN ('annullato', 'scaduto')
+            WHERE stato IN ('restituito', 'perso', 'danneggiato', 'annullato', 'scaduto')
             AND attivo = 1
         ");
         $stmt->execute();
@@ -625,6 +621,34 @@ class DataIntegrity {
                 $issues[] = [
                     'type' => 'terminated_loan_active',
                     'message' => \sprintf(__("Prestito ID %d con stato '%s' ha ancora attivo = 1"), $row['id'], $row['stato']),
+                    'severity' => 'error'
+                ];
+            }
+        }
+        $stmt->close();
+
+        // 11b. Un prestito aperto non può avere già una data di restituzione;
+        // un in_ritardo inattivo è invece il vecchio modello ambiguo che deve
+        // convergere a restituito + restituito_in_ritardo.
+        $stmt = $this->db->prepare("
+            SELECT id, libro_id, stato, attivo, data_restituzione
+            FROM prestiti
+            WHERE (attivo = 1 AND data_restituzione IS NOT NULL)
+               OR (attivo = 0 AND stato = 'in_ritardo')
+        ");
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $issues[] = [
+                    'type' => 'loan_lifecycle_mismatch',
+                    'message' => \sprintf(
+                        __("Prestito ID %d ha combinazione lifecycle incoerente (stato '%s', attivo=%d, restituzione=%s)"),
+                        $row['id'],
+                        $row['stato'],
+                        $row['attivo'],
+                        $row['data_restituzione'] ?? 'NULL'
+                    ),
                     'severity' => 'error'
                 ];
             }
@@ -651,6 +675,31 @@ class DataIntegrity {
                 $issues[] = [
                     'type' => 'stale_copy_state',
                     'message' => \sprintf(__("Copia ID %d del libro '%s' (ID: %d) ha stato '%s' ma nessun prestito attivo la riferisce"), $row['copia_id'], $row['titolo'], $row['libro_id'], $row['copia_stato']),
+                    'severity' => 'error'
+                ];
+            }
+        }
+        $stmt->close();
+
+        // 12b. La FK garantisce che copia_id esista, non che appartenga allo
+        // stesso libro del prestito. I trigger lo impediscono sulle nuove write;
+        // il report deve comunque trovare dati legacy o importati prima del fix.
+        $stmt = $this->db->prepare("
+            SELECT p.id, p.libro_id, p.copia_id, c.libro_id AS copia_libro_id
+            FROM prestiti p
+            JOIN copie c ON c.id = p.copia_id
+            WHERE p.copia_id IS NOT NULL AND c.libro_id <> p.libro_id
+        ");
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $issues[] = [
+                    'type' => 'loan_copy_book_mismatch',
+                    'message' => \sprintf(
+                        __('Prestito ID %d appartiene al libro %d ma usa la copia %d del libro %d'),
+                        $row['id'], $row['libro_id'], $row['copia_id'], $row['copia_libro_id']
+                    ),
                     'severity' => 'error'
                 ];
             }
@@ -743,7 +792,15 @@ class DataIntegrity {
         $stmt = $this->db->prepare("
             SELECT libro_id, 'prestito' AS source_type, id AS source_id,
                    DATE(data_prestito) AS start_date,
-                   DATE(data_scadenza) AS end_date
+                   DATE(CASE
+                       -- Overdue loans occupy the copy open-endedly. The sentinel is
+                       -- 9999-12-30 (NOT 9999-12-31) so the +1-day endExclusive below
+                       -- stays a 4-digit 'YYYY-MM-DD' string: '10000-01-01' would sort
+                       -- BEFORE every real date under ksort's lexicographic order
+                       -- ('1' < '2'), zeroing the overdue occupancy in the peak scan.
+                       WHEN attivo = 1 AND stato = 'in_ritardo' THEN '9999-12-30'
+                       ELSE data_scadenza
+                   END) AS end_date
             FROM prestiti
             WHERE (
                     (attivo = 1 AND stato IN ('prenotato', 'da_ritirare', 'in_corso', 'in_ritardo'))
@@ -771,6 +828,12 @@ class DataIntegrity {
             }
 
             $endExclusive = (new \DateTimeImmutable($end))->modify('+1 day')->format('Y-m-d');
+            // Defensive clamp: keep the sweep key a 4-digit 'YYYY-MM-DD' string so
+            // ksort's lexicographic order stays chronological (a 5-digit year like
+            // '10000-01-01' would sort before every real date and corrupt the peak).
+            if ($endExclusive > '9999-12-31') {
+                $endExclusive = '9999-12-31';
+            }
             $eventsByBook[$bookId][$start] = ($eventsByBook[$bookId][$start] ?? 0) + 1;
             $eventsByBook[$bookId][$endExclusive] = ($eventsByBook[$bookId][$endExclusive] ?? 0) - 1;
         }
@@ -803,6 +866,12 @@ class DataIntegrity {
                 $end = $start;
             }
             $endExclusive = (new \DateTimeImmutable($end))->modify('+1 day')->format('Y-m-d');
+            // Defensive clamp: keep the sweep key a 4-digit 'YYYY-MM-DD' string so
+            // ksort's lexicographic order stays chronological (a 5-digit year like
+            // '10000-01-01' would sort before every real date and corrupt the peak).
+            if ($endExclusive > '9999-12-31') {
+                $endExclusive = '9999-12-31';
+            }
             $eventsByBook[$bookId][$start] = ($eventsByBook[$bookId][$start] ?? 0) + 1;
             $eventsByBook[$bookId][$endExclusive] = ($eventsByBook[$bookId][$endExclusive] ?? 0) - 1;
         }
@@ -913,7 +982,7 @@ class DataIntegrity {
                     WHEN copie_disponibili > 0 THEN 'disponibile'
                     WHEN EXISTS (SELECT 1 FROM copie c WHERE c.libro_id = libri.id AND c.stato = 'prestato') THEN 'prestato'
                     WHEN EXISTS (SELECT 1 FROM copie c WHERE c.libro_id = libri.id) THEN 'non_disponibile'
-                    ELSE stato
+                    ELSE 'non_disponibile'
                 END
                 WHERE stato IN ('disponibile', 'prestato', 'non_disponibile')
                 AND deleted_at IS NULL
@@ -926,17 +995,19 @@ class DataIntegrity {
             $stmt = $this->db->prepare("
                 UPDATE prestiti SET stato = 'in_ritardo'
                 WHERE stato = 'in_corso'
-                AND data_scadenza < CURDATE()
+                AND data_scadenza < ?
                 AND attivo = 1
             ");
+            $today = \App\Support\DateHelper::today();
+            $stmt->bind_param('s', $today);
             $stmt->execute();
             $results['fixed'] += $this->db->affected_rows;
             $stmt->close();
 
-            // 3b. Correggi prestiti annullati/scaduti che hanno attivo = 1
+            // 3b. Correggi tutti gli stati terminali che hanno ancora attivo=1.
             $stmt = $this->db->prepare("
                 UPDATE prestiti SET attivo = 0
-                WHERE stato IN ('annullato', 'scaduto')
+                WHERE stato IN ('restituito', 'perso', 'danneggiato', 'annullato', 'scaduto')
                 AND attivo = 1
             ");
             $stmt->execute();
@@ -1089,7 +1160,7 @@ class DataIntegrity {
             $updates = [];
 
             // Verifica stato in ritardo
-            if ($loan['stato'] === 'in_corso' && $loan['data_scadenza'] < date('Y-m-d')) {
+            if ($loan['stato'] === 'in_corso' && $loan['data_scadenza'] < \App\Support\DateHelper::today()) {
                 $updates['stato'] = 'in_ritardo';
                 $result['updated_fields'][] = 'stato -> in_ritardo';
             }
@@ -1162,8 +1233,8 @@ class DataIntegrity {
             SELECT
                 (SELECT COUNT(*) FROM libri WHERE deleted_at IS NULL) as total_books,
                 (SELECT COUNT(*) FROM prestiti) as total_loans,
-                (SELECT COUNT(*) FROM prestiti WHERE stato IN ('in_corso', 'in_ritardo', 'da_ritirare')) as active_loans,
-                (SELECT COUNT(*) FROM prestiti WHERE stato = 'in_ritardo') as overdue_loans,
+                (SELECT COUNT(*) FROM prestiti WHERE attivo = 1 AND stato IN ('in_corso', 'in_ritardo', 'da_ritirare', 'prenotato')) as active_loans,
+                (SELECT COUNT(*) FROM prestiti WHERE attivo = 1 AND stato = 'in_ritardo') as overdue_loans,
                 (SELECT COUNT(*) FROM libri WHERE copie_disponibili > 0 AND deleted_at IS NULL) as books_available,
                 (SELECT COUNT(*) FROM libri WHERE copie_disponibili = 0 AND deleted_at IS NULL) as books_unavailable
         ");

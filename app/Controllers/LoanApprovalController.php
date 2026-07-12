@@ -121,15 +121,17 @@ class LoanApprovalController
                    CONCAT(u.nome, ' ', u.cognome) as utente_nome, u.email,
                    r.data_inizio_richiesta, r.data_fine_richiesta,
                    r.data_scadenza_prenotazione,
-                   (SELECT COUNT(*) + 1 FROM prenotazioni r2
-                    WHERE r2.libro_id = r.libro_id
-                    AND r2.stato = 'attiva'
-                    AND r2.created_at < r.created_at) as posizione_coda
+                   COALESCE(r.queue_position,
+                       (SELECT COUNT(*) + 1 FROM prenotazioni r2
+                        WHERE r2.libro_id = r.libro_id
+                          AND r2.stato = 'attiva'
+                          AND (r2.created_at < r.created_at
+                               OR (r2.created_at = r.created_at AND r2.id < r.id)))) AS posizione_coda
             FROM prenotazioni r
             JOIN libri l ON r.libro_id = l.id AND l.deleted_at IS NULL
             JOIN utenti u ON r.utente_id = u.id
             WHERE r.stato = 'attiva'
-            ORDER BY r.created_at ASC
+            ORDER BY r.libro_id ASC, r.queue_position IS NULL, r.queue_position ASC, r.created_at ASC, r.id ASC
         ");
         $reservationsStmt->execute();
         $activeReservations = $reservationsStmt->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -385,46 +387,11 @@ class LoanApprovalController
 
             // Step 2: If no valid pre-assigned copy, check global availability and find a new copy
             if (!$selectedCopy) {
-                // Step 2a: Count total lendable copies for this book
-                $totalCopiesStmt = $db->prepare("SELECT COUNT(*) as total FROM copie WHERE libro_id = ? AND stato NOT IN ('perso', 'danneggiato', 'manutenzione', 'in_restauro', 'in_trasferimento')");
-                $totalCopiesStmt->bind_param('i', $libroId);
-                $totalCopiesStmt->execute();
-                $totalCopies = (int) ($totalCopiesStmt->get_result()->fetch_assoc()['total'] ?? 0);
-                $totalCopiesStmt->close();
-
-                // Step 2b: Count overlapping loans (excluding the current pending one)
-                $loanCountStmt = $db->prepare("
-                    SELECT COUNT(*) as count FROM prestiti
-                    WHERE libro_id = ? AND id != ?
-                    AND data_prestito <= ? AND (stato = 'in_ritardo' OR data_scadenza >= ?)
-                    AND (
-                        (attivo = 1 AND stato IN ('in_corso', 'prenotato', 'da_ritirare', 'in_ritardo'))
-                        OR (stato = 'pendente' AND copia_id IS NOT NULL)
-                    )
-                ");
-                $loanCountStmt->bind_param('iiss', $libroId, $loanId, $dataScadenza, $dataPrestito);
-                $loanCountStmt->execute();
-                $overlappingLoans = (int) ($loanCountStmt->get_result()->fetch_assoc()['count'] ?? 0);
-                $loanCountStmt->close();
-
-                // Step 2c: Count overlapping prenotazioni
-                // Use COALESCE to handle NULL data_inizio_richiesta and data_fine_richiesta
-                // Fall back to data_scadenza_prenotazione if specific dates are not set
-                $resCountStmt = $db->prepare("
-                    SELECT COUNT(*) as count FROM prenotazioni
-                    WHERE libro_id = ? AND stato = 'attiva'
-                    AND COALESCE(data_inizio_richiesta, DATE(data_scadenza_prenotazione)) <= ?
-                    AND COALESCE(data_fine_richiesta, DATE(data_scadenza_prenotazione)) >= ?
-                    AND utente_id != ?
-                ");
-                $resCountStmt->bind_param('issi', $libroId, $dataScadenza, $dataPrestito, $loan['utente_id']);
-                $resCountStmt->execute();
-                $overlappingReservations = (int) ($resCountStmt->get_result()->fetch_assoc()['count'] ?? 0);
-                $resCountStmt->close();
-
-                // Check if there's at least one slot available
-                $totalOccupied = $overlappingLoans + $overlappingReservations;
-                if ($totalOccupied >= $totalCopies) {
+                // The pending row does not occupy capacity unless it already has a
+                // copy (handled above). Use the canonical per-day peak gate instead
+                // of summing all intervals that merely touch the requested range.
+                $capacity = new \App\Services\CapacityService($db);
+                if (!$capacity->hasFreeCapacity($libroId, $dataPrestito, $dataScadenza, excludePrestitoId: $loanId)) {
                     $db->rollback();
                     $response->getBody()->write(json_encode([
                         'success' => false,
@@ -618,13 +585,49 @@ class LoanApprovalController
         $db->begin_transaction();
 
         try {
-            // Lock and fetch FULL loan data BEFORE deletion (needed for rejection email)
-            // Must include user email/name and book title since loan will be deleted
+            // Canonical lock order: resolve the book without locking, lock `libri`
+            // first, then lock the pending loan. DataIntegrity locks the same book
+            // during the availability recalculation; taking the loan first here
+            // inverted the order used by approval/return and could deadlock.
+            $lookup = $db->prepare("SELECT libro_id FROM prestiti WHERE id = ? AND stato = 'pendente'");
+            $lookup->bind_param('i', $loanId);
+            $lookup->execute();
+            $lookupRow = $lookup->get_result()->fetch_assoc();
+            $lookup->close();
+            if (!$lookupRow) {
+                $db->rollback();
+                $response->getBody()->write(json_encode([
+                    'success' => false,
+                    'message' => __('Prestito non trovato o già processato')
+                ]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            }
+            $bookId = (int) $lookupRow['libro_id'];
+
+            // NIENTE filtro deleted_at qui né nella JOIN sottostante (eccezione
+            // deliberata al soft-delete invariant): rifiutare una richiesta pendente
+            // deve funzionare ANCHE se il libro è stato soft-eliminato nel frattempo —
+            // filtrare renderebbe la query vuota e lascerebbe la richiesta orfana.
+            $lockBook = $db->prepare('SELECT id FROM libri WHERE id = ? FOR UPDATE');
+            $lockBook->bind_param('i', $bookId);
+            $lockBook->execute();
+            $bookLocked = (bool) $lockBook->get_result()->fetch_row();
+            $lockBook->close();
+            if (!$bookLocked) {
+                $db->rollback();
+                $response->getBody()->write(json_encode([
+                    'success' => false,
+                    'message' => __('Libro non trovato')
+                ]));
+                return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+            }
+
+            // Fetch FULL loan data under lock before deletion (needed for email).
             $stmt = $db->prepare("
                 SELECT p.libro_id, p.utente_id, l.titolo as libro_titolo,
                        CONCAT(u.nome, ' ', u.cognome) as utente_nome, u.email as utente_email
                 FROM prestiti p
-                JOIN libri l ON p.libro_id = l.id AND l.deleted_at IS NULL
+                JOIN libri l ON p.libro_id = l.id
                 JOIN utenti u ON p.utente_id = u.id
                 WHERE p.id = ? AND p.stato = 'pendente'
                 FOR UPDATE
@@ -644,7 +647,9 @@ class LoanApprovalController
                 return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
             }
 
-            $bookId = (int) $loan['libro_id'];
+            if ((int) $loan['libro_id'] !== $bookId) {
+                throw new \RuntimeException('libro_id del prestito cambiato durante il lock (TOCTOU).');
+            }
             // Store data needed for rejection email BEFORE deletion
             $userEmail = $loan['utente_email'];
             $userName = $loan['utente_nome'];

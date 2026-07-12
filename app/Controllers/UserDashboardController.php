@@ -30,7 +30,7 @@ class UserDashboardController
             $stats['libri'] = (int)($res->fetch_assoc()['c'] ?? 0);
             
             // Count user active loans (exclude soft-deleted books)
-            $stmt = $db->prepare("SELECT COUNT(*) AS c FROM prestiti p JOIN libri l ON p.libro_id = l.id WHERE p.utente_id = ? AND p.attivo = 1 AND l.deleted_at IS NULL");
+            $stmt = $db->prepare("SELECT COUNT(*) AS c FROM prestiti p JOIN libri l ON p.libro_id = l.id WHERE p.utente_id = ? AND p.attivo = 1 AND p.stato IN ('in_corso','in_ritardo') AND l.deleted_at IS NULL");
             $stmt->bind_param('i', $userId);
             $stmt->execute();
             $res = $stmt->get_result();
@@ -46,7 +46,7 @@ class UserDashboardController
             $stmt->close();
             
             // Count user loan history (exclude soft-deleted books)
-            $stmt = $db->prepare("SELECT COUNT(*) AS c FROM prestiti p JOIN libri l ON p.libro_id = l.id WHERE p.utente_id = ? AND p.attivo = 0 AND l.deleted_at IS NULL");
+            $stmt = $db->prepare("SELECT COUNT(*) AS c FROM prestiti p JOIN libri l ON p.libro_id = l.id WHERE p.utente_id = ? AND p.attivo = 0 AND p.stato IN ('restituito','perso','danneggiato') AND l.deleted_at IS NULL");
             $stmt->bind_param('i', $userId);
             $stmt->execute();
             $res = $stmt->get_result();
@@ -81,7 +81,7 @@ class UserDashboardController
                        l.titolo AS titolo_libro, l.copertina_url
                 FROM prestiti p
                 JOIN libri l ON p.libro_id = l.id
-                WHERE p.utente_id = ? AND p.attivo = 1 AND l.deleted_at IS NULL
+                WHERE p.utente_id = ? AND p.attivo = 1 AND p.stato IN ('in_corso','in_ritardo') AND l.deleted_at IS NULL
                 ORDER BY p.data_scadenza ASC
                 LIMIT 5
             ");
@@ -188,7 +188,7 @@ class UserDashboardController
                        EXISTS(SELECT 1 FROM recensioni r WHERE r.libro_id = pr.libro_id AND r.utente_id = ?) AS has_review
                 FROM prestiti pr
                 JOIN libri l ON l.id = pr.libro_id
-                WHERE pr.utente_id = ? AND pr.attivo = 0 AND pr.stato != 'prestato' AND l.deleted_at IS NULL
+                WHERE pr.utente_id = ? AND pr.attivo = 0 AND pr.stato IN ('restituito','perso','danneggiato') AND l.deleted_at IS NULL
                 ORDER BY pr.data_restituzione DESC, pr.data_prestito DESC
                 LIMIT 50
             ");

@@ -161,7 +161,7 @@ class CopyController
         // Prestito "in carico" su questa copia (in_corso/in_ritardo): usato per la
         // chiusura automatica quando la copia torna 'disponibile'.
         $stmt = $db->prepare("
-            SELECT id
+            SELECT id, note
             FROM prestiti
             WHERE copia_id = ? AND attivo = 1 AND stato IN ('in_corso', 'in_ritardo')
         ");
@@ -184,74 +184,31 @@ class CopyController
         }
 
         // GESTIONE CAMBIO STATO DA "PRESTATO" A "DISPONIBILE"
-        // Se c'è un prestito in carico e si vuole rendere disponibile, chiudilo.
+        // Se c'è un prestito in carico e si vuole rendere disponibile, delega al
+        // SOLO flusso canonico di restituzione. Questo garantisce insieme: ordine
+        // lock libro->prestito, riassegnazione copia, promozione coda, ricalcolo,
+        // wishlist e mail di conferma, senza una seconda state machine divergente.
         if ($prestito && $statoCorrente === 'prestato' && $stato === 'disponibile') {
-            $db->begin_transaction();
-            try {
-                // Ri-leggi e BLOCCA il prestito da chiudere dentro la transazione.
-                $sel = $db->prepare("
-                    SELECT id, stato, data_scadenza
-                    FROM prestiti
-                    WHERE copia_id = ? AND attivo = 1 AND stato IN ('in_corso','in_ritardo','da_ritirare')
-                    ORDER BY data_prestito DESC
-                    LIMIT 1
-                    FOR UPDATE
-                ");
-                $sel->bind_param('i', $copyId);
-                $sel->execute();
-                $loanRow = $sel->get_result()->fetch_assoc();
-                $sel->close();
-                if (!$loanRow) {
-                    $db->rollback();
-                    $_SESSION['error_message'] = __('Il prestito associato non è più chiudibile. Ricarica la pagina.');
-                    return $response->withHeader('Location', url("/admin/books/{$libroId}"))->withStatus(302);
-                }
-                $prestitoId = (int) $loanRow['id'];
-                // Ritardo calcolato in PHP dalla riga bloccata: nell'UPDATE single-table
-                // non si può riferire il vecchio `stato` dopo averlo riassegnato.
-                $scadenza = (string) ($loanRow['data_scadenza'] ?? '');
-                $wasLate = ($loanRow['stato'] === 'in_ritardo')
-                    || ($scadenza !== '' && $scadenza < date('Y-m-d'));
-                $lateFlag = $wasLate ? 1 : 0;
-
-                // Chiudi come 'restituito' (MAI 'completato', I8); marca il ritardo (BUG5).
-                $upd = $db->prepare("
-                    UPDATE prestiti
-                    SET stato = 'restituito',
-                        restituito_in_ritardo = ?,
-                        attivo = 0,
-                        data_restituzione = CURDATE(),
-                        updated_at = NOW()
-                    WHERE id = ? AND attivo = 1
-                ");
-                $upd->bind_param('ii', $lateFlag, $prestitoId);
-                $upd->execute();
-                $affected = $upd->affected_rows;
-                $upd->close();
-                if ($affected !== 1) {
-                    $db->rollback();
-                    $_SESSION['error_message'] = __('Il prestito associato non è più chiudibile. Ricarica la pagina.');
-                    return $response->withHeader('Location', url("/admin/books/{$libroId}"))->withStatus(302);
-                }
-
-                // Aggiorna la copia nella stessa transazione
-                $stmt = $db->prepare("UPDATE copie SET stato = ?, note = ?, updated_at = NOW() WHERE id = ?");
-                $stmt->bind_param('ssi', $stato, $note, $copyId);
-                $stmt->execute();
-                $stmt->close();
-
-                $db->commit();
-            } catch (\Throwable $e) {
-                $db->rollback();
-                throw $e;
-            }
-
-            $_SESSION['success_message'] = __('Prestito chiuso automaticamente. La copia è ora disponibile.');
+            // processReturn ALWAYS overwrites prestiti.note with the value passed.
+            // The copy-edit form's `note` is a note about the COPY, not the loan —
+            // forwarding it blindly (or an empty string) would silently wipe the
+            // loan's own note. Preserve the loan note unless the operator actually
+            // typed a return note here.
+            $returnNote = ($note !== '') ? $note : (string) ($prestito['note'] ?? '');
+            $delegated = $request->withParsedBody([
+                'stato' => 'restituito',
+                'note' => $returnNote,
+                'redirect_to' => "/admin/books/{$libroId}",
+                'csrf_token' => $data['csrf_token'] ?? '',
+            ]);
+            return (new PrestitiController())->processReturn($delegated, $response, $db, (int) $prestito['id']);
         } else {
             // GESTIONE ALTRI STATI
-            // Fast-path: blocca subito se è già evidentemente trattenuta (HOLDING).
-            if ($copyHeld) {
-                $_SESSION['error_message'] = __('Impossibile modificare una copia attualmente impegnata in un prestito o una prenotazione. Prima liberala (chiudi o annulla il prestito) oppure impostala su "Disponibile".');
+            // A copy physically outside the library must go through the return
+            // workflow (which records lost/damaged outcomes). Future holds on a
+            // copy still in the library may instead be reassigned atomically below.
+            if ($copyHeld && $prestito) {
+                $_SESSION['error_message'] = __('La copia è fisicamente in prestito: registra prima la restituzione o l’esito perso/danneggiato dal sistema Prestiti.');
                 return $response->withHeader('Location', url("/admin/books/{$libroId}"))->withStatus(302);
             }
 
@@ -274,9 +231,16 @@ class CopyController
                     return $response->withHeader('Location', url("/admin/books/{$libroId}"))->withStatus(302);
                 }
 
-                if ($this->isCopyHeld($db, $copyId)) {
+                // Recheck only physical possession after the book lock. Scheduled
+                // holds are deliberately allowed and will be moved below.
+                $physicalStmt = $db->prepare("SELECT 1 FROM prestiti WHERE copia_id = ? AND attivo = 1 AND stato IN ('in_corso','in_ritardo') LIMIT 1 FOR UPDATE");
+                $physicalStmt->bind_param('i', $copyId);
+                $physicalStmt->execute();
+                $physicallyOut = (bool) $physicalStmt->get_result()->fetch_row();
+                $physicalStmt->close();
+                if ($physicallyOut) {
                     $db->rollback();
-                    $_SESSION['error_message'] = __('Impossibile modificare una copia attualmente impegnata in un prestito o una prenotazione. Prima liberala (chiudi o annulla il prestito) oppure impostala su "Disponibile".');
+                    $_SESSION['error_message'] = __('La copia è fisicamente in prestito: usa il flusso di restituzione.');
                     return $response->withHeader('Location', url("/admin/books/{$libroId}"))->withStatus(302);
                 }
 
@@ -285,42 +249,65 @@ class CopyController
                 $stmt->execute();
                 $stmt->close();
 
+                $reassignmentService = new \App\Services\ReservationReassignmentService($db);
+                $reassignmentService->setExternalTransaction(true);
+                $reservationManager = null;
+
+                if (in_array($stato, ['perso', 'danneggiato', 'manutenzione', 'in_restauro', 'in_trasferimento'], true)) {
+                    // One copy may host several non-overlapping future holds.
+                    for ($guard = 0; $guard < 1000; $guard++) {
+                        $held = $db->prepare("
+                            SELECT 1 FROM prestiti
+                            WHERE copia_id = ? AND (
+                                (attivo = 1 AND stato IN ('prenotato','da_ritirare'))
+                                OR (attivo = 0 AND stato = 'pendente' AND origine = 'prenotazione')
+                            )
+                            LIMIT 1
+                        ");
+                        $held->bind_param('i', $copyId);
+                        $held->execute();
+                        $stillHeld = (bool) $held->get_result()->fetch_row();
+                        $held->close();
+                        if (!$stillHeld) {
+                            break;
+                        }
+                        $reassignmentService->reassignOnCopyLost($copyId);
+                    }
+                } elseif ($stato === 'disponibile') {
+                    $reassignmentService->reassignOnReturn($copyId);
+                    $reservationManager = new \App\Controllers\ReservationManager($db);
+                    $reservationManager->setExternalTransaction(true);
+                    for ($guard = 0; $guard < 1000 && $reservationManager->processBookAvailability($libroId); $guard++) {
+                        // Promote every date-eligible reservation allowed by capacity.
+                    }
+                }
+
+                $integrity = new \App\Support\DataIntegrity($db);
+                if (!$integrity->recalculateBookAvailability($libroId, insideTransaction: true)) {
+                    throw new \RuntimeException('Impossibile ricalcolare la disponibilità del libro.');
+                }
+
                 $db->commit();
             } catch (\Throwable $e) {
                 $db->rollback();
-                throw $e;
+                SecureLogger::error(__('Errore gestione cambio stato copia'), [
+                    'copia_id' => $copyId,
+                    'stato' => $stato,
+                    'error' => $e->getMessage()
+                ]);
+                $_SESSION['error_message'] = __('Impossibile aggiornare la copia senza lasciare dati incoerenti. Nessuna modifica è stata salvata.');
+                return $response->withHeader('Location', url("/admin/books/{$libroId}"))->withStatus(302);
             }
-        }
 
-        // Case 2 & 9: Handle Copy Status Changes
-        try {
-            $reassignmentService = new \App\Services\ReservationReassignmentService($db);
-
-            // Case 2: Copy became unavailable (lost/damaged/etc) -> Reassign any pending reservation
-            if (in_array($stato, ['perso', 'danneggiato', 'manutenzione', 'in_restauro', 'in_trasferimento'])) {
-                $reassignmentService->reassignOnCopyLost($copyId);
-            }
-            // Case 9: Copy became available -> Assign to waiting reservation
-            elseif ($stato === 'disponibile') {
-                $reassignmentService->reassignOnReturn($copyId); // Layer 1: copy-less prenotato holds
-                // Layer 2: promote queued waitlist reservations for this book (loop
-                // until none convert). Both queues on every release path (D5/BUG10).
-                $reservationManager = new \App\Controllers\ReservationManager($db);
-                for ($promoGuard = 0; $promoGuard < 1000 && $reservationManager->processBookAvailability($libroId); $promoGuard++) {
-                    // keep promoting while freed capacity converts the next queued reservation
+            try {
+                $reassignmentService->flushDeferredNotifications();
+                if ($reservationManager !== null) {
+                    $reservationManager->flushDeferredNotifications();
                 }
+            } catch (\Throwable $e) {
+                SecureLogger::warning(__('Invio notifica cambio stato copia fallito'), ['error' => $e->getMessage()]);
             }
-        } catch (\Throwable $e) {
-            SecureLogger::error(__('Errore gestione cambio stato copia'), [
-                'copia_id' => $copyId,
-                'stato' => $stato,
-                'error' => $e->getMessage()
-            ]);
         }
-
-        // Ricalcola disponibilità del libro
-        $integrity = new \App\Support\DataIntegrity($db);
-        $integrity->recalculateBookAvailability($libroId);
 
         if (!isset($_SESSION['success_message'])) {
             $_SESSION['success_message'] = __('Stato della copia aggiornato con successo.');

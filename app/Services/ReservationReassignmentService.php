@@ -141,8 +141,8 @@ class ReservationReassignmentService
             FROM prestiti p
             LEFT JOIN copie c ON p.copia_id = c.id
             WHERE p.libro_id = ?
-            AND p.stato IN ('prenotato', 'da_ritirare')
-            AND p.attivo = 1
+            AND ( (p.attivo = 1 AND p.stato IN ('prenotato', 'da_ritirare'))
+                  OR (p.attivo = 0 AND p.stato = 'pendente' AND p.origine = 'prenotazione') )
             AND ( p.copia_id IS NULL
                   OR c.stato IN ('perso','danneggiato','manutenzione','in_restauro','in_trasferimento') )
             ORDER BY p.created_at ASC
@@ -161,6 +161,31 @@ class ReservationReassignmentService
         // 2. Se abbiamo trovato una prenotazione da sbloccare, proviamo ad assegnarla alla nuova copia
         $ownTransaction = $this->beginTransactionIfNeeded();
         try {
+            $lockBook = $this->db->prepare('SELECT id FROM libri WHERE id = ? FOR UPDATE');
+            $lockBook->bind_param('i', $libroId);
+            $lockBook->execute();
+            $lockBook->close();
+
+            // The initial lookup was intentionally non-locking to preserve book
+            // first ordering. Revalidate the chosen hold now, under the book lock.
+            $lockedReservationStmt = $this->db->prepare("
+                SELECT id, copia_id, utente_id, data_prestito, data_scadenza
+                FROM prestiti
+                WHERE id = ? AND libro_id = ?
+                  AND ( (attivo = 1 AND stato IN ('prenotato','da_ritirare'))
+                        OR (attivo = 0 AND stato = 'pendente' AND origine = 'prenotazione') )
+                FOR UPDATE
+            ");
+            $lockedReservationStmt->bind_param('ii', $reservation['id'], $libroId);
+            $lockedReservationStmt->execute();
+            $lockedReservation = $lockedReservationStmt->get_result()->fetch_assoc();
+            $lockedReservationStmt->close();
+            if (!$lockedReservation) {
+                $this->rollbackIfOwned($ownTransaction);
+                return;
+            }
+            $reservation = $lockedReservation;
+
             // Verifica che la nuova copia sia effettivamente disponibile (lock)
             $stmt = $this->db->prepare("SELECT id, stato FROM copie WHERE id = ? FOR UPDATE");
             $stmt->bind_param('i', $newCopiaId);
@@ -168,7 +193,7 @@ class ReservationReassignmentService
             $copyStatus = $stmt->get_result()->fetch_assoc();
             $stmt->close();
 
-            if (!$copyStatus || $copyStatus['stato'] !== 'disponibile') {
+            if (!$copyStatus || !in_array($copyStatus['stato'], ['disponibile', 'prenotato'], true)) {
                 $this->rollbackIfOwned($ownTransaction);
                 return;
             }
@@ -179,7 +204,7 @@ class ReservationReassignmentService
             $ovl = $this->db->prepare("
                 SELECT 1 FROM prestiti
                 WHERE copia_id = ? AND id <> ?
-                AND data_prestito <= ? AND data_scadenza >= ?
+                AND data_prestito <= ? AND (stato = 'in_ritardo' OR data_scadenza >= ?)
                 AND ( (attivo = 1 AND stato IN ('prenotato','da_ritirare','in_corso','in_ritardo'))
                       OR (attivo = 0 AND stato = 'pendente' AND copia_id IS NOT NULL) )
                 LIMIT 1
@@ -259,8 +284,8 @@ class ReservationReassignmentService
             SELECT id, libro_id, utente_id, data_prestito, data_scadenza
             FROM prestiti
             WHERE copia_id = ?
-            AND stato IN ('prenotato', 'da_ritirare')
-            AND attivo = 1
+            AND ( (attivo = 1 AND stato IN ('prenotato', 'da_ritirare'))
+                  OR (attivo = 0 AND stato = 'pendente' AND origine = 'prenotazione') )
             ORDER BY data_prestito ASC, id ASC
             LIMIT 1
         ");
@@ -293,6 +318,30 @@ class ReservationReassignmentService
             // Riassegna
             $ownTransaction = $this->beginTransactionIfNeeded();
             try {
+                $lockBook = $this->db->prepare('SELECT id FROM libri WHERE id = ? FOR UPDATE');
+                $lockBook->bind_param('i', $libroId);
+                $lockBook->execute();
+                $lockBook->close();
+
+                $lockReservation = $this->db->prepare("
+                    SELECT id, copia_id, data_prestito, data_scadenza
+                    FROM prestiti
+                    WHERE id = ? AND libro_id = ? AND copia_id = ?
+                      AND ( (attivo = 1 AND stato IN ('prenotato','da_ritirare'))
+                            OR (attivo = 0 AND stato = 'pendente' AND origine = 'prenotazione') )
+                    FOR UPDATE
+                ");
+                $lockReservation->bind_param('iii', $reservationId, $libroId, $copiaId);
+                $lockReservation->execute();
+                $currentReservation = $lockReservation->get_result()->fetch_assoc();
+                $lockReservation->close();
+                if (!$currentReservation) {
+                    $this->rollbackIfOwned($ownTransaction);
+                    return;
+                }
+                $resStart = (string) $currentReservation['data_prestito'];
+                $resEnd = (string) $currentReservation['data_scadenza'];
+
                 // Lock della nuova copia e verifica stato (race condition protection)
                 $stmt = $this->db->prepare("SELECT id, stato FROM copie WHERE id = ? FOR UPDATE");
                 $stmt->bind_param('i', $nextCopyId);
@@ -301,7 +350,7 @@ class ReservationReassignmentService
                 $stmt->close();
 
                 // Verifica che la copia sia ancora disponibile (potrebbe essere cambiata)
-                if (!$copyStatus || $copyStatus['stato'] !== 'disponibile') {
+                if (!$copyStatus || !in_array($copyStatus['stato'], ['disponibile', 'prenotato'], true)) {
                     $this->rollbackIfOwned($ownTransaction);
                     // Aggiungi questa copia alle escluse e riprova
                     $excludedCopies[] = $nextCopyId;
@@ -314,7 +363,7 @@ class ReservationReassignmentService
                 $ovl = $this->db->prepare("
                     SELECT 1 FROM prestiti
                     WHERE copia_id = ? AND id <> ?
-                    AND data_prestito <= ? AND data_scadenza >= ?
+                    AND data_prestito <= ? AND (stato = 'in_ritardo' OR data_scadenza >= ?)
                     AND ( (attivo = 1 AND stato IN ('prenotato','da_ritirare','in_corso','in_ritardo'))
                           OR (attivo = 0 AND stato = 'pendente' AND copia_id IS NOT NULL) )
                     LIMIT 1
@@ -382,12 +431,37 @@ class ReservationReassignmentService
     {
         // Meglio impostare copia_id a NULL per indicare "in coda senza copia" o "in attesa"
         // E notificare l'utente che è tornato in lista d'attesa
+        $lookup = $this->db->prepare('SELECT libro_id FROM prestiti WHERE id = ?');
+        $lookup->bind_param('i', $reservationId);
+        $lookup->execute();
+        $row = $lookup->get_result()->fetch_assoc();
+        $lookup->close();
+        if (!$row) {
+            return;
+        }
+        $libroId = (int) $row['libro_id'];
+
         $ownTransaction = $this->beginTransactionIfNeeded();
         try {
-            $stmt = $this->db->prepare("UPDATE prestiti SET copia_id = NULL WHERE id = ?");
-            $stmt->bind_param('i', $reservationId);
+            $lockBook = $this->db->prepare('SELECT id FROM libri WHERE id = ? FOR UPDATE');
+            $lockBook->bind_param('i', $libroId);
+            $lockBook->execute();
+            $lockBook->close();
+
+            $stmt = $this->db->prepare("
+                UPDATE prestiti SET copia_id = NULL
+                WHERE id = ? AND libro_id = ?
+                  AND ( (attivo = 1 AND stato IN ('prenotato','da_ritirare'))
+                        OR (attivo = 0 AND stato = 'pendente' AND origine = 'prenotazione') )
+            ");
+            $stmt->bind_param('ii', $reservationId, $libroId);
             $stmt->execute();
+            $updated = $stmt->affected_rows;
             $stmt->close();
+            if ($updated < 1) {
+                $this->rollbackIfOwned($ownTransaction);
+                return;
+            }
 
             $this->commitIfOwned($ownTransaction);
 
@@ -451,7 +525,7 @@ class ReservationReassignmentService
             SELECT id
             FROM copie
             WHERE libro_id = ?
-            AND stato = 'disponibile'
+            AND stato IN ('disponibile', 'prenotato')
         ";
         $params = [$libroId];
         $types = "i";

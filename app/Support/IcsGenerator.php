@@ -82,7 +82,20 @@ class IcsGenerator
             mkdir($dir, 0755, true);
         }
 
-        return file_put_contents($path, $content) !== false;
+        // Atomic write: cron, the admin-login hook and the maintenance button can
+        // all regenerate this shared calendar concurrently. A bare file_put_contents
+        // lets a reader see a half-written file; write to a unique temp file, then
+        // rename() (atomic on the same filesystem) so readers always see a complete
+        // calendar — either the old one or the new one, never a torn mix.
+        $tmp = $path . '.' . getmypid() . '.' . uniqid('', true) . '.tmp';
+        if (file_put_contents($tmp, $content, LOCK_EX) === false) {
+            return false;
+        }
+        if (!@rename($tmp, $path)) {
+            @unlink($tmp);
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -96,7 +109,7 @@ class IcsGenerator
     private function fetchEvents(): array
     {
         $events = [];
-        $today = date('Y-m-d');
+        $today = DateHelper::today();
 
         // Fetch active/scheduled loans
         $loanSql = "SELECT p.id, p.stato, p.data_prestito, p.data_scadenza, p.pickup_deadline,
@@ -131,6 +144,11 @@ class IcsGenerator
             $endDate = ($row['stato'] === 'da_ritirare' && !empty($row['pickup_deadline']))
                 ? $row['pickup_deadline']
                 : $row['data_scadenza'];
+            if ($row['stato'] === 'in_ritardo') {
+                // The copy remains physically occupied through today; ending the
+                // event on the missed due date falsely shows it as available.
+                $endDate = max((string) $endDate, $today);
+            }
 
             $events[] = [
                 'uid' => 'loan-' . $row['id'] . '@pinakes',
@@ -140,13 +158,13 @@ class IcsGenerator
                 'end' => $endDate,
                 'type' => 'prestito',
                 'status' => $row['stato'],
-                'updated' => $row['updated_at'] ?? date('Y-m-d H:i:s')
+                'updated' => $row['updated_at'] ?? (new \DateTimeImmutable('now', $this->appTimezone()))->format('Y-m-d H:i:s')
             ];
         }
         $stmt->close();
 
         // Fetch active reservations
-        $resSql = "SELECT r.id, r.stato, r.data_scadenza_prenotazione,
+        $resSql = "SELECT r.id, r.stato, r.data_prenotazione, r.data_scadenza_prenotazione,
                           r.data_inizio_richiesta, r.data_fine_richiesta,
                           l.titolo, CONCAT(u.nome, ' ', u.cognome) AS utente_nome,
                           u.email, r.updated_at
@@ -154,8 +172,8 @@ class IcsGenerator
                    JOIN libri l ON r.libro_id = l.id AND l.deleted_at IS NULL
                    JOIN utenti u ON r.utente_id = u.id
                    WHERE r.stato = 'attiva'
-                     AND COALESCE(r.data_fine_richiesta, r.data_scadenza_prenotazione) >= ?
-                   ORDER BY COALESCE(r.data_inizio_richiesta, r.data_scadenza_prenotazione) ASC";
+                     AND COALESCE(r.data_fine_richiesta, DATE(r.data_scadenza_prenotazione), r.data_inizio_richiesta, DATE(r.data_prenotazione)) >= ?
+                   ORDER BY COALESCE(r.data_inizio_richiesta, DATE(r.data_prenotazione), DATE(r.data_scadenza_prenotazione)) ASC";
         $stmt = $this->db->prepare($resSql);
         if ($stmt === false) {
             return $events;
@@ -166,8 +184,12 @@ class IcsGenerator
         }
         $res = $stmt->get_result();
         while ($row = $res->fetch_assoc()) {
-            $startDate = $row['data_inizio_richiesta'] ?? $row['data_scadenza_prenotazione'];
-            $endDate = $row['data_fine_richiesta'] ?? $row['data_scadenza_prenotazione'];
+            $startDate = $row['data_inizio_richiesta']
+                ?? ($row['data_prenotazione'] ? substr((string) $row['data_prenotazione'], 0, 10) : null)
+                ?? ($row['data_scadenza_prenotazione'] ? substr((string) $row['data_scadenza_prenotazione'], 0, 10) : $today);
+            $endDate = $row['data_fine_richiesta']
+                ?? ($row['data_scadenza_prenotazione'] ? substr((string) $row['data_scadenza_prenotazione'], 0, 10) : null)
+                ?? $startDate;
             $events[] = [
                 'uid' => 'reservation-' . $row['id'] . '@pinakes',
                 'title' => '📅 ' . __('Prenotazione') . ': ' . $row['titolo'],
@@ -176,7 +198,7 @@ class IcsGenerator
                 'end' => $endDate,
                 'type' => 'prenotazione',
                 'status' => $row['stato'],
-                'updated' => $row['updated_at'] ?? date('Y-m-d H:i:s')
+                'updated' => $row['updated_at'] ?? (new \DateTimeImmutable('now', $this->appTimezone()))->format('Y-m-d H:i:s')
             ];
         }
         $stmt->close();
@@ -272,10 +294,13 @@ class IcsGenerator
         $summary = $this->escapeIcs($event['title']);
         $description = $this->escapeIcs($event['description']);
 
-        // All-day events - use strtotime for robust date parsing
-        $dtstart = 'DTSTART;VALUE=DATE:' . date('Ymd', strtotime($event['start']));
+        // All-day values are calendar dates, not instants: parse them explicitly
+        // in the application timezone so the PHP process timezone cannot shift a day.
+        $start = new \DateTimeImmutable((string) $event['start'], $this->appTimezone());
+        $end = new \DateTimeImmutable((string) $event['end'], $this->appTimezone());
+        $dtstart = 'DTSTART;VALUE=DATE:' . $start->format('Ymd');
         // ICS end date is exclusive, so add 1 day for all-day events
-        $endDate = date('Ymd', strtotime($event['end'] . ' +1 day'));
+        $endDate = $end->modify('+1 day')->format('Ymd');
         $dtend = 'DTEND;VALUE=DATE:' . $endDate;
 
         // Use gmdate for UTC timestamps (Z suffix means UTC)

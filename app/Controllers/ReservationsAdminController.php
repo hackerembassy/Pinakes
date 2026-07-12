@@ -121,12 +121,14 @@ class ReservationsAdminController
         if ($dataFineRichiesta !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataFineRichiesta))
             $dataFineRichiesta = '';
 
-        $today = date('Y-m-d');
+        $today = \App\Support\DateHelper::today();
         if ($start === '') {
             $start = $today;
         }
         if ($end === '') {
-            $end = date('Y-m-d', strtotime($start . ' +1 month'));
+            $loanDays = (int) ((new \App\Models\SettingsRepository($db))->get('loans', 'loan_duration_days', '30') ?? 30);
+            $loanDays = $loanDays > 0 ? $loanDays : 30;
+            $end = (new \DateTimeImmutable($start))->modify("+{$loanDays} days")->format('Y-m-d');
         }
 
         // Derive data_inizio_richiesta from data_prenotazione (start) if not explicitly provided
@@ -356,15 +358,15 @@ class ReservationsAdminController
             $dataScadenza = '';
         }
 
-        // Set default dates if not provided (use date() for server timezone consistency)
-        $today = date('Y-m-d');
+        // Set default dates in the application timezone.
+        $today = \App\Support\DateHelper::today();
 
         // Parse form dates (date only, without time)
         $dataPrenotazioneDate = $dataPrenotazione;
         $dataScadenzaDate = $dataScadenza;
 
         if (empty($dataPrenotazione)) {
-            $dataPrenotazione = date('Y-m-d H:i:s');
+            $dataPrenotazione = $today . ' 00:00:00';
             $dataPrenotazioneDate = $today;
         } else {
             $dataPrenotazioneDate = $dataPrenotazione; // Keep date only for loan period
@@ -378,8 +380,12 @@ class ReservationsAdminController
             if ($loanDays < 1) {
                 $loanDays = 30;
             }
-            $dataScadenza = date('Y-m-d H:i:s', strtotime("+{$loanDays} days"));
-            $dataScadenzaDate = date('Y-m-d', strtotime("+{$loanDays} days"));
+            // The default duration starts from the requested start date, not
+            // from today (critical for future reservations).
+            $dataScadenzaDate = (new \DateTimeImmutable($dataPrenotazioneDate))
+                ->modify("+{$loanDays} days")
+                ->format('Y-m-d');
+            $dataScadenza = $dataScadenzaDate . ' 23:59:59';
         } else {
             $dataScadenzaDate = $dataScadenza; // Keep date only for loan period
             $dataScadenza = $dataScadenza . ' 23:59:59';

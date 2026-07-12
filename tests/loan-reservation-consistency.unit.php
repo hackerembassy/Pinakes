@@ -89,4 +89,24 @@ if ($cancelPos === false || $processPos === false || $cancelPos > $processPos) {
     throw new \RuntimeException('FAIL: MaintenanceService must cancel expired waitlist reservations before converting scheduled reservations');
 }
 
+$maintenanceController = readFileOrFail($root . '/app/Controllers/MaintenanceController.php');
+assertContainsText('new MaintenanceService($db))->runAll()', $maintenanceController, 'Admin maintenance must execute circulation lifecycle and notifications');
+
+$copyRepository = readFileOrFail($root . '/app/Models/CopyRepository.php');
+assertContainsText('getScheduleByBookId', $copyRepository, 'CopyRepository must keep calendar commitments separate from physical copy rows');
+
+$notificationService = readFileOrFail($root . '/app/Support/NotificationService.php');
+assertContainsText("AND p.attivo = 1", $notificationService, 'Automatic loan notifications must ignore closed rows');
+assertContainsText("AND attivo = 1 AND stato = 'in_corso'", $notificationService, 'Expiration-warning claim must revalidate the loan lifecycle');
+
+foreach ([
+    'app/Controllers/UserDashboardController.php',
+    'app/Controllers/UserActionsController.php',
+    'storage/plugins/mobile-api/src/Controllers/ActionsController.php',
+] as $historyPath) {
+    $history = readFileOrFail($root . '/' . $historyPath);
+    assertNotContainsText("stato != 'prestato'", $history, "{$historyPath} must not show pending/cancelled rows as loan history");
+    assertContainsText("stato IN ('restituito','perso','danneggiato')", $history, "{$historyPath} must use terminal physical-loan outcomes for history");
+}
+
 echo "Loan/reservation consistency unit checks passed.\n";

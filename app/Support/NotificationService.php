@@ -390,6 +390,7 @@ class NotificationService {
                 JOIN libri l ON p.libro_id = l.id AND l.deleted_at IS NULL
                 JOIN utenti u ON p.utente_id = u.id
                 WHERE p.stato = 'in_corso'
+                  AND p.attivo = 1
                   AND p.data_scadenza = DATE_ADD(?, INTERVAL ? DAY)
                   AND (p.warning_sent IS NULL OR p.warning_sent = 0)
             ");
@@ -407,7 +408,7 @@ class NotificationService {
             foreach ($loans as $loan) {
                 // ATOMIC: Mark warning as sent BEFORE sending email
                 // Only proceed if we successfully claimed this loan (affected_rows == 1)
-                $updateStmt = $this->db->prepare("UPDATE prestiti SET warning_sent = 1 WHERE id = ? AND (warning_sent IS NULL OR warning_sent = 0)");
+                $updateStmt = $this->db->prepare("UPDATE prestiti SET warning_sent = 1 WHERE id = ? AND attivo = 1 AND stato = 'in_corso' AND (warning_sent IS NULL OR warning_sent = 0)");
                 $updateStmt->bind_param('i', $loan['id']);
                 $updateStmt->execute();
                 $claimed = $updateStmt->affected_rows === 1;
@@ -439,7 +440,7 @@ class NotificationService {
                     $sentCount++;
                 } else {
                     // Email failed after retries, revert the flag so it can be retried next run
-                    $revertStmt = $this->db->prepare("UPDATE prestiti SET warning_sent = 0 WHERE id = ?");
+                    $revertStmt = $this->db->prepare("UPDATE prestiti SET warning_sent = 0 WHERE id = ? AND attivo = 1 AND stato = 'in_corso'");
                     $revertStmt->bind_param('i', $loan['id']);
                     $revertStmt->execute();
                     $revertStmt->close();
@@ -476,6 +477,7 @@ class NotificationService {
                 JOIN libri l ON p.libro_id = l.id AND l.deleted_at IS NULL
                 JOIN utenti u ON p.utente_id = u.id
                 WHERE p.stato IN ('in_corso', 'in_ritardo')
+                  AND p.attivo = 1
                   AND p.data_scadenza < ?
                   AND (p.overdue_notification_sent IS NULL OR p.overdue_notification_sent = 0)
             ");

@@ -7,6 +7,7 @@ use mysqli;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Support\DataIntegrity;
+use App\Support\MaintenanceService;
 
 class MaintenanceController
 {
@@ -94,19 +95,27 @@ class MaintenanceController
         $results = [];
 
         try {
-            // 1. Ricalcola tutte le disponibilità
-            $availabilityResult = $integrity->recalculateAllBookAvailability();
-            $results['availability'] = $availabilityResult;
+            // 1. Run the same circulation lifecycle used by cron: scheduled
+            // activations, expirations, overdue transitions, email notifications
+            // and ICS. Previously the admin button only repaired counters, so it
+            // looked successful while leaving loans/notifications untouched.
+            $circulation = (new MaintenanceService($db))->runAll();
+            $results['circulation'] = $circulation;
 
-            // 2. Correggi inconsistenze
+            // 2. Correggi inconsistenze. fixDataInconsistencies() già esegue al suo
+            // interno recalculateAllBookAvailability() (e ne somma 'updated' in
+            // 'fixed'), quindi NON ricalcoliamo una seconda volta qui: sarebbe un
+            // secondo lock dell'intera tabella libri per lo stesso click e farebbe
+            // doppio-conteggio nel totale.
             $fixResult = $integrity->fixDataInconsistencies();
             $results['fixes'] = $fixResult;
+            $results['availability'] = ['updated' => $fixResult['fixed'], 'errors' => $fixResult['errors']];
 
             // 3. Genera report finale
             $report = $integrity->generateIntegrityReport();
             $results['final_report'] = $report;
 
-            $totalFixed = $availabilityResult['updated'] + $fixResult['fixed'];
+            $totalFixed = $fixResult['fixed'];
             $message = sprintf(__("Manutenzione completata: %d record corretti"), $totalFixed);
 
             if (!empty($report['consistency_issues'])) {

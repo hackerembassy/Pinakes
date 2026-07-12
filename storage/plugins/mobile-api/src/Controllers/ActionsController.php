@@ -104,7 +104,7 @@ final class ActionsController
                            l.titolo, l.copertina_url
                     FROM prestiti pr
                     JOIN libri l ON l.id = pr.libro_id AND l.deleted_at IS NULL
-                    WHERE pr.utente_id = ? AND pr.attivo = 0 AND pr.stato != 'prestato'
+                    WHERE pr.utente_id = ? AND pr.attivo = 0 AND pr.stato IN ('restituito','perso','danneggiato')
                     ORDER BY pr.data_restituzione DESC, pr.data_prestito DESC
                     LIMIT 30";
             foreach ($this->fetchScoped($sql, $userId) as $r) {

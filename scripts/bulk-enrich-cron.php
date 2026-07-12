@@ -41,7 +41,7 @@ function logMessage(string $message, string $logFile): void
 
 // Load environment
 $dotenv = Dotenv::createImmutable($projectRoot);
-$dotenv->load();
+$dotenv->safeLoad();  // safeLoad: no .env is OK — container/CLI runs rely on real env vars (getenv fallback in config/settings.php)
 
 // Connect to DB via the shared cron bootstrap helper (handles DB_SOCKET
 // host normalisation so the socket is actually used on macOS installs).

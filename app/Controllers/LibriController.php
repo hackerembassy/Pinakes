@@ -425,6 +425,7 @@ class LibriController
         // Recupera tutte le copie del libro con informazioni sui prestiti
         $copyRepo = new \App\Models\CopyRepository($db);
         $copie = $copyRepo->getByBookId($id);
+        $copySchedule = $copyRepo->getScheduleByBookId($id);
 
         // Get loan history for this book
         $loanHistoryQuery = "
@@ -1085,12 +1086,13 @@ class LibriController
                 ? $fields['numero_inventario']
                 : "LIB-{$id}";
 
-            for ($i = 1; $i <= $copieTotali; $i++) {
-                $numeroInventario = $copieTotali > 1
-                    ? "{$baseInventario}-C{$i}"
-                    : $baseInventario;
-
-                $note = $copieTotali > 1 ? "Copia {$i} di {$copieTotali}" : null;
+            // Uniform "-C{N}" codes for every copy (#238): even a single copy is
+            // "{base}-C1", so later adding a 2nd copy yields a consistent C1/C2 pair
+            // instead of a bare base plus a "-C2". allocateInventoryCodes guarantees
+            // no collision with any existing numero_inventario.
+            $codes = $copyRepo->allocateInventoryCodes($baseInventario, $copieTotali);
+            foreach ($codes as $i => $numeroInventario) {
+                $note = "Copia " . ($i + 1) . " di {$copieTotali}";
                 $copyRepo->create($id, $numeroInventario, 'disponibile', $note);
             }
 
@@ -1722,17 +1724,18 @@ class LibriController
             $newCopieCount = (int) $fields['copie_totali'];
 
             if ($newCopieCount > $currentCopieCount) {
-                // Aggiungi nuove copie
+                // Aggiungi nuove copie. #238: generate gap-filling, collision-free
+                // "-C{N}" codes instead of "-C{count+1}" (which duplicated an existing
+                // code after a copy had been removed). allocateInventoryCodes checks
+                // every candidate against the whole `copie` table.
                 $baseInventario = !empty($fields['numero_inventario'])
                     ? $fields['numero_inventario']
                     : "LIB-{$id}";
 
-                for ($i = $currentCopieCount + 1; $i <= $newCopieCount; $i++) {
-                    $numeroInventario = $newCopieCount > 1
-                        ? "{$baseInventario}-C{$i}"
-                        : $baseInventario;
-
-                    $note = "Copia {$i} di {$newCopieCount}";
+                $howMany = $newCopieCount - $currentCopieCount;
+                $codes = $copyRepo->allocateInventoryCodes($baseInventario, $howMany);
+                foreach ($codes as $numeroInventario) {
+                    $note = "Copia {$numeroInventario}";
                     $newCopyId = $copyRepo->create($id, $numeroInventario, 'disponibile', $note);
 
                     // Case 1: Reassign pending reservations to this new copy
@@ -1756,20 +1759,19 @@ class LibriController
                     }
                 }
             } elseif ($newCopieCount < $currentCopieCount) {
-                // Rimuovi copie in eccesso (solo quelle disponibili, non in prestito)
-                $copie = $copyRepo->getByBookId($id);
+                // Rimuovi copie in eccesso DALLA CODA (le ultime aggiunte), solo quelle
+                // disponibili e senza impegni (#238: prima si rimuoveva la PRIMA della
+                // lista ASC, lasciando codici col suffisso più alto → collisioni dopo).
+                $removable = $copyRepo->getRemovableCopiesNewestFirst($id);
                 $toRemove = $currentCopieCount - $newCopieCount;
                 $removed = 0;
 
-                foreach ($copie as $copia) {
-                    if ($removed >= $toRemove)
+                foreach ($removable as $copia) {
+                    if ($removed >= $toRemove) {
                         break;
-
-                    // Rimuovi solo copie disponibili senza prestiti attivi
-                    if ($copia['stato'] === 'disponibile' && empty($copia['prestito_id'])) {
-                        $copyRepo->delete($copia['id']);
-                        $removed++;
                     }
+                    $copyRepo->delete($copia['id']);
+                    $removed++;
                 }
 
                 // Se non riusciamo a rimuovere abbastanza copie, avvisa l'utente

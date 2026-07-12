@@ -155,7 +155,7 @@ class PrestitiApiController
         while ($r = $res->fetch_assoc()) {
             $actions = '<a class="text-blue-600" href="'.htmlspecialchars(url('/admin/loans/details/'.(int)$r['id']), ENT_QUOTES, 'UTF-8').'">'.htmlspecialchars(__('Dettagli'), ENT_QUOTES, 'UTF-8').'</a>';
             $actions .= ' | <a class="text-orange-600" href="'.htmlspecialchars(url('/admin/loans/edit/'.(int)$r['id']), ENT_QUOTES, 'UTF-8').'">'.htmlspecialchars(__('Modifica'), ENT_QUOTES, 'UTF-8').'</a>';
-            if ((int)$r['attivo'] === 1) {
+            if ((int)$r['attivo'] === 1 && in_array((string) $r['stato'], ['in_corso', 'in_ritardo'], true)) {
                 $actions .= ' | <a class="text-green-600" href="'.htmlspecialchars(url('/admin/loans/returned/'.(int)$r['id']), ENT_QUOTES, 'UTF-8').'">'.htmlspecialchars(__('Restituito'), ENT_QUOTES, 'UTF-8').'</a>';
             }
             $rows[] = [

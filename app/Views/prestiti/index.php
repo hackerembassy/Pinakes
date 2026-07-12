@@ -518,7 +518,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             <i class="fas fa-box-open w-4 h-4"></i>
                         </button>`;
                     }
-                    if (row.attivo === 1 && row.stato === 'in_corso') {
+                    // Return is valid for both in_corso AND in_ritardo (an overdue loan
+                    // is the commonest one to return); the backend handler accepts both,
+                    // so the button must appear for both — not only in_corso.
+                    if (row.attivo === 1 && (row.stato === 'in_corso' || row.stato === 'in_ritardo')) {
                         actions += `<a href="${window.BASE_PATH}/admin/loans/returned/${safeId}" class="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors" title="${window.__('Registra Restituzione')}">
                             <i class="fas fa-undo-alt w-4 h-4"></i>
                         </a>`;
