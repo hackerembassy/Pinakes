@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Behavioral integration suite — 59 loan ("prestiti") edge cases for Pinakes.
+ * Behavioral integration suite — 60 loan ("prestiti") edge cases for Pinakes.
  *
  * Runs against the LIVE local MySQL but only ever touches data it creates,
  * marked with: book titles `ZZ_LOANEDGE_%`, copy numero_inventario `ZZLE-%`,
@@ -17,7 +17,7 @@ declare(strict_types=1);
  *   - installer/database/triggers.sql (copy-occupancy invariants)
  *
  * Run:   php tests/loan-edge-cases.unit.php
- * Exit:  0 only if all 59 pass; prints "ALL 59 PASS".
+ * Exit:  0 only if all 60 pass; prints "ALL 60 PASS".
  */
 
 use App\Models\CopyRepository;
@@ -135,7 +135,7 @@ function pass(string $desc): void
 {
     global $TESTNO;
     $TESTNO++;
-    printf("[%02d/59] PASS: %s\n", $TESTNO, $desc);
+    printf("[%02d/60] PASS: %s\n", $TESTNO, $desc);
 }
 
 function assertEq($exp, $got, string $msg): void
@@ -673,7 +673,7 @@ assertEq('disponibile', bookStato($b), 'recalc overwrites manually-wrong libri.s
 pass('misc: libri.stato is derived (recalc overwrites wrong value)');
 
 /* ==========================================================================
- * 53-59  Canonical capacity, schedules, integrity and calendars
+ * 53-60  Canonical capacity, schedules, integrity and calendars
  * ====================================================================== */
 // 53: an unreturned overdue loan is open-ended for future capacity decisions.
 $b = mkBook('capacity_overdue_open');

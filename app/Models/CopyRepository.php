@@ -167,14 +167,16 @@ class CopyRepository
      */
     public function allocateInventoryCodes(string $base, int $howMany): array
     {
+        // numero_inventario is VARCHAR(100); reserve room for the "-C{N}" suffix so
+        // a very long base can never overflow the column (worst case "-C9999" = 6).
+        $base = mb_substr($base, 0, 90);
         $codes = [];
-        $n = 1;
-        while (count($codes) < $howMany) {
-            $candidate = "{$base}-C{$n}";
+        $needed = max(0, $howMany);
+        for ($index = 1; count($codes) < $needed; $index++) {
+            $candidate = "{$base}-C{$index}";
             if (!in_array($candidate, $codes, true) && !$this->inventoryCodeExists($candidate)) {
                 $codes[] = $candidate;
             }
-            $n++;
         }
         return $codes;
     }
@@ -237,6 +239,36 @@ class CopyRepository
         $stmt->close();
 
         return $result;
+    }
+
+    /**
+     * Delete a copy ONLY if it is still removable (available, no active/pending
+     * loan). Closes the race between selecting removable copies and deleting them
+     * (#252): if a loan claimed the copy in between, the conditional DELETE removes
+     * nothing and returns false, so the caller can try the next candidate instead
+     * of miscounting. The prestiti.copia_id FK is ON DELETE RESTRICT, so this can
+     * never orphan a loan even under the race — this just makes the outcome clean.
+     *
+     * @return bool True only if a row was actually deleted.
+     */
+    public function deleteIfRemovable(int $id): bool
+    {
+        $stmt = $this->db->prepare("
+            DELETE FROM copie
+            WHERE id = ?
+              AND stato = 'disponibile'
+              AND NOT EXISTS (
+                  SELECT 1 FROM prestiti p
+                  WHERE p.copia_id = copie.id
+                    AND ( (p.attivo = 1 AND p.stato IN ('prenotato','da_ritirare','in_corso','in_ritardo'))
+                          OR (p.attivo = 0 AND p.stato = 'pendente') )
+              )
+        ");
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $deleted = $stmt->affected_rows === 1;
+        $stmt->close();
+        return $deleted;
     }
 
     /**

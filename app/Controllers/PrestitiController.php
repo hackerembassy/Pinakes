@@ -810,7 +810,7 @@ class PrestitiController
             $bookStmt = $db->prepare("
                 SELECT p.libro_id, l.copie_disponibili
                 FROM prestiti p
-                JOIN libri l ON l.id = p.libro_id
+                JOIN libri l ON l.id = p.libro_id AND l.deleted_at IS NULL
                 WHERE p.id = ?
             ");
             $bookStmt->bind_param('i', $id);

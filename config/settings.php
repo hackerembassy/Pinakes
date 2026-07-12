@@ -6,10 +6,13 @@ declare(strict_types=1);
 // into $_ENV; reading only $_ENV made CLI cron/container runs connect as user ''.
 $envValue = static function (string $key, mixed $default = null): mixed {
     if (array_key_exists($key, $_ENV)) {
-        return $_ENV[$key];
+        $v = $_ENV[$key];
+        // Treat an explicitly empty string as "unset" so e.g. DB_PORT="" falls
+        // back to the default (3306) instead of casting to 0 → mysqli connect fail.
+        return ($v === '') ? $default : $v;
     }
     $value = getenv($key);
-    return $value === false ? $default : $value;
+    return ($value === false || $value === '') ? $default : $value;
 };
 
 // Basic settings; expand as needed
@@ -29,11 +32,6 @@ $settings = [
         'socket'   => $envValue('DB_SOCKET'), // Optional socket path
     ],
 ];
-
-// Allow override via env
-if ($appDebug !== null) {
-    $settings['displayErrorDetails'] = filter_var($appDebug, FILTER_VALIDATE_BOOL);
-}
 
 // Configure PHP error display based on DISPLAY_ERRORS env variable
 if ($displayErrorsEnv !== null) {

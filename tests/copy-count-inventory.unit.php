@@ -70,6 +70,11 @@ function check(bool $cond, string $desc): void
     }
 }
 
+// Per-run token so concurrent runs (and this run's cleanup) only ever touch
+// their own rows — never another run's or unrelated data.
+$RUN = bin2hex(random_bytes(6));
+$TITLE_PREFIX = "ZZ_COPYNUM_{$RUN}_";
+
 $repo = new CopyRepository($db);
 
 /** Current codes for a book, ordered by creation. @return list<string> */
@@ -102,15 +107,17 @@ $removeCopies = static function (int $bookId, int $howMany) use ($repo): void {
 };
 
 /* ------------------------------- cleanup -------------------------------- */
-$cleanup = static function () use ($db): void {
-    $db->query("DELETE c FROM copie c JOIN libri l ON l.id = c.libro_id WHERE l.titolo LIKE 'ZZ_COPYNUM_%'");
-    $db->query("DELETE FROM libri WHERE titolo LIKE 'ZZ_COPYNUM_%'");
+$cleanup = static function () use ($db, $TITLE_PREFIX): void {
+    $like = $db->real_escape_string($TITLE_PREFIX) . '%';
+    $db->query("DELETE c FROM copie c JOIN libri l ON l.id = c.libro_id WHERE l.titolo LIKE '{$like}'");
+    $db->query("DELETE FROM libri WHERE titolo LIKE '{$like}'");
 };
 $cleanup();
 
 try {
+    $title = $TITLE_PREFIX . 'book';
     $db->query("INSERT INTO libri (titolo, copie_totali, copie_disponibili, created_at, updated_at)
-                VALUES ('ZZ_COPYNUM_book', 0, 0, NOW(), NOW())");
+                VALUES ('" . $db->real_escape_string($title) . "', 0, 0, NOW(), NOW())");
     $bookId = (int) $db->insert_id;
     $base = "ZZCN-{$bookId}";
 

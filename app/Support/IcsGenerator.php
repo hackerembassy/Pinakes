@@ -87,11 +87,15 @@ class IcsGenerator
         // lets a reader see a half-written file; write to a unique temp file, then
         // rename() (atomic on the same filesystem) so readers always see a complete
         // calendar — either the old one or the new one, never a torn mix.
-        $tmp = $path . '.' . getmypid() . '.' . uniqid('', true) . '.tmp';
+        $tmp = $path . '.' . getmypid() . '.' . bin2hex(random_bytes(8)) . '.tmp';
         if (file_put_contents($tmp, $content, LOCK_EX) === false) {
             return false;
         }
+        // The final file inherits the temp file's mode; a restrictive umask could
+        // otherwise leave the calendar unreadable by the web server. Force 0644.
+        @chmod($tmp, 0644);
         if (!@rename($tmp, $path)) {
+            // nosemgrep: php.lang.security.unlink-use.unlink-use -- $tmp is an internal, code-constructed path under storage, not user input
             @unlink($tmp);
             return false;
         }

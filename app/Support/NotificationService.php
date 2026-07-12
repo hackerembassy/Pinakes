@@ -408,8 +408,11 @@ class NotificationService {
             foreach ($loans as $loan) {
                 // ATOMIC: Mark warning as sent BEFORE sending email
                 // Only proceed if we successfully claimed this loan (affected_rows == 1)
-                $updateStmt = $this->db->prepare("UPDATE prestiti SET warning_sent = 1 WHERE id = ? AND attivo = 1 AND stato = 'in_corso' AND (warning_sent IS NULL OR warning_sent = 0)");
-                $updateStmt->bind_param('i', $loan['id']);
+                // Re-assert data_scadenza too: renew()/update() may have moved the
+                // due date between the SELECT and this claim; without it we'd send a
+                // warning quoting a now-stale date (#252).
+                $updateStmt = $this->db->prepare("UPDATE prestiti SET warning_sent = 1 WHERE id = ? AND attivo = 1 AND stato = 'in_corso' AND data_scadenza = ? AND (warning_sent IS NULL OR warning_sent = 0)");
+                $updateStmt->bind_param('is', $loan['id'], $loan['data_scadenza']);
                 $updateStmt->execute();
                 $claimed = $updateStmt->affected_rows === 1;
                 $updateStmt->close();
@@ -499,8 +502,11 @@ class NotificationService {
                 // durare minuti dopo la SELECT — senza il filtro su attivo/stato il
                 // claim riporterebbe in 'in_ritardo' un prestito restituito nel
                 // frattempo (attivo=0 + stato in_ritardo: combinazione invalida).
-                $updateStmt = $this->db->prepare("UPDATE prestiti SET overdue_notification_sent = 1, stato = 'in_ritardo' WHERE id = ? AND (overdue_notification_sent IS NULL OR overdue_notification_sent = 0) AND attivo = 1 AND stato IN ('in_corso', 'in_ritardo')");
-                $updateStmt->bind_param('i', $loan['id']);
+                // Re-assert data_scadenza (#252): a renew() between the SELECT and this
+                // claim can push the due date into the future, so the loan is no longer
+                // overdue and must NOT be transitioned to 'in_ritardo' with a stale date.
+                $updateStmt = $this->db->prepare("UPDATE prestiti SET overdue_notification_sent = 1, stato = 'in_ritardo' WHERE id = ? AND data_scadenza = ? AND (overdue_notification_sent IS NULL OR overdue_notification_sent = 0) AND attivo = 1 AND stato IN ('in_corso', 'in_ritardo')");
+                $updateStmt->bind_param('is', $loan['id'], $loan['data_scadenza']);
                 $updateStmt->execute();
                 $claimed = $updateStmt->affected_rows === 1;
                 $updateStmt->close();

@@ -1331,7 +1331,14 @@ class LibriController
         $fields['editore_id'] = empty($fields['editore_id']) || $fields['editore_id'] == 0 ? null : (int) $fields['editore_id'];
         $fields['genere_id'] = empty($fields['genere_id']) || $fields['genere_id'] == 0 ? null : (int) $fields['genere_id'];
         $fields['sottogenere_id'] = empty($fields['sottogenere_id']) || $fields['sottogenere_id'] == 0 ? null : (int) $fields['sottogenere_id'];
+        // Clamp to the same 1..9999 range as store(): an unbounded value would build
+        // a huge allocation loop / copy set. (#252 CodeRabbit)
         $fields['copie_totali'] = (int) $fields['copie_totali'];
+        if ($fields['copie_totali'] < 1) {
+            $fields['copie_totali'] = 1;
+        } elseif ($fields['copie_totali'] > 9999) {
+            $fields['copie_totali'] = 9999;
+        }
 
         // Validazione copie: verifica che sia possibile ridurre il numero di copie
         $copyRepo = new \App\Models\CopyRepository($db);
@@ -1770,8 +1777,12 @@ class LibriController
                     if ($removed >= $toRemove) {
                         break;
                     }
-                    $copyRepo->delete($copia['id']);
-                    $removed++;
+                    // Conditional delete: only counts if the copy is still removable
+                    // (a loan may have claimed it since the SELECT). Miscounting is
+                    // thus impossible; the FK RESTRICT is the hard backstop.
+                    if ($copyRepo->deleteIfRemovable($copia['id'])) {
+                        $removed++;
+                    }
                 }
 
                 // Se non riusciamo a rimuovere abbastanza copie, avvisa l'utente

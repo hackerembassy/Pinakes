@@ -126,9 +126,13 @@ class ReservationsAdminController
             $start = $today;
         }
         if ($end === '') {
-            $loanDays = (int) ((new \App\Models\SettingsRepository($db))->get('loans', 'loan_duration_days', '30') ?? 30);
-            $loanDays = $loanDays > 0 ? $loanDays : 30;
+            $loanDays = $this->loanDurationDays($db);
             $end = (new \DateTimeImmutable($start))->modify("+{$loanDays} days")->format('Y-m-d');
+        }
+        // Normalize an inverted range on the reservation dates too (form can post
+        // end < start), mirroring the data_*_richiesta clamp below (#252).
+        if ($end < $start) {
+            $end = $start;
         }
 
         // Derive data_inizio_richiesta from data_prenotazione (start) if not explicitly provided
@@ -312,10 +316,7 @@ class ReservationsAdminController
             }
         }
 
-        $defaultLoanDays = (int) ((new \App\Models\SettingsRepository($db))->get('loans', 'loan_duration_days', '30') ?? 30);
-        if ($defaultLoanDays < 1) {
-            $defaultLoanDays = 30;
-        }
+        $defaultLoanDays = $this->loanDurationDays($db);
 
         ob_start();
         $title = "Crea Prenotazione - Admin";
@@ -376,10 +377,7 @@ class ReservationsAdminController
         if (empty($dataScadenza)) {
             // Durata di default allineata all'impostazione admin loan_duration_days
             // (stesso valore mostrato dalla view), non più 30 giorni hardcoded.
-            $loanDays = (int) ((new \App\Models\SettingsRepository($db))->get('loans', 'loan_duration_days', '30') ?? 30);
-            if ($loanDays < 1) {
-                $loanDays = 30;
-            }
+            $loanDays = $this->loanDurationDays($db);
             // The default duration starts from the requested start date, not
             // from today (critical for future reservations).
             $dataScadenzaDate = (new \DateTimeImmutable($dataPrenotazioneDate))
@@ -388,7 +386,12 @@ class ReservationsAdminController
             $dataScadenza = $dataScadenzaDate . ' 23:59:59';
         } else {
             $dataScadenzaDate = $dataScadenza; // Keep date only for loan period
-            $dataScadenza = $dataScadenza . ' 23:59:59';
+            // Normalize an inverted range when both dates are posted (#252), mirroring
+            // the data_*_richiesta clamp below.
+            if ($dataScadenzaDate < $dataPrenotazioneDate) {
+                $dataScadenzaDate = $dataPrenotazioneDate;
+            }
+            $dataScadenza = $dataScadenzaDate . ' 23:59:59';
         }
 
         // Derive data_inizio_richiesta from data_prenotazione if not explicitly provided
@@ -488,6 +491,17 @@ class ReservationsAdminController
             $db->rollback();
             return $response->withHeader('Location', url('/admin/reservations/create') . '?error=save_failed')->withStatus(302);
         }
+    }
+
+    /**
+     * The configured loan duration in days (loans.loan_duration_days), with the
+     * canonical fallback to 30 for a missing or non-positive value. Centralizes
+     * the lookup previously duplicated in update(), store() and createForm().
+     */
+    private function loanDurationDays(mysqli $db): int
+    {
+        $days = (int) ((new \App\Models\SettingsRepository($db))->get('loans', 'loan_duration_days', '30') ?? 30);
+        return $days > 0 ? $days : 30;
     }
 
     private function reorderQueuePositions(mysqli $db, int $libroId): void
