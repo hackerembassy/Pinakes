@@ -37,6 +37,17 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 
 ---
 
+## What's New in v0.7.35
+
+- **Docker-aware in-app updater.** On the official Docker image the app files are
+  baked in and owned by the image, so the "Updates" button couldn't overwrite
+  them and failed with a raw list of unwritable paths. The updater now detects a
+  container and explains the right path instead: update by moving the container
+  to the new image (`docker compose pull && docker compose up -d`) — your data in
+  the database and the `storage`/`uploads` volumes stays safe. The in-app button
+  remains for classic/shared-hosting installs where the web-server user owns the
+  files.
+
 ## What's New in v0.7.34
 
 More user-reported fixes on labels and physical copies, plus a hardening pass
