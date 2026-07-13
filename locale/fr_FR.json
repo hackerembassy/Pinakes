@@ -5430,6 +5430,7 @@
   "Prenotazione annullata": "Réservation annulée",
   "Inviata all'utente quando una prenotazione viene annullata dall'amministrazione.": "Envoyée à l'utilisateur lorsqu'une réservation est annulée par l'administration.",
   "\"%s\" prestato a %s scade fra %d giorni": "\"%s\" emprunté par %s arrive à échéance dans %d jours",
+  "\"%s\" prestato a %s scade oggi": "\"%s\" emprunté par %s arrive à échéance aujourd'hui",
   "MaintenanceService claim cooldown fallito": "MaintenanceService échec du claim du cooldown",
   "MaintenanceService errore recupero notifiche prenotazione": "MaintenanceService erreur lors de la récupération des notifications de réservation",
   "La data di inizio non può essere nel passato": "La date de début ne peut pas être dans le passé",

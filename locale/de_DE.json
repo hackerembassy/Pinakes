@@ -5430,6 +5430,7 @@
   "Prenotazione annullata": "Reservierung storniert",
   "Inviata all'utente quando una prenotazione viene annullata dall'amministrazione.": "Wird an den Benutzer gesendet, wenn eine Reservierung von der Verwaltung storniert wird.",
   "\"%s\" prestato a %s scade fra %d giorni": "\"%s\" ausgeliehen an %s ist in %d Tagen fällig",
+  "\"%s\" prestato a %s scade oggi": "\"%s\" ausgeliehen an %s ist heute fällig",
   "MaintenanceService claim cooldown fallito": "MaintenanceService Claim des Cooldowns fehlgeschlagen",
   "MaintenanceService errore recupero notifiche prenotazione": "MaintenanceService Fehler beim Abrufen der Reservierungsbenachrichtigungen",
   "La data di inizio non può essere nel passato": "Das Startdatum darf nicht in der Vergangenheit liegen",

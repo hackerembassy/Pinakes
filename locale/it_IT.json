@@ -5430,6 +5430,7 @@
   "Prenotazione annullata": "Prenotazione annullata",
   "Inviata all'utente quando una prenotazione viene annullata dall'amministrazione.": "Inviata all'utente quando una prenotazione viene annullata dall'amministrazione.",
   "\"%s\" prestato a %s scade fra %d giorni": "\"%s\" prestato a %s scade fra %d giorni",
+  "\"%s\" prestato a %s scade oggi": "\"%s\" prestato a %s scade oggi",
   "MaintenanceService claim cooldown fallito": "MaintenanceService claim cooldown fallito",
   "MaintenanceService errore recupero notifiche prenotazione": "MaintenanceService errore recupero notifiche prenotazione",
   "La data di inizio non può essere nel passato": "La data di inizio non può essere nel passato",

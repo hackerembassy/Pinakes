@@ -109,13 +109,14 @@ class PrestitiApiController
         $orderDir = 'DESC';
 
         // Map column index to database column
-        // 0: libro, 1: utente, 2: data_prestito, 3: stato, 4: actions
+        // 0: libro, 1: utente, 2: data_prestito, 3: data_scadenza,
+        // 4: stato; columns 5 (PDF) and 6 (actions) are not orderable.
         $columnMap = [
             0 => 'l.titolo',       // Libro
             1 => 'utente',         // Utente (computed column)
             2 => 'p.data_prestito',// Data Prestito
-            3 => 'p.stato',        // Stato
-            4 => 'p.id'            // Actions (fallback to id)
+            3 => 'p.data_scadenza',// Scadenza
+            4 => 'p.stato'         // Stato
         ];
 
         // Parse order parameter from DataTables

@@ -28,6 +28,7 @@ function getStatusBadge($status) {
             return "<span class='$baseClasses bg-gray-100 text-gray-800'><i class='fas fa-question-circle mr-2'></i>" . __("Sconosciuto") . "</span>";
     }
 }
+$applicationToday = \App\Support\DateHelper::today();
 ?>
 
 <!-- Modern Loans Management Interface -->
@@ -352,12 +353,13 @@ function getStatusBadge($status) {
                                     <?= format_date($prestito['data_prestito'], false, '/') ?>
                                 </td>
                                 <?php
-                                    $isLoanOverdue = !empty($prestito['data_scadenza'])
-                                        && strtotime((string)$prestito['data_scadenza']) <= strtotime(date('Y-m-d'))
+                                    $isDueNowOrOverdue = !empty($prestito['data_scadenza'])
+                                        && (string)$prestito['data_scadenza'] <= $applicationToday
+                                        && (int)($prestito['attivo'] ?? 0) === 1
                                         && in_array($prestito['stato'] ?? '', ['in_corso', 'in_ritardo'], true);
                                 ?>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="<?= $isLoanOverdue ? 'text-red-600 font-semibold' : 'text-gray-700' ?>">
+                                    <span class="<?= $isDueNowOrOverdue ? 'text-red-600 font-semibold' : 'text-gray-700' ?>">
                                         <?= format_date($prestito['data_scadenza'], false, '/') ?>
                                     </span>
                                 </td>
@@ -427,6 +429,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     let currentStatusFilter = '';
+    const applicationToday = <?= json_encode($applicationToday, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
     // Initialize DataTable
     const table = new DataTable('#prestiti-table', {
@@ -472,14 +475,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     // Same red-highlight rule as the Physical Copies list: an active
                     // loan (in_corso/in_ritardo) whose due date is today or past.
-                    // Compare on local date to match the server's stored dates.
-                    const now = new Date();
-                    const today = now.getFullYear() + '-' +
-                        String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                        String(now.getDate()).padStart(2, '0');
-                    const isOverdue = data <= today &&
+                    // Compare against the application's configured timezone, not
+                    // the browser or PHP process timezone.
+                    const isDueNowOrOverdue = data <= applicationToday && Number(row.attivo) === 1 &&
                         (row.stato === 'in_corso' || row.stato === 'in_ritardo');
-                    const cls = isOverdue ? 'text-red-600 font-semibold' : 'text-gray-700';
+                    const cls = isDueNowOrOverdue ? 'text-red-600 font-semibold' : 'text-gray-700';
                     return `<span class="${cls}">${formatDateLocale(data)}</span>`;
                 }
             },
@@ -531,13 +531,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             <i class="fas fa-eye w-4 h-4"></i>
                         </a>`;
                     // Show "Conferma Ritiro" button for da_ritirare OR prenotato with today's date
-                    // Use local date (not UTC) to correctly compare with server dates
-                    const now = new Date();
-                    const today = now.getFullYear() + '-' +
-                        String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                        String(now.getDate()).padStart(2, '0');
                     const isReadyForPickup = row.stato === 'da_ritirare' ||
-                        (row.stato === 'prenotato' && row.data_prestito && row.data_prestito <= today);
+                        (row.stato === 'prenotato' && row.data_prestito && row.data_prestito <= applicationToday);
                     if (isReadyForPickup) {
                         actions += `<button type="button" onclick="confirmPickup(${safeId})" class="p-2 text-amber-600 hover:bg-amber-100 rounded-full transition-colors" title="${window.__('Conferma Ritiro')}">
                             <i class="fas fa-box-open w-4 h-4"></i>
