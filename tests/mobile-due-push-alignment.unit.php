@@ -18,14 +18,19 @@ $root = dirname(__DIR__);
 $actions = (string)file_get_contents($root . '/storage/plugins/mobile-api/src/Controllers/ActionsController.php');
 $openApi = (string)file_get_contents($root . '/storage/plugins/mobile-api/src/Controllers/OpenApiController.php');
 $dispatcher = (string)file_get_contents($root . '/storage/plugins/mobile-api/src/Push/PushDispatcher.php');
+$settingsRepo = (string)file_get_contents($root . '/app/Models/SettingsRepository.php');
 $hourlyCron = (string)file_get_contents($root . '/cron/automatic-notifications.php');
 
 $check(
-    substr_count($actions . $dispatcher, "get('advanced', 'days_before_expiry_warning'") === 2
-        && !str_contains($actions . $dispatcher, "get('loans', 'reminder_days_before'")
-        && str_contains($actions, '$dueSoonDays = max(0,')
-        && str_contains($dispatcher, 'return max(0, $days);'),
-    'mobile feed and push use the core expiration-warning setting'
+    // The horizon (key + fallback + clamp) lives in one shared method; both mobile
+    // callers delegate to it and neither reads the setting inline or via the old key.
+    str_contains($settingsRepo, 'public function daysBeforeExpiryWarning(): int')
+        && str_contains($settingsRepo, "get('advanced', 'days_before_expiry_warning', '3')")
+        && str_contains($settingsRepo, 'max(0,')
+        && substr_count($actions . $dispatcher, '->daysBeforeExpiryWarning()') === 2
+        && !str_contains($actions . $dispatcher, "get('advanced', 'days_before_expiry_warning'")
+        && !str_contains($actions . $dispatcher, "get('loans', 'reminder_days_before'"),
+    'mobile feed and push share the core expiration-warning horizon helper'
 );
 $check(
     str_contains($dispatcher, '$today = DateHelper::today()')

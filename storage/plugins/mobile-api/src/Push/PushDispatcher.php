@@ -575,13 +575,11 @@ final class PushDispatcher
     private function dueSoonDays(): int
     {
         try {
-            $days = (int) ((new \App\Models\SettingsRepository($this->db))->get('advanced', 'days_before_expiry_warning', '3') ?? 3);
+            // Single source of truth for the horizon (key + fallback + clamp), shared
+            // with the web reminders and the mobile-api loan feed.
+            return (new \App\Models\SettingsRepository($this->db))->daysBeforeExpiryWarning();
         } catch (\Throwable $e) {
-            $days = 3;
+            return 3;
         }
-
-        // Match NotificationService exactly: zero is valid and means "today only";
-        // negative/corrupt values are clamped rather than silently reset to three.
-        return max(0, $days);
     }
 }

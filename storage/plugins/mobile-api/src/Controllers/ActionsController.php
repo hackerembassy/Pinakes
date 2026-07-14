@@ -708,10 +708,11 @@ final class ActionsController
             // Domain "today" from DateHelper::today() (app timezone), so the
             // due/overdue day boundary matches the web/cron pipeline.
             $today = DateHelper::today();
-            // Use the exact same setting as NotificationService / Settings → Advanced.
-            // The former loans.reminder_days_before key never existed, so the mobile
-            // feed silently stayed at its fallback even when an admin changed the UI.
-            $dueSoonDays = max(0, (int) ((new \App\Models\SettingsRepository($this->db))->get('advanced', 'days_before_expiry_warning', '3') ?? 3));
+            // Single source of truth for the horizon (key + fallback + clamp), shared
+            // with the web reminders and the push dispatcher. The former
+            // loans.reminder_days_before key never existed, so the mobile feed used to
+            // stay pinned to its fallback even after an admin changed the UI.
+            $dueSoonDays = (new \App\Models\SettingsRepository($this->db))->daysBeforeExpiryWarning();
             $dueSoonLimit = date('Y-m-d', strtotime($today . " +{$dueSoonDays} days"));
 
             // Loans due soon (active, in-progress, not yet overdue).

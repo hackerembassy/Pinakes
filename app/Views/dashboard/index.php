@@ -657,7 +657,9 @@ $applicationToday = \App\Support\DateHelper::today();
                     // The date turning red is a visibility signal; it does NOT mean the
                     // loan is formally late (a loan due today is still on time).
                     $dueSoonOrOverdue = !empty($p['data_scadenza'])
-                        && (string)$p['data_scadenza'] <= $applicationToday;
+                        && (string)$p['data_scadenza'] <= $applicationToday
+                        && (int)($p['attivo'] ?? 0) === 1
+                        && in_array($p['stato'] ?? '', ['in_corso', 'in_ritardo'], true);
                     // The status badge reflects the REAL loan state (in_ritardo is set
                     // by the maintenance overdue-updater), so a due-today loan still
                     // reads "In corso" while a genuinely late one reads "In Ritardo".

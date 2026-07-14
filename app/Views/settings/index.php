@@ -350,7 +350,7 @@ $activeTab = $activeTab ?? 'general';
               var to = (document.getElementById('test_email') || {}).value || '';
               btn.disabled = true;
               var original = btn.innerHTML;
-              btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <?= __("Invio in corso…") ?>';
+              btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + <?= json_encode(__("Invio in corso…"), JSON_HEX_TAG) ?>;
               out.className = 'mt-3 text-sm text-gray-500';
               out.textContent = '';
               var body = 'test_email=' + encodeURIComponent(to);
@@ -366,7 +366,7 @@ $activeTab = $activeTab ?? 'general';
                 })
                 .catch(function () {
                   out.className = 'mt-3 text-sm text-red-700';
-                  out.textContent = '<?= __("Richiesta non riuscita. Riprova.") ?>';
+                  out.textContent = <?= json_encode(__("Richiesta non riuscita. Riprova."), JSON_HEX_TAG) ?>;
                 })
                 .finally(function () { btn.disabled = false; btn.innerHTML = original; });
             });
