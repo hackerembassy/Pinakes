@@ -362,7 +362,7 @@ $activeTab = $activeTab ?? 'general';
               }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
                 .then(function (res) {
                   out.className = 'mt-3 text-sm ' + (res.j.success ? 'text-green-700' : 'text-red-700');
-                  out.textContent = res.j.message || (res.j.success ? 'OK' : 'Error');
+                  out.textContent = res.j.message || (res.j.success ? <?= json_encode(__('Operazione completata'), JSON_HEX_TAG) ?> : <?= json_encode(__('Errore'), JSON_HEX_TAG) ?>);
                 })
                 .catch(function () {
                   out.className = 'mt-3 text-sm text-red-700';
