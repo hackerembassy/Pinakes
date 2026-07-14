@@ -408,6 +408,16 @@ class NotificationService {
             }
             $stmt->close();
 
+            // The email template renders in the installation locale (see
+            // sendWithRetry), so resolve the "oggi" label in that locale too — not
+            // the caller's session locale (this runs from the admin-login
+            // maintenance path as well as cron). Computed once for the whole batch.
+            $installLocale = \App\Support\I18n::getInstallationLocale();
+            $sessionLocale = \App\Support\I18n::getLocale();
+            \App\Support\I18n::setLocale($installLocale);
+            $todayLabel = __('oggi');
+            \App\Support\I18n::setLocale($sessionLocale);
+
             foreach ($loans as $loan) {
                 // ATOMIC: Mark warning as sent BEFORE sending email
                 // Only proceed if we successfully claimed this loan (affected_rows == 1)
@@ -433,7 +443,7 @@ class NotificationService {
                     'utente_nome' => $loan['utente_nome'],
                     'libro_titolo' => $loan['libro_titolo'],
                     'data_scadenza' => $this->formatEmailDate($loan['data_scadenza']),
-                    'giorni_rimasti' => $daysRemaining === 0 ? __('oggi') : (string)$daysRemaining
+                    'giorni_rimasti' => $daysRemaining === 0 ? $todayLabel : (string)$daysRemaining
                 ];
 
                 $emailSent = $this->sendWithRetry($loan['utente_email'], 'loan_expiring_warning', $variables);
