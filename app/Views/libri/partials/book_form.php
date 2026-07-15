@@ -275,12 +275,12 @@ $selectedSeriesType = \App\Support\SeriesLabels::canonical($book['tipo_collana']
           <div class="form-grid-2">
             <?php foreach ($contributorFields as $roleKey => $meta): ?>
             <div>
-              <label for="<?= $roleKey ?>_select" class="form-label"><?= HtmlHelper::e($meta['label']) ?></label>
+              <label for="<?= $roleKey ?>_select" class="form-label"><?= htmlspecialchars((string)$meta['label'], ENT_QUOTES, 'UTF-8') ?></label>
               <select id="<?= $roleKey ?>_select" name="<?= $roleKey ?>_select[]" multiple
                       placeholder="<?= __('Cerca o aggiungi...') ?>"
                       data-initial-contributors="<?php echo $initialContributorsJson[$roleKey]; ?>"></select>
               <div id="<?= $roleKey ?>_hidden"></div>
-              <p class="text-xs text-gray-500 mt-1"><?= HtmlHelper::e($meta['help']) ?></p>
+              <p class="text-xs text-gray-500 mt-1"><?= htmlspecialchars((string)$meta['help'], ENT_QUOTES, 'UTF-8') ?></p>
             </div>
             <?php endforeach; ?>
           </div>

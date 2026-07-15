@@ -211,7 +211,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
               ?>
                 <a href="<?= htmlspecialchars(url('/admin/authors/' . (int)($a['id'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>"
                    class="inline-flex items-center px-2 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
-                  <i class="fas fa-user mr-1"></i><?php echo App\Support\HtmlHelper::e($label); ?>
+                  <i class="fas fa-user mr-1"></i><?php echo htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8'); ?>
                 </a>
              <?php endforeach; else: ?>
                 <span class="text-gray-400"><?= __("Non specificato") ?></span>
