@@ -16,6 +16,26 @@
 
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+/**
+ * Bundled plugins parsed from App\Support\BundledPlugins::LIST — the app's own
+ * source of truth. Derived, never hardcoded: adding a plugin there updates this
+ * test automatically. Returns null when the source is unreadable (skip then).
+ * @returns {string[]|null}
+ */
+function parseBundledPluginsFromSource() {
+    const srcPath = path.resolve(__dirname, '..', 'app', 'Support', 'BundledPlugins.php');
+    try {
+        const src = fs.readFileSync(srcPath, 'utf-8');
+        const block = src.match(/const\s+LIST\s*=\s*\[([\s\S]*?)\]\s*;/);
+        if (!block) return null;
+        return [...block[1].matchAll(/'([^']+)'/g)].map(m => m[1]).sort();
+    } catch {
+        return null;
+    }
+}
 
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:8081';
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
@@ -49,24 +69,11 @@ function dbQuery(sql) {
 test.skip(!ADMIN_EMAIL || !ADMIN_PASS || !DB_USER || !DB_NAME || !INSTALL_ROOT,
     'Missing env (ADMIN_EMAIL/PASS, DB_*, E2E_INSTALL_ROOT)');
 
-const EXPECTED_BUNDLED = [
-    'api-book-scraper',
-    'archives',
-    'bibframe-linked-data',
-    'deezer',
-    'dewey-editor',
-    'digital-library',
-    'discogs',
-    'goodlib',
-    'musicbrainz',
-    'ncip-server',
-    'oai-pmh-server',
-    'open-library',
-    'openurl-resolver',
-    'resource-sync',
-    'viaf-authority',
-    'z39-server',
-];
+// Derived from BundledPlugins::LIST — do NOT reintroduce a hardcoded list; it
+// only re-asserts the source and goes stale on every plugin added.
+const EXPECTED_BUNDLED = parseBundledPluginsFromSource();
+test.skip(EXPECTED_BUNDLED === null,
+    'app/Support/BundledPlugins.php not readable — cannot derive bundled plugin list');
 
 test.describe.serial('Plugin integrity regression (#101)', () => {
     /** @type {import('@playwright/test').BrowserContext} */
