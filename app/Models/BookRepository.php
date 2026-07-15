@@ -1162,7 +1162,15 @@ class BookRepository
                     throw new \InvalidArgumentException('autori_ids must be an array');
                 }
                 foreach ($creatorIds as $authorData) {
-                    $authorId = $this->processAuthorId($authorData);
+                    try {
+                        $authorId = $this->processAuthorId($authorData);
+                    } catch (\InvalidArgumentException $e) {
+                        // A single malformed contributor id (a frontend contract
+                        // slip) skips that one entry rather than rolling back the
+                        // whole book save (issue #237 review, finding F011).
+                        \App\Support\SecureLogger::warning('[BookRepository] skipping malformed contributor id', ['book_id' => $bookId, 'error' => $e->getMessage()]);
+                        continue;
+                    }
                     if ($authorId <= 0) {
                         continue;
                     }
@@ -1179,7 +1187,15 @@ class BookRepository
                     throw new \InvalidArgumentException("{$key} must be an array");
                 }
                 foreach ($ids as $authorData) {
-                    $authorId = $this->processAuthorId($authorData);
+                    try {
+                        $authorId = $this->processAuthorId($authorData);
+                    } catch (\InvalidArgumentException $e) {
+                        // A single malformed contributor id (a frontend contract
+                        // slip) skips that one entry rather than rolling back the
+                        // whole book save (issue #237 review, finding F011).
+                        \App\Support\SecureLogger::warning('[BookRepository] skipping malformed contributor id', ['book_id' => $bookId, 'error' => $e->getMessage()]);
+                        continue;
+                    }
                     if ($authorId > 0) {
                         $desired[$authorId . ':' . $role] = [$authorId, $role];
                     }
