@@ -62,9 +62,9 @@ class LibraryModule extends AbstractModule
     // Schema
     // ------------------------------------------------------------------
 
-    public function ensureSchema(): array
+    protected static function schemaSteps(): array
     {
-        return $this->runDdl([
+        return [
             'bookclub_review_meta' => "CREATE TABLE IF NOT EXISTS bookclub_review_meta (
                 id INT NOT NULL AUTO_INCREMENT,
                 recensione_id INT NOT NULL,
@@ -85,7 +85,7 @@ class LibraryModule extends AbstractModule
                 CONSTRAINT fk_bcrevmeta_club FOREIGN KEY (club_id)
                     REFERENCES bookclub_clubs (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-        ]);
+        ];
     }
 
     // ------------------------------------------------------------------

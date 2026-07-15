@@ -34,9 +34,27 @@ abstract class AbstractModule implements ModuleInterface
         return true;
     }
 
+    /** @return list<string> */
+    final public static function declaredTables(): array
+    {
+        return array_keys(static::schemaSteps());
+    }
+
+    /** @return list<string> */
+    final public function expectedTables(): array
+    {
+        return static::declaredTables();
+    }
+
     public function ensureSchema(): array
     {
-        return ['created' => [], 'failed' => []];
+        return $this->runDdl(static::schemaSteps());
+    }
+
+    /** @return array<string,string> table => CREATE DDL, in dependency order. */
+    protected static function schemaSteps(): array
+    {
+        return [];
     }
 
     public function registerRoutes($app): void

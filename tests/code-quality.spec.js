@@ -16,6 +16,11 @@
 const { test, expect } = require('@playwright/test');
 const fs   = require('fs');
 const path = require('path');
+const {
+    parseCreateTableNames,
+    parseBundledPluginNames,
+    readBundledPlugins,
+} = require('./helpers/source-expectations');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -87,26 +92,68 @@ test.describe.serial('Code Quality — 15 static analysis tests', () => {
         ).toHaveLength(0);
     });
 
-    // ── 2. CORE_TABLES list in sync with schema.sql ───────────────────────────
+    // ── 2. Dynamic schema expectations ───────────────────────────────────────
 
-    test('2. CORE_TABLES in schema-integrity.spec.js matches CREATE TABLE in schema.sql', () => {
+    test('2. Dynamic schema parser covers every CREATE TABLE form without hardcoded lists', () => {
         const specFile  = fs.readFileSync(path.join(__dirname, 'schema-integrity.spec.js'), 'utf-8');
-        const listMatch = specFile.match(/const CORE_TABLES\s*=\s*\[([\s\S]*?)\];/);
-        expect(listMatch, 'CORE_TABLES definition not found in schema-integrity.spec.js').not.toBeNull();
-
-        const hardcoded  = (listMatch[1].match(/'([^']+)'/g) ?? []).map(s => s.replace(/'/g, '')).sort();
+        const installer = fs.readFileSync(path.join(ROOT, 'installer', 'classes', 'Installer.php'), 'utf-8');
+        const pluginManager = fs.readFileSync(path.join(ROOT, 'app', 'Support', 'PluginManager.php'), 'utf-8');
         const schemaSQL  = fs.readFileSync(path.join(ROOT, 'installer', 'database', 'schema.sql'), 'utf-8');
-        const fromSchema = [...schemaSQL.matchAll(/^CREATE TABLE `(\w+)`/gm)].map(m => m[1]).sort();
+        const statementCount = (schemaSQL.match(/^\s*CREATE\s+TABLE\b/gim) ?? []).length;
+        const fromSchema = parseCreateTableNames(schemaSQL);
 
-        const inSchemaOnly    = fromSchema.filter(t => !hardcoded.includes(t));
-        const inHardcodedOnly = hardcoded.filter(t => !fromSchema.includes(t));
+        expect(fromSchema).toHaveLength(statementCount);
+        expect(fromSchema).toContain('mobile_app_tokens'); // unquoted + IF NOT EXISTS
+        expect(parseCreateTableNames(
+            'CREATE TABLE `quoted_name` (id INT);\nCREATE TABLE IF NOT EXISTS unquoted_name (id INT);'
+        )).toEqual(['quoted_name', 'unquoted_name']);
+        expect(parseBundledPluginNames(
+            "final class BundledPlugins { const LIST = [\n'a-plugin',\n// 'comment-only'\n'b-plugin',\n]; }"
+        )).toEqual(['a-plugin', 'b-plugin']);
+        expect(specFile).toContain('readCoreTablesFromSchema()');
+        expect(specFile, 'schema-integrity must not reintroduce a hardcoded CORE_TABLES array')
+            .not.toMatch(/const\s+CORE_TABLES\s*=\s*\[/);
+        expect(installer).toContain('parseCreateTableNames($sql)');
+        expect(installer, 'Installer must derive expectations from schema.sql')
+            .not.toContain('EXPECTED_TABLES');
 
-        expect(inSchemaOnly,
-            `Tables in schema.sql but missing from CORE_TABLES: ${inSchemaOnly.join(', ')}`
-        ).toHaveLength(0);
-        expect(inHardcodedOnly,
-            `Tables in CORE_TABLES but absent from schema.sql: ${inHardcodedOnly.join(', ')}`
-        ).toHaveLength(0);
+        // Bundled is a distribution/registration source, not an instruction to
+        // activate every plugin on a fresh install. Defaults remain an explicit,
+        // smaller product-policy set; optional auto-registrations remain off.
+        const bundledPlugins = readBundledPlugins(ROOT);
+        const defaultActivePlugins = [...installer.matchAll(/\$installPlugin\('([^']+)'/g)]
+            .map(match => match[1]);
+        expect(bundledPlugins).not.toBeNull();
+        expect(defaultActivePlugins.length).toBeGreaterThan(0);
+        expect(defaultActivePlugins.length).toBeLessThan(bundledPlugins.length);
+        expect(defaultActivePlugins.every(plugin => bundledPlugins.includes(plugin))).toBe(true);
+        expect(pluginManager).toContain('$isActiveValue = $isOptional ? 0 : 1;');
+        const optInPlugins = bundledPlugins.filter((plugin) => {
+            const manifest = JSON.parse(fs.readFileSync(
+                path.join(ROOT, 'storage', 'plugins', plugin, 'plugin.json'),
+                'utf-8'
+            ));
+            return manifest.metadata?.optional === true && !defaultActivePlugins.includes(plugin);
+        });
+        expect(optInPlugins.length, 'at least one bundled plugin must remain opt-in on fresh install')
+            .toBeGreaterThan(0);
+
+        const dynamicConsumers = [
+            ['.github/workflows/ci-upgrade-smoke.yml', 'tables'],
+            ['scripts/create-release.sh', 'plugins'],
+            ['bin/build-release.sh', 'plugins'],
+        ];
+        for (const [file, kind] of dynamicConsumers) {
+            const source = fs.readFileSync(path.join(ROOT, file), 'utf-8');
+            expect(source, `${file} must use the shared ${kind} source resolver`)
+                .toContain(`list-source-expectations.php ${kind}`);
+        }
+        const releaseScript = fs.readFileSync(path.join(ROOT, 'scripts', 'create-release.sh'), 'utf-8');
+        expect(releaseScript).toContain('EXPECTED_PLUGIN_COUNT=${#BUNDLED_PLUGINS[@]}');
+        expect(releaseScript, 'remote release verification must not use a numeric plugin floor')
+            .not.toMatch(/REMOTE_PLUGIN_COUNT[^\n]*-ge\s+\d+/);
+        expect(fs.readFileSync(path.join(ROOT, 'bin', 'build-release.sh'), 'utf-8'))
+            .toContain('BundledPlugins::LIST declares ${#bundled_plugins[@]}');
     });
 
     // ── 3. Plugin ensureSchema() called from onActivate() ─────────────────────

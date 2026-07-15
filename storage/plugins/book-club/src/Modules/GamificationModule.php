@@ -61,9 +61,9 @@ class GamificationModule extends AbstractModule
     // Schema
     // ------------------------------------------------------------------
 
-    public function ensureSchema(): array
+    protected static function schemaSteps(): array
     {
-        $result = $this->runDdl([
+        return [
             'bookclub_badges' => "CREATE TABLE IF NOT EXISTS bookclub_badges (
                 id INT NOT NULL AUTO_INCREMENT,
                 slug VARCHAR(50) NOT NULL,
@@ -107,7 +107,12 @@ class GamificationModule extends AbstractModule
                 CONSTRAINT fk_bcxp_user FOREIGN KEY (user_id)
                     REFERENCES utenti (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-        ]);
+        ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $result = $this->runDdl(static::schemaSteps());
 
         try {
             $this->seedBadges();

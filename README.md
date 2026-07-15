@@ -818,12 +818,12 @@ The 0.5.9.x series took four hotfix iterations because a forgotten
 GitHub Actions workflow (`release.yml`) was racing
 `scripts/create-release.sh` and overwriting the published ZIP with a
 stale build that only contained 5 of 10 bundled plugins. The rogue
-workflow is now disabled, `bin/build-release.sh` enumerates plugins
-from the filesystem instead of a hardcoded list, and
-`scripts/create-release.sh` verifies the shipped ZIP via the GitHub
-API (uploader identity + SHA + plugin count, polled for 90s) so no
-third-party overwrite can slip through unnoticed. Full post-mortem
-in `updater.md`.
+workflow is now disabled. The release builders derive the required plugin set
+from `BundledPlugins::LIST` instead of maintaining another list, and
+`scripts/create-release.sh` verifies the shipped ZIP via the GitHub API
+(uploader identity, SHA, and every expected plugin, polled for 90s) so no
+third-party overwrite can slip through unnoticed. Full post-mortem in
+`updater.md`.
 
 ---
 

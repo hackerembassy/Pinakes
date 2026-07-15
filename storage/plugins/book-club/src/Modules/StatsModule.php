@@ -57,9 +57,9 @@ class StatsModule extends AbstractModule
     // Schema
     // ------------------------------------------------------------------
 
-    public function ensureSchema(): array
+    protected static function schemaSteps(): array
     {
-        return $this->runDdl([
+        return [
             'bookclub_stats_daily' => "CREATE TABLE IF NOT EXISTS bookclub_stats_daily (
                 id INT NOT NULL AUTO_INCREMENT,
                 club_id INT NOT NULL,
@@ -71,7 +71,7 @@ class StatsModule extends AbstractModule
                 CONSTRAINT fk_bcstats_club FOREIGN KEY (club_id)
                     REFERENCES bookclub_clubs (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-        ]);
+        ];
     }
 
     // ------------------------------------------------------------------

@@ -7,7 +7,7 @@
 #   • migration-0.7.31.unit.php  — the release migration adds/backfills exactly
 #     the columns/indexes it claims, over OLD-schema sandboxes, idempotently.
 #   • plugin-schema-guard.unit.php — every bundled plugin's expectedTables() is
-#     an EXACT subset of what its ensureSchema() creates (no missing table left
+#     the EXACT set its ensureSchema() creates (no missing table left
 #     un-healed, no stale entry that would make the boot self-heal thrash), and
 #     ensureSchema is idempotent.
 #   • plugin-schema-selfheal.unit.php — an already-active plugin whose version
@@ -29,6 +29,8 @@ cd "$(dirname "$0")/.."
 
 PHP="${PHP_BIN:-php}"
 TESTS=(
+  tests/source-expectations.unit.php
+  tests/plugin-schema-expectations-static.unit.php
   tests/migration-0.7.31.unit.php
   tests/plugin-schema-guard.unit.php
   tests/plugin-schema-selfheal.unit.php

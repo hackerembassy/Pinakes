@@ -32,7 +32,7 @@ Known/deferred (low, noted on the PR): `new_message` is a wired-but-unfired push
 
 | Area | Notes |
 |---|---|
-| Plugin scaffold | `storage/plugins/mobile-api/`, default-inactive, `ensureSchema()` from both `onActivate()`+`onInstall()`, 5 tables. Registered in `BundledPlugins` + `create-release*.sh` + `.gitignore`. |
+| Plugin scaffold | `storage/plugins/mobile-api/`, `ensureSchema()` from both `onActivate()`+`onInstall()`, tables declared from a single schema map. Registered in `BundledPlugins`; activation policy remains separate from bundling. |
 | Health / discovery | `GET /api/v1/health` — identity, version, api_version, feature flags, `app_access_enabled`, `registration_enabled`, `private_mode`, https warning. |
 | Token auth | login (throttled), register (respects instance toggle), forgot-password, logout, bearer `AppAuthMiddleware` (sha256 + `hash_equals`), per-token quotas. Tokens stored hashed. |
 | Devices | list + revoke single, own-only. |

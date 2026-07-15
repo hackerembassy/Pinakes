@@ -264,30 +264,37 @@ verify_package_contents() {
         has_errors=true
     fi
 
-    # Bundled plugins that MUST be included.
-    # SOURCE OF TRUTH: this list was previously hardcoded with only 5 entries
-    # and drifted out of sync with reality (archives, deezer, discogs, goodlib,
-    # musicbrainz were missing — this caused the v0.5.9.3 shipping-ZIP disaster
-    # reported by HansUwe52). Do NOT re-hardcode it; enumerate from the actual
-    # filesystem instead so every bundled plugin that ships in the repo lands
-    # in the ZIP automatically.
+    # Bundled plugins that MUST be included. Derive from BundledPlugins::LIST;
+    # enumerating the package itself would be tautological and could not detect
+    # a bundled plugin omitted while building the ZIP.
+    local bundled_output
+    if ! bundled_output=$(php scripts/list-source-expectations.php plugins); then
+        log_error "Could not derive bundled plugins from BundledPlugins::LIST"
+        return 1
+    fi
     local bundled_plugins=()
-    while IFS= read -r -d '' plugin_json; do
-        local plugin_dir
-        plugin_dir=$(dirname "$plugin_json")
-        # skip the premium plugin (distributed separately as scraping-pro-*.zip)
-        if [[ "$(basename "$plugin_dir")" == "scraping-pro" ]]; then
-            continue
-        fi
-        bundled_plugins+=("${plugin_dir#${package_dir}/}")
-    done < <(find "${package_dir}/storage/plugins" -mindepth 2 -maxdepth 2 -name plugin.json -print0 2>/dev/null)
+    while IFS= read -r plugin; do
+        [ -n "$plugin" ] && bundled_plugins+=("$plugin")
+    done <<< "$bundled_output"
+    if [ "${#bundled_plugins[@]}" -eq 0 ]; then
+        log_error "BundledPlugins::LIST produced an empty plugin list"
+        return 1
+    fi
 
     for plugin in "${bundled_plugins[@]}"; do
-        if [ ! -d "${package_dir}/${plugin}" ]; then
-            log_warning "Bundled plugin missing: $plugin"
-            # Not a fatal error, but warn
+        if [ ! -f "${package_dir}/storage/plugins/${plugin}/plugin.json" ]; then
+            log_error "Bundled plugin missing: storage/plugins/${plugin}/plugin.json"
+            has_errors=true
         fi
     done
+
+    local packaged_plugin_count
+    packaged_plugin_count=$(find "${package_dir}/storage/plugins" \
+        -mindepth 2 -maxdepth 2 -name plugin.json -print 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$packaged_plugin_count" -ne "${#bundled_plugins[@]}" ]; then
+        log_error "Package has ${packaged_plugin_count} plugin manifests; BundledPlugins::LIST declares ${#bundled_plugins[@]}"
+        has_errors=true
+    fi
 
     if [ "$has_errors" = true ]; then
         log_error "Package verification failed!"

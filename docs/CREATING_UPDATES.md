@@ -129,16 +129,15 @@ CREATE TABLE `libri` (
 ) ENGINE=InnoDB ...;
 ```
 
-**Step 4: Update Installer.php if adding tables**
+**Step 4: Verify source-derived installation expectations**
 
-If you're adding new tables, update `EXPECTED_TABLES` in `installer/classes/Installer.php`:
+Do not maintain a second table list in the installer or tests. Adding a
+`CREATE TABLE` statement to `installer/database/schema.sql` automatically
+updates installation, CI, and reinstall expectations. Verify the parser with:
 
-```php
-private const EXPECTED_TABLES = [
-    ...
-    'new_table_name',  // Add here
-    ...
-];
+```bash
+php tests/source-expectations.unit.php
+php scripts/list-source-expectations.php tables
 ```
 
 ---
@@ -204,7 +203,7 @@ CREATE INDEX idx_name ON table_name(column_name);
 - [ ] Bump the README version badge AND add a `## What's New in vX.Y.Z` section (same commit)
 - [ ] Create migration file if database changes needed (version ≤ release version!)
 - [ ] Update `installer/database/schema.sql` with any new tables/columns
-- [ ] Update `installer/classes/Installer.php` EXPECTED_TABLES if new tables
+- [ ] Run `php tests/source-expectations.unit.php` after changing schema tables or bundled plugins
 - [ ] Update `installer/database/triggers.sql` AND a trigger migration if loan/copy triggers change
 - [ ] Add translations for any new `__()` string to all 4 locale JSONs (it_IT is the source; also fill en_US, de_DE, fr_FR)
 - [ ] Update `app/Support/BundledPlugins::LIST` if plugins added/removed/renamed

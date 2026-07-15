@@ -202,18 +202,25 @@ class BookClubPlugin
      * @return array{created: list<string>, failed: list<string>}
      */
     /**
-     * The core tables ensureSchema() always creates. Declared so PluginManager
+     * Every table ensureSchema() always creates, including auto-discovered
+     * module schemas. Declared so PluginManager
      * can cheaply self-heal: if any of these is missing on an ACTIVE plugin
      * (e.g. a partial/aborted upgrade left version == disk but a table absent),
      * the boot-time sync re-runs onActivate regardless of the version match.
-     * Keep in lock-step with the $steps map in ensureSchema() — a unit test
-     * asserts the two stay identical.
+     * Derived from the same core/module maps ensureSchema() executes, so a
+     * newly added DDL cannot drift out of the self-heal contract.
      *
      * @return list<string>
      */
     public function expectedTables(): array
     {
-        return array_keys(self::schemaSteps());
+        $tables = array_keys(self::schemaSteps());
+        foreach (Modules\Registry::classes() as $moduleClass) {
+            $tables = array_merge($tables, $moduleClass::declaredTables());
+        }
+        $tables = array_values(array_unique($tables));
+        sort($tables);
+        return $tables;
     }
 
     /** @return array<string,string> table => CREATE DDL, in dependency order. */

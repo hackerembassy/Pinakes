@@ -54,7 +54,7 @@ Opzionali (opt-in per club): **seasons** (stagioni con archivio storico),
 ```
 plugin.json            manifest (main_file: wrapper.php, optional: true)
 wrapper.php            proxy globale BookClubPlugin → App\Plugins\BookClub\BookClubPlugin
-BookClubPlugin.php     lifecycle, ensureSchema() (12 tabelle bookclub_*), hook, rotte
+BookClubPlugin.php     lifecycle, ensureSchema() (tabelle bookclub_*), hook, rotte
 src/Repo.php           accesso dati (mysqli prepared statements)
 src/BaseController.php render two-pass (view → layout core), permessi, flash
 src/AdminController.php    /admin/book-club/* (AdminAuthMiddleware + CSRF)

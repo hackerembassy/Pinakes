@@ -199,15 +199,13 @@ class MobileApiPlugin
      */
     public function expectedTables(): array
     {
-        return ['mobile_app_tokens', 'mobile_availability_watchers', 'mobile_push_log', 'mobile_push_prefs', 'mobile_push_subscriptions'];
+        return array_keys(self::schemaSteps());
     }
 
-    public function ensureSchema(): array
+    /** @return array<string,string> table => CREATE DDL, in dependency order. */
+    private static function schemaSteps(): array
     {
-        $created = [];
-        $failed  = [];
-
-        $tables = [
+        return [
             // One revocable bearer token per device. Only the sha256 hash of the
             // plaintext token is ever stored (spec §Auth model).
             'mobile_app_tokens' => "CREATE TABLE IF NOT EXISTS mobile_app_tokens (
@@ -291,6 +289,13 @@ class MobileApiPlugin
                 KEY idx_created (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $created = [];
+        $failed  = [];
+        $tables = self::schemaSteps();
 
         foreach ($tables as $name => $ddl) {
             if ($this->db->query($ddl) === true) {

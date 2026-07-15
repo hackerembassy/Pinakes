@@ -9,12 +9,16 @@ on:
     branches: [main]
     paths:
       - 'installer/database/**'
+      - 'installer/classes/Installer.php'
+      - 'scripts/list-source-expectations.php'
       - 'version.json'
       - '.github/workflows/ci-upgrade-smoke.yml'
   pull_request:
     branches: [main]
     paths:
       - 'installer/database/**'
+      - 'installer/classes/Installer.php'
+      - 'scripts/list-source-expectations.php'
       - 'version.json'
       - '.github/workflows/ci-upgrade-smoke.yml'
   workflow_dispatch:
@@ -170,10 +174,12 @@ jobs:
       # ── Step 6: Verify schema after upgrade ───────────────────────────────
       - name: Verify core tables present
         run: |
-          CORE_TABLES="admin_notifications api_keys autori author_authority_alternates cms_pages collane consent_log contact_messages copie digital_assets donazioni editori email_templates events feedback gdpr_requests generi home_content import_logs languages libri libri_autori libri_collane libri_donati libri_tag log_modifiche mag_project_config mensole migrations ncip_partners ncip_transactions oai_deleted_records oai_resumption_tokens plugin_data plugin_hooks plugin_logs plugin_settings plugins posizioni preferenze_notifica_utenti prenotazioni prestiti recensioni scaffali sedi staff system_settings tag themes update_logs user_sessions utenti volumi wishlist z39_access_logs z39_rate_limits"
+          TABLE_OUTPUT=$(php scripts/list-source-expectations.php tables)
+          mapfile -t CORE_TABLES <<< "$TABLE_OUTPUT"
+          [ "${#CORE_TABLES[@]}" -gt 0 ] || { echo "No tables derived from schema.sql"; exit 1; }
           FAILED=0
           MISSING=""
-          for t in $CORE_TABLES; do
+          for t in "${CORE_TABLES[@]}"; do
             EXISTS=$(mysql -h 127.0.0.1 -u root -proot pinakes_upgrade -sN -e \
               "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='pinakes_upgrade' AND table_name='$t'")
             if [ "$EXISTS" -eq 0 ]; then
@@ -182,7 +188,7 @@ jobs:
             fi
           done
           if [ "$FAILED" -eq 0 ]; then
-            echo "✓ All $(echo $CORE_TABLES | wc -w | tr -d ' ') core tables present"
+            echo "✓ All ${#CORE_TABLES[@]} schema.sql tables present"
           else
             echo "✗ Missing tables:$MISSING"
             exit 1

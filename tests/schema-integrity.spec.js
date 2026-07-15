@@ -41,8 +41,10 @@
 
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
-const fs   = require('fs');
-const path = require('path');
+const {
+    readCoreTablesFromSchema,
+    readBundledPlugins,
+} = require('./helpers/source-expectations');
 
 const DB_USER   = process.env.E2E_DB_USER   || '';
 const DB_PASS   = process.env.E2E_DB_PASS   || '';
@@ -71,49 +73,6 @@ function dbQuery(sql) {
 
 test.skip(!DB_USER || !DB_NAME, 'Missing E2E env (DB_*)');
 
-// ── Schema.sql auto-derive (approach 2) ──────────────────────────────────────
-
-/**
- * Parse CREATE TABLE names from the authoritative schema.sql.
- * Returns null when schema.sql is not readable (e.g. remote-only CI target).
- * Plugin-optional tables are NOT in schema.sql, so they are naturally excluded.
- *
- * __dirname is always the tests/ folder of the *source repo*, regardless of
- * where the app is installed — so this always reflects the latest definition.
- *
- * @returns {string[]|null}
- */
-function parseCoreTablesFromSchema() {
-    const sqlPath = path.resolve(__dirname, '..', 'installer', 'database', 'schema.sql');
-    try {
-        const sql = fs.readFileSync(sqlPath, 'utf-8');
-        return [...sql.matchAll(/^CREATE TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`(\w+)`/gim)].map(m => m[1]).sort();
-    } catch {
-        return null;
-    }
-}
-
-/**
- * Bundled plugins declared by the app itself, parsed from
- * App\Support\BundledPlugins::LIST — the SAME source of truth the runtime uses
- * to register them. Derived, never hardcoded: adding a plugin to that constant
- * updates this test automatically. Returns null when the source is unreadable
- * (remote-only CI target) so the caller can skip.
- *
- * @returns {string[]|null}
- */
-function parseBundledPluginsFromSource() {
-    const srcPath = path.resolve(__dirname, '..', 'app', 'Support', 'BundledPlugins.php');
-    try {
-        const src = fs.readFileSync(srcPath, 'utf-8');
-        const block = src.match(/const\s+LIST\s*=\s*\[([\s\S]*?)\]\s*;/);
-        if (!block) return null;
-        return [...block[1].matchAll(/'([^']+)'/g)].map(m => m[1]).sort();
-    } catch {
-        return null;
-    }
-}
-
 // ── Expected state (DERIVED, never hardcoded) ───────────────────────────────
 //
 // Both lists come from the app's own sources of truth — schema.sql for core
@@ -126,14 +85,16 @@ function parseBundledPluginsFromSource() {
 // KEEP THIS DYNAMIC. Do not reintroduce a hardcoded table/plugin list or count.
 
 /** Core tables the installer must create — every CREATE TABLE in schema.sql. */
-const CORE_TABLES = parseCoreTablesFromSchema();
+const coreTablesFromSource = readCoreTablesFromSchema();
+const CORE_TABLES = coreTablesFromSource ?? [];
 
 /** Bundled plugins that must be registered — every entry in BundledPlugins::LIST. */
-const EXPECTED_PLUGINS = parseBundledPluginsFromSource();
+const pluginsFromSource = readBundledPlugins();
+const EXPECTED_PLUGINS = pluginsFromSource ?? [];
 
 // Without the sources we can't derive expectations — skip rather than assert
 // against an empty/guessed list (remote-only CI target, no source checkout).
-test.skip(CORE_TABLES === null || EXPECTED_PLUGINS === null,
+test.skip(coreTablesFromSource === null || pluginsFromSource === null,
     'schema.sql / BundledPlugins.php not readable — cannot derive expectations');
 
 // ── Helper ────────────────────────────────────────────────────────────────────

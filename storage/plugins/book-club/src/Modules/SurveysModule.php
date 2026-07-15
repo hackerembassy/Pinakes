@@ -64,9 +64,9 @@ class SurveysModule extends AbstractModule
     // Schema
     // ------------------------------------------------------------------
 
-    public function ensureSchema(): array
+    protected static function schemaSteps(): array
     {
-        $result = $this->runDdl([
+        return [
             'bookclub_surveys' => "CREATE TABLE IF NOT EXISTS bookclub_surveys (
                 id INT NOT NULL AUTO_INCREMENT,
                 club_id INT NOT NULL,
@@ -104,7 +104,12 @@ class SurveysModule extends AbstractModule
                 CONSTRAINT fk_bcsurvans_user FOREIGN KEY (user_id)
                     REFERENCES utenti (id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-        ]);
+        ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $result = $this->runDdl(static::schemaSteps());
 
         // Idempotent guards for installs whose bookclub_surveys predates the
         // scheduling columns (CREATE TABLE IF NOT EXISTS skips existing

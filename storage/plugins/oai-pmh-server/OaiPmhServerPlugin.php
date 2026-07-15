@@ -152,15 +152,13 @@ class OaiPmhServerPlugin
      */
     public function expectedTables(): array
     {
-        return ['oai_deleted_records', 'oai_resumption_tokens', 'digital_assets', 'mag_project_config'];
+        return array_keys(self::schemaSteps());
     }
 
-    public function ensureSchema(): array
+    /** @return array<string,string> table => CREATE DDL, in dependency order. */
+    private static function schemaSteps(): array
     {
-        $created = [];
-        $failed  = [];
-
-        $tables = [
+        return [
             'oai_deleted_records' => "CREATE TABLE IF NOT EXISTS oai_deleted_records (
                 id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 entity_type  ENUM('book','archival_unit') NOT NULL,
@@ -213,6 +211,13 @@ class OaiPmhServerPlugin
                     FOREIGN KEY (libro_id) REFERENCES libri(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $created = [];
+        $failed  = [];
+        $tables = self::schemaSteps();
 
         foreach ($tables as $name => $ddl) {
             if ($this->db->query($ddl) === true) {

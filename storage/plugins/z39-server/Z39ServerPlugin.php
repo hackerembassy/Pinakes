@@ -119,14 +119,13 @@ class Z39ServerPlugin
      */
     public function expectedTables(): array
     {
-        return ['autore_varianti', 'libri_soggetti', 'soggetti', 'z39_access_logs', 'z39_rate_limits'];
+        return array_keys(self::schemaSteps());
     }
 
-    public function ensureSchema(): array
+    /** @return array<string,string> table => CREATE DDL, in dependency order. */
+    private static function schemaSteps(): array
     {
-        $result = ['created' => [], 'failed' => []];
-
-        $tables = [
+        return [
             'z39_access_logs' => "CREATE TABLE IF NOT EXISTS z39_access_logs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 ip_address VARCHAR(45) NOT NULL COMMENT 'Client IP address',
@@ -189,6 +188,12 @@ class Z39ServerPlugin
                 INDEX idx_forma (forma_variante)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $result = ['created' => [], 'failed' => []];
+        $tables = self::schemaSteps();
 
         foreach ($tables as $table => $ddl) {
             if ($this->db->query($ddl) !== false) {

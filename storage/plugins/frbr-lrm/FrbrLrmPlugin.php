@@ -176,17 +176,22 @@ class FrbrLrmPlugin
      */
     public function expectedTables(): array
     {
-        return ['opere', 'espressioni', 'libri_autori_ruoli'];
+        return array_keys(self::schemaSteps());
     }
 
-    public function ensureSchema(): array
+    /** @return array<string,string> table => CREATE DDL, in dependency order. */
+    private static function schemaSteps(): array
     {
-        $steps = [
+        return [
             'opere'              => self::ddlOpere(),
             'espressioni'        => self::ddlEspressioni(),
             'libri_autori_ruoli' => self::ddlLibriAutoriRuoli(),
         ];
+    }
 
+    public function ensureSchema(): array
+    {
+        $steps = self::schemaSteps();
         $created = [];
         $failed = [];
 

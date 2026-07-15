@@ -28,6 +28,12 @@ interface ModuleInterface
 
     public function defaultEnabled(): bool;
 
+    /** Tables created by this module's schema map, available without a DB instance. */
+    public static function declaredTables(): array;
+
+    /** Tables created by this module's schema map. */
+    public function expectedTables(): array;
+
     /**
      * Idempotent DDL (CREATE TABLE IF NOT EXISTS + guarded ALTERs).
      * Called from BOTH onInstall() and onActivate() of the plugin.

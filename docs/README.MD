@@ -143,19 +143,16 @@ biblioteche museali, fondi di riferimento.
  Attivabile in Impostazioni → Avanzate (chiave: system.catalogue_mode).
 ```
 
-### Sistema a Plugin (16 plugin inclusi)
+### Sistema a Plugin
 ```
-Pinakes si estende senza toccare il codice. Plugin pre-installati
-(tutti opt-in da Impostazioni → Plugin; attivo di default solo Open Library):
+Pinakes si estende senza toccare il codice. I plugin bundled sono distribuiti
+con l'applicazione, ma "bundled" non significa "attivo": il set attivato su
+una nuova installazione resta una scelta esplicita dell'installer e i plugin
+opzionali restano disattivati finché l'amministratore non li abilita.
 
- Metadati: Open Library, API Book Scraper
- Musica: Discogs, MusicBrainz, Deezer (CD, LP, vinili)
- Autorità: VIAF Authority Control (collega autori a VIAF/ISNI)
- Interoperabilità: Z39 Server (SRU/SBN/BNF), OAI-PMH Server,
-   NCIP 2.0, BIBFRAME, OpenURL Resolver, ResourceSync
- Catalogazione: Dewey Editor, Digital Library (eBook/audiolibri)
- Archivi: Archives (ISAD(G) + ISAAR(CPF))
- Ricerca esterna: GoodLib
+La lista autorevole dei plugin distribuiti è App\Support\BundledPlugins::LIST.
+Per visualizzarla senza mantenere conteggi o elenchi duplicati:
+ php scripts/list-source-expectations.php plugins
 
  Installa nuovi plugin via upload ZIP dal pannello admin.
 ```

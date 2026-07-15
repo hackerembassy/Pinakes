@@ -5,65 +5,6 @@
 
 class Installer {
 
-    private const EXPECTED_TABLES = [
-        'admin_notifications',
-        'api_keys',
-        'autori',
-        'cms_pages',
-        'collane',
-        'consent_log',
-        'contact_messages',
-        'copie',
-        'donazioni',
-        'editori',
-        'email_templates',
-        'events',
-        'feedback',
-        'gdpr_requests',
-        'generi',
-        'home_content',
-        'import_logs',
-        'languages',
-        'libri',
-        'libri_autori',
-        'libri_collane',
-        'libri_donati',
-        'libri_tag',
-        'log_modifiche',
-        'mensole',
-        'migrations',
-        // Mobile API plugin tables — active by default since 0.7.21 (schema.sql),
-        // so the installer's post-import verification must check them too.
-        'mobile_app_tokens',
-        'mobile_availability_watchers',
-        'mobile_push_log',
-        'mobile_push_prefs',
-        'mobile_push_subscriptions',
-        'plugin_data',
-        'plugin_hooks',
-        'plugin_logs',
-        'plugin_settings',
-        'plugins',
-        'posizioni',
-        'preferenze_notifica_utenti',
-        'prenotazioni',
-        'prestiti',
-        'recensioni',
-        'scaffali',
-        'sedi',
-        'staff',
-        'system_settings',
-        'tag',
-        'themes',
-        'update_logs',
-        'user_sessions',
-        'utenti',
-        'volumi',
-        'wishlist',
-        'z39_access_logs',
-        'z39_rate_limits'
-    ];
-
     private $baseDir;
     private $pdo;
     private $config = [];
@@ -547,6 +488,55 @@ class Installer {
     /**
      * Verify schema was imported correctly
      */
+    private function expectedTablesFromSchema() {
+        $schemaFile = dirname(__DIR__) . '/database/schema.sql';
+        $sql = @file_get_contents($schemaFile);
+        if ($sql === false) {
+            throw new Exception("Impossibile leggere il file schema.sql per la verifica: {$schemaFile}");
+        }
+
+        return self::parseCreateTableNames($sql);
+    }
+
+    /**
+     * Extract every CREATE TABLE target from schema.sql.
+     * Supports quoted and unquoted MySQL identifiers and rejects partial
+     * parses, so a new SQL spelling cannot silently weaken installation checks.
+     *
+     * @return array<int,string>
+     */
+    public static function parseCreateTableNames($sql) {
+        preg_match_all('/^\s*CREATE\s+TABLE\b/im', (string)$sql, $statements);
+        preg_match_all(
+            '/^\s*CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:`([^`]+)`|([A-Za-z_][A-Za-z0-9_$]*))/im',
+            (string)$sql,
+            $matches,
+            PREG_SET_ORDER
+        );
+
+        if (count($statements[0]) === 0) {
+            throw new Exception('schema.sql non contiene dichiarazioni CREATE TABLE.');
+        }
+        if (count($matches) !== count($statements[0])) {
+            throw new Exception(sprintf(
+                'Impossibile derivare tutte le tabelle da schema.sql: %d nomi su %d CREATE TABLE.',
+                count($matches),
+                count($statements[0])
+            ));
+        }
+
+        $tables = [];
+        foreach ($matches as $match) {
+            $tables[] = strtolower($match[1] !== '' ? $match[1] : $match[2]);
+        }
+        if (count(array_unique($tables)) !== count($tables)) {
+            throw new Exception('schema.sql contiene dichiarazioni CREATE TABLE duplicate.');
+        }
+
+        sort($tables);
+        return $tables;
+    }
+
     private function verifySchemaImport() {
         // IMPORTANT: Close old PDO connection and reset it
         // This ensures new connections see the newly created tables
@@ -565,17 +555,13 @@ class Installer {
             $actual = array_map('strtolower', $tables);
             sort($actual);
 
-            $expected = self::EXPECTED_TABLES;
-            sort($expected);
+            $expected = $this->expectedTablesFromSchema();
 
             $missing = array_diff($expected, $actual);
             if (!empty($missing)) {
                 throw new Exception(sprintf(__("Schema non importato correttamente. Tabelle mancanti: %s"), implode(', ', $missing)));
             }
 
-            if (count($actual) < count($expected)) {
-                throw new Exception(sprintf(__("Schema incompleto: trovate %d tabelle su %d attese."), count($actual), count($expected)));
-            }
         } catch (PDOException $e) {
             throw new Exception(sprintf(__("Errore verifica tabelle: %s"), $e->getMessage()));
         }
@@ -766,8 +752,7 @@ class Installer {
 
         $actualTables = array_map('strtolower', $tables);
         sort($actualTables);
-        $expectedTables = self::EXPECTED_TABLES;
-        sort($expectedTables);
+        $expectedTables = $this->expectedTablesFromSchema();
 
         $missing = array_diff($expectedTables, $actualTables);
         if (!empty($missing)) {
@@ -1408,7 +1393,9 @@ HTACCESS;
 
     /**
      * Register and activate default plugins
-     * Plugins: open-library, z39-server, api-book-scraper, digital-library, dewey-editor
+     * Plugins: open-library, z39-server, api-book-scraper, digital-library,
+     * dewey-editor, mobile-api. This explicit product-policy set is intentionally
+     * smaller than BundledPlugins::LIST: bundled does not mean default-active.
      * Excluded: scraping-pro (commercial/proprietary)
      */
     public function installPluginsFromZip() {
@@ -1520,10 +1507,9 @@ HTACCESS;
         // NOTE: The 5 historically-default plugins plus mobile-api (active by default
         // since 0.7.21) are auto-activated on fresh install.
         // Other bundled plugins (BundledPlugins::LIST) are registered later by
-        // autoRegisterBundledPlugins() and remain deactivated until admin opt-in.
-        // Keeping new plugins opt-in is safer for fresh installs: it avoids surprising
-        // behavior changes, side effects (extra routes, DB tables, background jobs),
-        // and lets the admin review and enable each plugin consciously.
+        // autoRegisterBundledPlugins(). Their manifest policy remains authoritative:
+        // metadata.optional plugins start inactive, while the bundled list itself
+        // never means "activate everything".
         // Install all default plugins (excluding scraping-pro)
         $installPlugin('open-library');
         $installPlugin('z39-server', [

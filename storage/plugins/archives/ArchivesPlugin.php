@@ -312,12 +312,13 @@ class ArchivesPlugin
      */
     public function expectedTables(): array
     {
-        return ['archival_units', 'archival_unit_files', 'archival_unit_authority', 'archive_activities', 'archive_unit_activities', 'archive_agent_identifiers', 'archive_agent_relations', 'archive_places', 'archive_relations', 'authority_records', 'autori_authority_link'];
+        return array_keys(self::schemaSteps());
     }
 
-    public function ensureSchema(): array
+    /** @return array<string,string> table => CREATE DDL, in dependency order. */
+    private static function schemaSteps(): array
     {
-        $steps = [
+        return [
             'archival_units'             => self::ddlArchivalUnits(),
             'authority_records'          => self::ddlAuthorityRecords(),
             'archival_unit_authority'    => self::ddlArchivalAuthorityLinks(),
@@ -333,6 +334,11 @@ class ArchivesPlugin
             'archive_places'             => self::ddlArchivePlaces(),
             'archive_relations'          => self::ddlArchiveRelations(),
         ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $steps = self::schemaSteps();
         $created = [];
         $failed = [];
 

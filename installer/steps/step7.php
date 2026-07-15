@@ -36,6 +36,8 @@ if (!isset($_SESSION['installation_finalized'])) {
 // Get admin info from session
 $adminUser = $_SESSION['admin_user'] ?? null;
 $appName = $_SESSION['app_settings']['name'] ?? 'Pinakes';
+$schemaSql = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
+$schemaTableCount = count(Installer::parseCreateTableNames($schemaSql === false ? '' : $schemaSql));
 
 renderHeader(7, __('Installazione Completata'));
 ?>
@@ -142,7 +144,7 @@ if (!empty($triggerWarnings)):
 <?php endif; ?>
 <h3 style="margin-top: 30px; margin-bottom: 15px; color: #2d3748;"><?= __("Riepilogo Installazione") ?></h3>
 <ul class="summary-list">
-    <li><i class="fas fa-check-circle"></i> <?= __("Database installato (46 tabelle)") ?></li>
+    <li><i class="fas fa-check-circle"></i> <?= __("Database installato (%d tabelle)", $schemaTableCount) ?></li>
     <?php if (empty($triggerWarnings)): ?>
         <li><i class="fas fa-check-circle"></i> <?= __("Trigger database configurati") ?></li>
     <?php else: ?>
