@@ -2346,7 +2346,7 @@ function initContributorPicker(roleKey) {
         // just because addItems=true. Explicitly add a temporary choice and let
         // the controller resolve its label through <role>_new[]. This mirrors
         // the load-bearing Enter handling of the main author picker (#74).
-        const createContributorFromInput = (rawValue) => {
+        const createContributorFromInput = (rawValue, silent = false) => {
             const label = String(rawValue || '').trim();
             if (!label) return;
             const duplicate = Array.from(hidden ? hidden.querySelectorAll('input') : [])
@@ -2354,7 +2354,7 @@ function initContributorPicker(roleKey) {
             if (duplicate) {
                 // Feedback parity with the authors picker: a silently-dropped
                 // duplicate looks like the keystroke was ignored.
-                if (window.Toast) {
+                if (!silent && window.Toast) {
                     window.Toast.fire({ icon: 'info', title: bookFormMessages.contributorAlreadySelected.replace('%s', label) });
                 }
                 if (internalInput) internalInput.value = '';
@@ -2369,8 +2369,10 @@ function initContributorPicker(roleKey) {
             if (typeof choice.clearInput === 'function') choice.clearInput();
             choice.hideDropdown();
             // Confirm the new contributor is staged for creation, matching the
-            // authors picker's "ready to be created" Toast.
-            if (window.Toast) {
+            // authors picker's "ready to be created" Toast. Suppressed for the
+            // scraping path (silent=true), which reuses this fn but shows its own
+            // single "import complete" Toast instead of one per contributor (F016).
+            if (!silent && window.Toast) {
                 window.Toast.fire({ icon: 'success', title: bookFormMessages.contributorReady.replace('%s', label) });
             }
         };
@@ -4349,7 +4351,7 @@ function initializeIsbnImport() {
                         scrapedTranslator.value = normalized;
                     }
                     if (window.__contributorPickers && window.__contributorPickers.traduttori) {
-                        window.__contributorPickers.traduttori.addName(normalized);
+                        window.__contributorPickers.traduttori.addName(normalized, true);
                     }
                 }
             } catch (err) {
@@ -4368,7 +4370,7 @@ function initializeIsbnImport() {
                         scrapedIllustrator.value = normalized;
                     }
                     if (window.__contributorPickers && window.__contributorPickers.illustratori) {
-                        window.__contributorPickers.illustratori.addName(normalized);
+                        window.__contributorPickers.illustratori.addName(normalized, true);
                     }
                 }
             } catch (err) {
