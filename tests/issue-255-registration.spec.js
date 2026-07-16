@@ -29,15 +29,25 @@ const ADMIN_PASS = process.env.E2E_ADMIN_PASS || '';
 const DB_USER = process.env.E2E_DB_USER || '';
 const DB_PASS = process.env.E2E_DB_PASS || '';
 const DB_SOCKET = process.env.E2E_DB_SOCKET || '';
+const DB_HOST = process.env.E2E_DB_HOST || '';
+const DB_PORT = process.env.E2E_DB_PORT || '';
 const DB_NAME = process.env.E2E_DB_NAME || '';
 
 test.skip(!ADMIN_EMAIL || !ADMIN_PASS || !DB_USER || !DB_NAME,
   'E2E credentials not configured (set E2E_ADMIN_EMAIL, E2E_ADMIN_PASS, E2E_DB_*)');
 
 function dbQuery(sql) {
-  const args = ['-u', DB_USER];
-  if (DB_SOCKET) args.push('--socket=' + DB_SOCKET);
-  args.push(DB_NAME, '-N', '-B', '-e', sql);
+  // Prefer TCP host/port (CI's MySQL service listens on 127.0.0.1, not the
+  // default socket); fall back to the socket (local dev). Mirrors the working
+  // connection logic in schema-integrity.spec.js.
+  const args = [];
+  if (DB_HOST) {
+    args.push('-h', DB_HOST);
+    if (DB_PORT) args.push('-P', DB_PORT);
+  } else if (DB_SOCKET) {
+    args.push('-S', DB_SOCKET);
+  }
+  args.push('-u', DB_USER, DB_NAME, '-N', '-B', '-e', sql);
   return execFileSync('mysql', args, {
     encoding: 'utf-8', timeout: 10000,
     env: { ...process.env, MYSQL_PWD: DB_PASS },
