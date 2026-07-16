@@ -66,4 +66,58 @@ abstract class RecordFormatter
     {
         return htmlspecialchars($text, ENT_XML1 | ENT_QUOTES, 'UTF-8');
     }
+
+    /**
+     * Normalize the role-aware contributor payload supplied by SRU/Z39.
+     * Older callers that only provide the historic `autori` string retain a
+     * compatible principal/co-author representation.
+     *
+     * @param array<string,mixed> $record
+     * @return list<array{nome:string,ruolo:string}>
+     */
+    protected function contributorRows(array $record): array
+    {
+        $allowed = ['principale', 'co-autore', 'traduttore', 'illustratore', 'curatore', 'colorista'];
+        $rows = [];
+        if (isset($record['contributors']) && is_array($record['contributors'])) {
+            foreach ($record['contributors'] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $name = trim((string) ($row['nome'] ?? $row['name'] ?? ''));
+                $role = (string) ($row['ruolo'] ?? 'co-autore');
+                if ($name !== '' && in_array($role, $allowed, true)) {
+                    $rows[] = ['nome' => $name, 'ruolo' => $role];
+                }
+            }
+            if ($rows !== []) {
+                return $rows;
+            }
+        }
+
+        $authors = array_values(array_filter(array_map(
+            'trim',
+            explode('; ', (string) ($record['autori'] ?? ''))
+        )));
+        foreach ($authors as $index => $name) {
+            $rows[] = ['nome' => $name, 'ruolo' => $index === 0 ? 'principale' : 'co-autore'];
+        }
+        return $rows;
+    }
+
+    protected function isCreatorRole(string $role): bool
+    {
+        return $role === 'principale' || $role === 'co-autore';
+    }
+
+    protected function roleTerm(string $role): string
+    {
+        return match ($role) {
+            'traduttore' => 'translator',
+            'illustratore' => 'illustrator',
+            'curatore' => 'editor',
+            'colorista' => 'colorist',
+            default => 'author',
+        };
+    }
 }

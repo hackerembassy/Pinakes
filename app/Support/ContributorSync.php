@@ -29,16 +29,21 @@ final class ContributorSync
      */
     public static function splitNames(string $raw): array
     {
-        // Semicolon/pipe/ampersand/conjunctions are unambiguous list
-        // separators. A comma is never safe to infer: both
+        // Decode the complete value before splitting: entity-encoded apostrophes
+        // and ampersands must never become authors such as "#039" or "amp".
+        // Only semicolon and pipe are sufficiently explicit list separators.
+        // Ampersands and conjunctions occur in legitimate personal/corporate
+        // names ("Costa e Silva", "Robert E Howard", "Simon & Schuster").
+        // A comma is likewise never safe to infer: both
         // "Mario Rossi, Luigi Bianchi" and the valid SBN personal name
         // "García Márquez, Gabriel José" have two multi-word fragments.
         // Preserve comma-containing chunks as one name and let
         // AuthorNormalizer handle the inverted Surname, Forename form.
-        $chunks = preg_split('/\s*(?:;|\||&|\se\s|\sand\s)\s*/ui', $raw) ?: [];
+        $decoded = HtmlHelper::decode($raw);
+        $chunks = preg_split('/\s*(?:;|\|)\s*/u', $decoded) ?: [];
         $names = [];
         foreach ($chunks as $chunk) {
-            $name = trim(HtmlHelper::decode($chunk));
+            $name = trim($chunk);
             if ($name !== ''
                 && preg_match('/^,+$/', preg_replace('/\s+/', '', $name) ?? $name) !== 1
                 && !in_array($name, $names, true)
@@ -111,6 +116,55 @@ final class ContributorSync
         self::persistLinks($db, $bookId, $resolved);
 
         return $created;
+    }
+
+    /**
+     * Persist one creator owned by a CSV-like import. The imported creator list
+     * is authoritative for this person: a prior manual demotion must not leave
+     * simultaneous principal/co-author rows and duplicate rendered names.
+     */
+    public static function persistImportedPrincipal(
+        mysqli $db,
+        int $bookId,
+        int $authorId,
+        int $creditOrder
+    ): void {
+        if ($bookId <= 0 || $authorId <= 0 || $creditOrder <= 0) {
+            throw new \InvalidArgumentException('Invalid imported principal association');
+        }
+
+        $delete = $db->prepare(
+            "DELETE FROM libri_autori
+              WHERE libro_id = ? AND autore_id = ? AND ruolo = 'co-autore'"
+        );
+        $insert = $db->prepare(
+            "INSERT INTO libri_autori (libro_id, autore_id, ruolo, ordine_credito)
+             VALUES (?, ?, 'principale', ?)
+             ON DUPLICATE KEY UPDATE ordine_credito = VALUES(ordine_credito)"
+        );
+        if ($delete === false || $insert === false) {
+            if ($delete instanceof \mysqli_stmt) {
+                $delete->close();
+            }
+            if ($insert instanceof \mysqli_stmt) {
+                $insert->close();
+            }
+            throw new \RuntimeException('Unable to prepare imported principal persistence');
+        }
+        try {
+            $delete->bind_param('ii', $bookId, $authorId);
+            if (!$delete->execute()) {
+                throw new \RuntimeException('Unable to normalize imported creator role: ' . $delete->error);
+            }
+
+            $insert->bind_param('iii', $bookId, $authorId, $creditOrder);
+            if (!$insert->execute()) {
+                throw new \RuntimeException('Unable to persist imported principal: ' . $insert->error);
+            }
+        } finally {
+            $delete->close();
+            $insert->close();
+        }
     }
 
     /**

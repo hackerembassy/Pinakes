@@ -66,6 +66,13 @@ test.describe.serial('Discogs Advanced Tests', () => {
 
     musicBookId = dbQuery(`SELECT id FROM libri WHERE titolo = 'E2E_ADV_CD_${RUN_ID}' AND deleted_at IS NULL LIMIT 1`);
     bookBookId = dbQuery(`SELECT id FROM libri WHERE titolo = 'E2E_ADV_Book_${RUN_ID}' AND deleted_at IS NULL LIMIT 1`);
+    // Direct SQL fixtures bypass BookRepository, whose production write path
+    // rebuilds the denormalized FULLTEXT column used by search_text.
+    dbExec(
+      `UPDATE libri
+          SET search_index = CONCAT_WS(' ', titolo, descrizione)
+        WHERE id IN (${Number(musicBookId) || 0}, ${Number(bookBookId) || 0})`
+    );
   });
 
   test.afterAll(async () => {

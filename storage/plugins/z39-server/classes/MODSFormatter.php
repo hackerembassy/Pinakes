@@ -42,26 +42,22 @@ class MODSFormatter extends RecordFormatter
             }
         }
 
-        // Name (Authors)
-        if (!empty($record['autori'])) {
-            $authors = explode('; ', $record['autori']);
-            foreach ($authors as $author) {
-                if (!empty($author)) {
-                    $name = $this->doc->createElement('name');
-                    $name->setAttribute('type', 'personal');
-                    $mods->appendChild($name);
+        // Names retain their core contributor role.
+        foreach ($this->contributorRows($record) as $contributor) {
+            $name = $this->doc->createElement('name');
+            $name->setAttribute('type', 'personal');
+            $mods->appendChild($name);
 
-                    $namePart = $this->doc->createElement('namePart', $this->escapeXml($author));
-                    $name->appendChild($namePart);
+            $namePart = $this->doc->createElement('namePart', $this->escapeXml($contributor['nome']));
+            $name->appendChild($namePart);
 
-                    $role = $this->doc->createElement('role');
-                    $name->appendChild($role);
+            $role = $this->doc->createElement('role');
+            $name->appendChild($role);
 
-                    $roleTerm = $this->doc->createElement('roleTerm', 'author');
-                    $roleTerm->setAttribute('type', 'text');
-                    $role->appendChild($roleTerm);
-                }
-            }
+            $roleTerm = $this->doc->createElement('roleTerm', $this->roleTerm($contributor['ruolo']));
+            $roleTerm->setAttribute('type', 'text');
+            $roleTerm->setAttribute('authority', 'marcrelator');
+            $role->appendChild($roleTerm);
         }
 
         // Type of Resource

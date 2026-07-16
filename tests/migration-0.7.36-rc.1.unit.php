@@ -14,7 +14,7 @@ declare(strict_types=1);
  * Strategy (mirrors tests/migration-0.7.25.unit.php):
  *   A. Enum ALTER on a sandbox table `zz_mig_libri_autori` seeded with the OLD
  *      enum → run the MODIFY → assert 'colorista' present → re-run → idempotent.
- *   B. ContributorBackfill::splitNames() cases (SBN comma / semicolon / & / e / and).
+ *   B. ContributorBackfill::splitNames() cases (SBN comma / explicit ; and | separators).
  *   C. Functional: inside a ROLLED-BACK transaction on the real tables, point an
  *      existing book's free-text illustratore at a two-name list (one author
  *      pre-created, one new), run the REAL ContributorBackfill::run(), and assert
@@ -121,9 +121,9 @@ echo "B. splitNames()\n";
 $check(ContributorBackfill::splitNames('Mario Rossi') === ['Mario Rossi'], "single name");
 $check(ContributorBackfill::splitNames('García Márquez, Gabriel José') === ['García Márquez, Gabriel José'], "multi-word SBN comma preserved");
 $check(ContributorBackfill::splitNames('Mario Rossi, Gianni Verdi') === ['Mario Rossi, Gianni Verdi'], "ambiguous comma list preserved as one value");
-$check(ContributorBackfill::splitNames('A; B & C | D') === ['A', 'B', 'C', 'D'], "semicolon + ampersand + pipe");
-$check(ContributorBackfill::splitNames('Tizio e Caio') === ['Tizio', 'Caio'], "italian ' e '");
-$check(ContributorBackfill::splitNames('Foo and Bar') === ['Foo', 'Bar'], "english ' and '");
+$check(ContributorBackfill::splitNames('A; B | C') === ['A', 'B', 'C'], "semicolon + pipe");
+$check(ContributorBackfill::splitNames('Costa e Silva') === ['Costa e Silva'], "italian conjunction in a name is preserved");
+$check(ContributorBackfill::splitNames('Robert E Howard; Simon &amp; Schuster') === ['Robert E Howard', 'Simon & Schuster'], "initial/conjunction names survive entity decoding");
 $check(ContributorBackfill::splitNames('  ,  ') === [], "empty fragments dropped");
 
 // ── C. Functional backfill (transactional, rolled back) ─────────────────────
@@ -161,6 +161,16 @@ try {
     $stmt->execute();
     $stmt->close();
 
+    $softDeletedName = "ZZ Mig {$token} Restorable Translator";
+    $stmt = $db->prepare(
+        'INSERT INTO libri (titolo, traduttore, deleted_at) VALUES (?, ?, NOW())'
+    );
+    $softDeletedTitle = "ZZ migration soft-deleted fixture {$token}";
+    $stmt->bind_param('ss', $softDeletedTitle, $softDeletedName);
+    $stmt->execute();
+    $softDeletedBookId = (int) $db->insert_id;
+    $stmt->close();
+
     ContributorBackfill::run($db);
 
     // Marker set → the whole pass completed without error.
@@ -179,6 +189,16 @@ try {
     // The second name became a new author entity.
     $twoId = $authors->findByName($twoName);
     $check($twoId !== null, "second illustrator created as an entity");
+
+    $softDeletedLinks = (int) $db->query(
+        "SELECT COUNT(*) FROM libri_autori la JOIN autori a ON a.id = la.autore_id
+          WHERE la.libro_id = {$softDeletedBookId}
+            AND la.ruolo = 'traduttore' AND a.nome = '" . $db->real_escape_string($softDeletedName) . "'"
+    )->fetch_column();
+    $check(
+        $softDeletedLinks === 1,
+        'soft-deleted books are backfilled so a later restore keeps contributor entities'
+    );
 
     $index = (string) $db->query("SELECT search_index FROM libri WHERE id={$bookId}")->fetch_column();
     $check(str_contains($index, $pseudonym), "first post-upgrade pass rebuilds pseudonym search index");
@@ -208,6 +228,8 @@ $check(strpos($upgradeSmoke, 'runMigrations($target, $target)') !== false
     'upgrade smoke executes and verifies the runtime backfill through Updater');
 $src = (string) file_get_contents($root . '/app/Support/ContributorSync.php');
 $check(strpos($src, 'syncImportedLegacyValues') !== false && strpos($src, 'libri_autori_import_sources') !== false, "shared contributor sync tracks importer provenance");
+$backfillSrc = (string) file_get_contents($root . '/app/Support/ContributorBackfill.php');
+$check(strpos($backfillSrc, 'GET_LOCK') !== false && strpos($backfillSrc, 'RELEASE_LOCK') !== false, 'backfill marker is protected by a cross-process advisory lock');
 
 echo "\n" . ($failed === 0 ? "ALL {$passed} PASS\n" : "{$passed} passed, {$failed} FAILED\n");
 $db->close();

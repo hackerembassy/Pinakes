@@ -271,7 +271,7 @@ $selectedSeriesType = \App\Support\SeriesLabels::canonical($book['tipo_collana']
               'coloristi'    => ['label' => __('Colorista'),    'help' => __('Cerca un autore esistente o scrivine uno nuovo (utile per i fumetti)')],
           ];
           ?>
-          <input type="hidden" name="contributors_entity_picker" value="1" />
+          <input type="hidden" id="contributors_entity_picker" name="contributors_entity_picker" value="0" />
           <div class="form-grid-2">
             <?php foreach ($contributorFields as $roleKey => $meta): ?>
             <div>
@@ -1168,7 +1168,12 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeUppy();
     initializeChoicesJS();
     initializePublishersChoices();
-    ['illustratori', 'traduttori', 'curatori', 'coloristi'].forEach(initContributorPicker);
+    const contributorPickerResults = ['illustratori', 'traduttori', 'curatori', 'coloristi']
+        .map(initContributorPicker);
+    const contributorMarker = document.getElementById('contributors_entity_picker');
+    if (contributorMarker && contributorPickerResults.every(Boolean)) {
+        contributorMarker.value = '1';
+    }
     initializeSeriesAutocompletes();
     initializeSweetAlert();
     initializeGeneriDropdowns();
@@ -2296,8 +2301,8 @@ function initializeSeriesAutocompletes() {
 function initContributorPicker(roleKey) {
     try {
         const el = document.getElementById(roleKey + '_select');
-        if (!el || typeof Choices === 'undefined') return;
         const hidden = document.getElementById(roleKey + '_hidden');
+        if (!el || !hidden || typeof Choices === 'undefined') return false;
 
         const choice = new Choices(el, {
             searchEnabled: true,
@@ -2432,8 +2437,10 @@ function initContributorPicker(roleKey) {
                 }
             }, 300);
         });
+        return true;
     } catch (error) {
         console.error('initContributorPicker failed for ' + roleKey + ':', error);
+        return false;
     }
 }
 

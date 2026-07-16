@@ -24,7 +24,7 @@ final class AuthorName
      */
     public const DISPLAY_SQL_A = "CASE WHEN TRIM(COALESCE(`a`.`pseudonimo`, '')) <> ''"
         . " AND TRIM(COALESCE(`a`.`nome`, '')) <> ''"
-        . " AND TRIM(COALESCE(`a`.`pseudonimo`, '')) <> TRIM(COALESCE(`a`.`nome`, ''))"
+        . " AND BINARY TRIM(COALESCE(`a`.`pseudonimo`, '')) <> BINARY TRIM(COALESCE(`a`.`nome`, ''))"
         . " THEN CONCAT(TRIM(COALESCE(`a`.`pseudonimo`, '')), ' (', TRIM(COALESCE(`a`.`nome`, '')), ')')"
         . " WHEN TRIM(COALESCE(`a`.`nome`, '')) <> '' THEN TRIM(COALESCE(`a`.`nome`, ''))"
         . " ELSE TRIM(COALESCE(`a`.`pseudonimo`, '')) END";
@@ -36,8 +36,11 @@ final class AuthorName
      */
     public static function display(array $author): string
     {
-        $nome = trim((string)($author['nome'] ?? ''));
-        $pseudonimo = trim((string)($author['pseudonimo'] ?? ''));
+        // MySQL TRIM() removes ASCII spaces, not every character in PHP's
+        // default trim mask. Use the same rule here; the SQL comparison is
+        // BINARY so case/accent differences also match PHP's !== exactly.
+        $nome = trim((string)($author['nome'] ?? ''), ' ');
+        $pseudonimo = trim((string)($author['pseudonimo'] ?? ''), ' ');
 
         if ($pseudonimo !== '' && $pseudonimo !== $nome) {
             return $nome !== '' ? $pseudonimo . ' (' . $nome . ')' : $pseudonimo;
@@ -63,5 +66,20 @@ final class AuthorName
         return $alias === 'a'
             ? self::DISPLAY_SQL_A
             : str_replace('`a`.', "`{$alias}`.", self::DISPLAY_SQL_A);
+    }
+
+    /**
+     * SQL expression for the name readers use to alphabetize an author.
+     * Unlike displaySql(), this intentionally omits the real-name suffix so
+     * an author displayed as "Lewis Carroll (Charles Dodgson)" sorts under
+     * Carroll rather than Dodgson.
+     */
+    public static function preferredSql(string $alias = 'a'): string
+    {
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias) !== 1) {
+            $alias = 'a';
+        }
+
+        return "COALESCE(NULLIF(TRIM(`{$alias}`.`pseudonimo`), ''), TRIM(COALESCE(`{$alias}`.`nome`, '')))";
     }
 }

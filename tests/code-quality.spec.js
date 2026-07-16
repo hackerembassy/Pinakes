@@ -222,7 +222,10 @@ test.describe.serial('Code Quality — 15 static analysis tests', () => {
         ];
         for (const file of phpFiles) {
             const content = fs.readFileSync(file, 'utf-8');
-            if ((FROM_LIBRI.test(content) || JOIN_LIBRI.test(content)) && !SOFT_DEL.test(content)) {
+            const intentionalMigrationRead = content.includes('@include-soft-deleted');
+            if ((FROM_LIBRI.test(content) || JOIN_LIBRI.test(content))
+                && !SOFT_DEL.test(content)
+                && !intentionalMigrationRead) {
                 violations.push(path.relative(ROOT, file));
             }
         }

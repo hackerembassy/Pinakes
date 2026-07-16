@@ -277,7 +277,15 @@ class SitemapGenerator
                        WHERE la.libro_id = l.id AND la.ruolo IN ('principale', 'co-autore')
                        ORDER BY CASE la.ruolo WHEN 'principale' THEN 0 ELSE 1 END, la.ordine_credito
                        LIMIT 1
-                   ) AS autore_principale
+                   ) AS autore_principale,
+                   (
+                       SELECT a.nome
+                       FROM libri_autori la
+                       JOIN autori a ON la.autore_id = a.id
+                       WHERE la.libro_id = l.id AND la.ruolo IN ('principale', 'co-autore')
+                       ORDER BY CASE la.ruolo WHEN 'principale' THEN 0 ELSE 1 END, la.ordine_credito
+                       LIMIT 1
+                   ) AS autore_principale_nome
             FROM libri l
             WHERE l.deleted_at IS NULL
             ORDER BY l.updated_at DESC
@@ -295,7 +303,7 @@ class SitemapGenerator
                 // Generate URL for each active locale
                 foreach ($this->activeLocales as $locale) {
                     $localePrefix = $this->getLocalePrefix($locale);
-                    $bookPath = $this->buildBookPath($id, $title, (string)($row['autore_principale'] ?? ''));
+                    $bookPath = $this->buildBookPath($id, $title, (string)($row['autore_principale_nome'] ?? ''));
 
                     $entries[] = [
                         'loc' => $this->baseUrl . $localePrefix . $bookPath,

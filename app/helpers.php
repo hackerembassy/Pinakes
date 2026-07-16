@@ -132,6 +132,9 @@ if (!function_exists('book_primary_author_name')) {
     function book_primary_author_name(array $book): string
     {
         $candidates = [
+            // URL builders must use the stable real name. List queries that
+            // render a pseudonym provide it separately under this key.
+            $book['autore_principale_nome'] ?? null,
             $book['autore_principale'] ?? null,
             $book['autore'] ?? null,
             $book['author'] ?? null,

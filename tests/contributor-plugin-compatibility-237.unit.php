@@ -33,6 +33,14 @@ $check(count($manifests) === count(\App\Support\BundledPlugins::LIST)
     && count(array_filter($manifests, 'is_file')) === count($manifests),
     'all centrally registered bundled plugin manifests are covered by the compatibility audit');
 $check(count(array_filter($manifests, static fn (string $file): bool => is_array(json_decode((string) file_get_contents($file), true)))) === count($manifests), 'all bundled plugin manifests remain valid JSON');
+foreach (['archives', 'book-club', 'frbr-lrm', 'mobile-api', 'z39-server'] as $plugin) {
+    $manifest = json_decode($read("storage/plugins/{$plugin}/plugin.json"), true);
+    $check(
+        is_array($manifest)
+            && version_compare((string) ($manifest['requires_app'] ?? ''), '0.7.36-rc.1', '>='),
+        "{$plugin} requires the AuthorName-era core version"
+    );
+}
 
 echo "B. Identity boundary\n";
 $authors = $read('app/Models/AuthorRepository.php');
@@ -67,6 +75,42 @@ $check(\Z39Server\UnimarcLibriParser::relatorForRole('traduttore') === '730', 'U
 $check(\Z39Server\UnimarcLibriParser::relatorForRole('illustratore') === '440', 'UNIMARC illustrator relator is 440');
 $check(\Z39Server\UnimarcLibriParser::relatorForRole('colorista') === '410', 'UNIMARC colorist relator is 410');
 
+require_once $root . '/storage/plugins/z39-server/classes/RecordFormatter.php';
+require_once $root . '/storage/plugins/z39-server/classes/DublinCoreFormatter.php';
+require_once $root . '/storage/plugins/z39-server/classes/MODSFormatter.php';
+require_once $root . '/storage/plugins/z39-server/classes/MARCXMLFormatter.php';
+require_once $root . '/storage/plugins/z39-server/classes/UNIMARCXMLFormatter.php';
+$interopRecord = [
+    'id' => 237,
+    'titolo' => 'Role-aware record',
+    'autori' => 'Principal Person',
+    'contributors' => [
+        ['nome' => 'Principal Person', 'ruolo' => 'principale'],
+        ['nome' => 'Translator Person', 'ruolo' => 'traduttore'],
+    ],
+];
+$renderRecord = static function (string $formatterClass) use ($interopRecord): string {
+    $document = new DOMDocument('1.0', 'UTF-8');
+    $node = (new $formatterClass($document))->format($interopRecord);
+    return (string) $document->saveXML($node);
+};
+$dcXml = $renderRecord(\Z39Server\DublinCoreFormatter::class);
+$check(str_contains($dcXml, '<dc:creator>Principal Person</dc:creator>')
+    && str_contains($dcXml, '<dc:contributor>Translator Person</dc:contributor>'),
+    'SRU Dublin Core behavior keeps translator separate from creator');
+$modsXml = $renderRecord(\Z39Server\MODSFormatter::class);
+$check(str_contains($modsXml, '<namePart>Translator Person</namePart>')
+    && str_contains($modsXml, '<roleTerm type="text" authority="marcrelator">translator</roleTerm>'),
+    'SRU MODS behavior exports the translator role');
+$marcXml = $renderRecord(\Z39Server\MARCXMLFormatter::class);
+$check(str_contains($marcXml, 'tag="100"') && str_contains($marcXml, 'Translator Person')
+    && str_contains($marcXml, '>translator</subfield>'),
+    'SRU MARCXML behavior exports principal and translator responsibilities');
+$unimarcXml = $renderRecord(\Z39Server\UNIMARCXMLFormatter::class);
+$check(str_contains($unimarcXml, 'tag="702"') && str_contains($unimarcXml, 'Translator Person')
+    && str_contains($unimarcXml, '>730</subfield>'),
+    'SRU UNIMARC behavior exports translator as 702 with relator 730');
+
 $oai = $read('storage/plugins/oai-pmh-server/OaiPmhServerPlugin.php');
 $check(str_contains($oai, "? 'creator' : 'contributor'") && str_contains($oai, "? (\$index === \$primaryCreatorIndex ? '700' : '701') : '702'"), 'OAI Dublin Core and UNIMARC preserve creator/contributor semantics');
 $check(str_contains($oai, 'private function primaryCreatorIndex')
@@ -93,6 +137,32 @@ $check($primaryCreatorIndex->invoke($oaiInstance, [
 $check($primaryCreatorIndex->invoke($oaiInstance, [
     ['nome' => 'Translator', 'ruolo' => 'traduttore'],
 ]) === null, 'OAI contributors never become the main creator');
+$writeMarc = $oaiReflection->getMethod('writeBookMarcXml');
+$renderOaiMarc = static function (array $authors) use ($writeMarc, $oaiInstance): string {
+    $writer = new XMLWriter();
+    $writer->openMemory();
+    $writer->startDocument('1.0', 'UTF-8');
+    $writeMarc->invoke(
+        $oaiInstance,
+        $writer,
+        ['id' => 237, 'titolo' => 'Translated title', 'traduttore' => 'Translator Person'],
+        $authors,
+        [],
+        null
+    );
+    $writer->endDocument();
+    return $writer->outputMemory();
+};
+$marcWithEntityTranslator = $renderOaiMarc([
+    ['nome' => 'Translator Person', 'ruolo' => 'traduttore'],
+]);
+$marcWithLegacyTranslator = $renderOaiMarc([]);
+$check(
+    str_contains($marcWithEntityTranslator, 'Translator Person')
+        && !str_contains($marcWithEntityTranslator, 'traduzione di')
+        && str_contains($marcWithLegacyTranslator, 'traduzione di Translator Person'),
+    'OAI MARC 245$c falls back to legacy translator only when no translator entity exists'
+);
 
 echo "D. Plugin and API presentation\n";
 foreach ([

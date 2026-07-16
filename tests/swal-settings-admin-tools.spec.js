@@ -412,10 +412,19 @@ test.describe.serial('SweetAlert — settings-admin-tools cluster', () => {
     }, pid);
     const confirm = await waitSwal(page);
     await expect(confirm).toContainText(/disattivare|Conferma/i);
+    const responsePromise = page.waitForResponse(
+      (response) => response.request().method() === 'POST'
+        && response.url().endsWith(`/admin/plugins/${pid}/deactivate`),
+      { timeout: 20000 }
+    );
     await page.click('.swal2-confirm');
-    await page.waitForTimeout(1000);
-    const active = dbQuery(`SELECT is_active FROM plugins WHERE id=${pid}`).trim();
-    expect(active).toBe('0');
+    const response = await responsePromise;
+    expect(response.status()).toBe(200);
+    expect((await response.json()).success).toBe(true);
+    await expect.poll(
+      () => dbQuery(`SELECT is_active FROM plugins WHERE id=${pid}`).trim(),
+      { timeout: 8000 }
+    ).toBe('0');
   });
 
   // plugins.php:1493 — uninstallPlugin (confirm-destructive). A real uninstall
@@ -493,7 +502,12 @@ test.describe.serial('SweetAlert — settings-admin-tools cluster', () => {
     await page.click('#apiBookScraperModal button[type="submit"]');
     const popup = await waitSwal(page);
     await expect(popup).toContainText(/Successo|salvat/i);
-    await page.click('.swal2-confirm').catch(() => {});
+    // Closing the success alert reloads the plugins page. Await that reload so
+    // it cannot race the next test's navigation to /admin/updates.
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => null),
+      page.click('.swal2-confirm').catch(() => {}),
+    ]);
   });
 
   // ════════════════════════════════════════════════════════════════════

@@ -164,18 +164,25 @@ async function ensurePlugins(browser) {
 // ─── Seeding ──────────────────────────────────────────────────────────────────
 
 function ensureTestUser(email, password, suffix) {
-    const existing = dbQuery(
-        `SELECT id FROM utenti WHERE email = '${email.replace(/'/g, "''")}' LIMIT 1`
-    );
-    if (existing !== '') return parseInt(existing, 10);
-    const hash = execFileSync('php', ['-r', `echo password_hash('${password}', PASSWORD_DEFAULT);`], {
+    const safeEmail = email.replace(/'/g, "''");
+    const hash = execFileSync('php', ['-r', `echo password_hash(${JSON.stringify(password)}, PASSWORD_DEFAULT);`], {
         encoding: 'utf-8', timeout: 5000,
     }).trim();
+    const existing = dbQuery(
+        `SELECT id FROM utenti WHERE email = '${safeEmail}' LIMIT 1`
+    );
+    if (existing !== '') {
+        const id = parseInt(existing, 10);
+        dbExec(
+            `UPDATE utenti SET password = '${hash.replace(/'/g, "''")}', stato = 'attivo', email_verificata = 1 WHERE id = ${id}`
+        );
+        return id;
+    }
     dbExec(
         `INSERT INTO utenti (nome, cognome, email, password, tipo_utente, email_verificata, stato, codice_tessera, privacy_accettata)
-         VALUES ('Test${suffix}', 'User', '${email}', '${hash}', 'standard', 1, 'attivo', 'BCFX${suffix}', 1)`
+         VALUES ('Test${suffix}', 'User', '${safeEmail}', '${hash.replace(/'/g, "''")}', 'standard', 1, 'attivo', 'BCFX${suffix}', 1)`
     );
-    return parseInt(dbQuery(`SELECT id FROM utenti WHERE email = '${email}' LIMIT 1`), 10);
+    return parseInt(dbQuery(`SELECT id FROM utenti WHERE email = '${safeEmail}' LIMIT 1`), 10);
 }
 
 function seedBook(title) {

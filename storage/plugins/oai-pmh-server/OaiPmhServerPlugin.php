@@ -1541,7 +1541,8 @@ class OaiPmhServerPlugin
         if (!empty($row['sottotitolo'])) {
             $titleSubs[] = ['b', (string) $row['sottotitolo']];
         }
-        if (!empty($row['traduttore'])) {
+        $entityRoles = array_map(static fn (array $a): string => (string) ($a['ruolo'] ?? ''), $authors);
+        if (!empty($row['traduttore']) && !in_array('traduttore', $entityRoles, true)) {
             $titleSubs[] = ['c', 'traduzione di ' . (string) $row['traduttore']];
         }
         $ind1 = $primaryCreatorIndex !== null ? '1' : '0';

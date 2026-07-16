@@ -364,10 +364,12 @@ class CsvImportController
                             $importData['authors_created']++;
                         }
 
-                        $stmt = $db->prepare("INSERT INTO libri_autori (libro_id, autore_id, ruolo, ordine_credito) VALUES (?, ?, 'principale', ?)");
-                        $stmt->bind_param('iii', $bookId, $authorId, $authorOrder);
-                        $stmt->execute();
-                        $stmt->close();
+                        \App\Support\ContributorSync::persistImportedPrincipal(
+                            $db,
+                            $bookId,
+                            $authorId,
+                            $authorOrder
+                        );
                         $authorOrder++;
                     }
                 }

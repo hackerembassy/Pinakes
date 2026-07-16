@@ -29,7 +29,12 @@ $e = static fn(mixed $v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'U
       $loanCount = (int) ($book['member_loan_count'] ?? 0);
       $loans = is_array($book['member_loans'] ?? null) ? $book['member_loans'] : [];
       $yesRsvps = (int) ($book['max_yes_rsvps'] ?? 0);
-      $bookUrl = book_url(['id' => (int) $book['libro_id'], 'titolo' => (string) $book['titolo'], 'autori' => (string) ($book['autori'] ?? '')]);
+      $bookUrl = book_url([
+        'id' => (int) $book['libro_id'],
+        'titolo' => (string) $book['titolo'],
+        'autori' => (string) ($book['autori'] ?? ''),
+        'autore_principale_nome' => (string) ($book['autore_principale_nome'] ?? ''),
+      ]);
     ?>
     <div class="border rounded-3 px-3 py-3 mb-3">
       <div class="d-flex align-items-start gap-3">

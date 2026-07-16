@@ -31,7 +31,8 @@ class SearchController
                 $params[] = $like;
                 $types .= 'ss';
             }
-            $sql = "SELECT id, {$label} FROM autori WHERE " . implode(' AND ', $conditions) . " ORDER BY nome";
+            $sql = "SELECT id, {$label} FROM autori WHERE " . implode(' AND ', $conditions)
+                . " ORDER BY " . \App\Support\AuthorName::preferredSql('autori');
             $stmt = $db->prepare($sql);
             $stmt->bind_param($types, ...$params);
             $stmt->execute();
@@ -42,7 +43,7 @@ class SearchController
             }
         } else {
             // Return all authors (for Choices.js initial load)
-            $res = $db->query("SELECT id, {$label} FROM autori ORDER BY nome");
+            $res = $db->query("SELECT id, {$label} FROM autori ORDER BY " . \App\Support\AuthorName::preferredSql('autori'));
             while ($r = $res->fetch_assoc()) {
                 $r['label'] = HtmlHelper::decode($r['label']);
                 $rows[] = $r;
@@ -128,7 +129,9 @@ class SearchController
             // publisher, ISBN/EAN and keywords, so one MATCH replaces the OR-of-LIKE.
             $stmt = $db->prepare("
                 SELECT l.id, l.titolo, l.sottotitolo, l.isbn10, l.isbn13, l.ean, l.stato,
-                       (SELECT GROUP_CONCAT(" . \App\Support\AuthorName::displaySql('a') . " ORDER BY a.nome SEPARATOR ', ')
+                       (SELECT GROUP_CONCAT(" . \App\Support\AuthorName::displaySql('a') . "
+                                ORDER BY (la.ruolo = 'principale') DESC,
+                                         COALESCE(la.ordine_credito, 0), a.nome SEPARATOR ', ')
                         FROM libri_autori la
                         JOIN autori a ON la.autore_id = a.id
                         WHERE la.libro_id = l.id AND la.ruolo IN ('principale','co-autore')) AS autori,
@@ -254,7 +257,9 @@ class SearchController
         // authors, publisher and keywords, so one MATCH replaces the OR-of-LIKE.
         $stmt = $db->prepare("
             SELECT l.id, l.titolo AS label, l.sottotitolo, l.isbn10, l.isbn13, l.ean,
-                   (SELECT GROUP_CONCAT(" . \App\Support\AuthorName::displaySql('a') . " ORDER BY a.nome SEPARATOR ', ')
+                   (SELECT GROUP_CONCAT(" . \App\Support\AuthorName::displaySql('a') . "
+                            ORDER BY (la.ruolo = 'principale') DESC,
+                                     COALESCE(la.ordine_credito, 0), a.nome SEPARATOR ', ')
                     FROM libri_autori la
                     JOIN autori a ON la.autore_id = a.id
                     WHERE la.libro_id = l.id AND la.ruolo IN ('principale','co-autore')) AS autori
@@ -313,7 +318,9 @@ class SearchController
             $params[] = $like;
             $types .= 'ss';
         }
-        $sql = "SELECT id, " . \App\Support\AuthorName::displaySql('autori') . " AS label FROM autori WHERE " . implode(' AND ', $conditions) . " ORDER BY nome LIMIT 5";
+        $sql = "SELECT id, " . \App\Support\AuthorName::displaySql('autori') . " AS label FROM autori WHERE "
+            . implode(' AND ', $conditions) . " ORDER BY "
+            . \App\Support\AuthorName::preferredSql('autori') . " LIMIT 5";
         $stmt = $db->prepare($sql);
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
@@ -431,7 +438,7 @@ class SearchController
                    (SELECT COUNT(*) FROM libri_autori la2 JOIN libri l2 ON la2.libro_id = l2.id WHERE la2.autore_id = a.id AND l2.deleted_at IS NULL) as libro_count
             FROM autori a
             WHERE " . implode(' AND ', $conditions) . "
-            ORDER BY a.nome LIMIT 4
+            ORDER BY " . \App\Support\AuthorName::preferredSql('a') . " LIMIT 4
         ";
         $stmt = $db->prepare($sql);
         $stmt->bind_param($types, ...$params);

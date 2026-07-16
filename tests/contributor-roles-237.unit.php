@@ -341,7 +341,13 @@ try {
     $csv = (string)file_get_contents($root . '/app/Controllers/CsvImportController.php');
     $libraryThing = (string)file_get_contents($root . '/app/Controllers/LibraryThingImportController.php');
     $publicDetail = (string)file_get_contents($root . '/app/Views/frontend/book-detail.php');
-    $check(str_contains($form, 'contributors_entity_picker') && str_contains($form, 'createContributorFromInput'), 'form marks authoritative picker payload and supports create-on-Enter');
+    $check(
+        str_contains($form, 'name="contributors_entity_picker" value="0"')
+            && str_contains($form, 'contributorPickerResults.every(Boolean)')
+            && str_contains($form, "contributorMarker.value = '1'")
+            && str_contains($form, 'createContributorFromInput'),
+        'form marks contributor payload authoritative only after every picker initializes'
+    );
     $check(str_contains($form, 'authorChoiceLabelMatchesInput') && str_contains($form, 'match[1].trim() === normalizedInput'), 'Enter recognizes pseudonym and real-name labels as existing authors');
     $check(str_contains($form, '__contributorPickers.traduttori.addName') && str_contains($form, '__contributorPickers.illustratori.addName'), 'scraping writes visible contributor chips');
     $check(str_contains($csv, 'ContributorSync::syncImportedLegacyValues') && str_contains($csv, "'csv'"), 'CSV import synchronizes contributor entities with provenance');

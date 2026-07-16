@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Issue #237 — reusable regression suite (25 checks) over every surface the
+ * Issue #237 — reusable regression suite over every surface the
  * contributor-roles / pseudonym work touched. Complements the behavioural
  * tests in contributor-roles-237.unit.php and migration-*.unit.php: this file
  * pins the INVARIANTS that past review rounds proved easy to regress —
@@ -94,6 +94,23 @@ $check(
     'release migration has a matching behavioural unit test'
 );
 
+// Exercise the real standalone-upgrader splitter against the real migration.
+// An apostrophe inside a SQL comment previously held the parser in quote mode
+// and merged the remaining statements.
+$splitterOutput = [];
+$splitterStatus = 1;
+exec(
+    escapeshellarg(PHP_BINARY) . ' '
+        . escapeshellarg($root . '/scripts/manual-upgrade.php') . ' --count-sql-statements '
+        . escapeshellarg($releaseMigration) . ' 2>&1',
+    $splitterOutput,
+    $splitterStatus
+);
+$check(
+    $splitterStatus === 0 && trim(implode("\n", $splitterOutput)) === '6',
+    'manual-upgrade parses the complete shipped migration into six statements'
+);
+
 $schema = $src('installer/database/schema.sql');
 $roleEnum = "enum('principale','co-autore','traduttore','illustratore','curatore','colorista')";
 
@@ -172,10 +189,11 @@ $check($interopOk, 'OAI/BIBFRAME/NCIP/Z39 order contributors principale-first');
 // ─────────────────────────────────────────────────────────────────────────────
 echo "B. splitNames + AuthorName behaviour (pure)\n";
 
-// 12. Unambiguous list separators split.
+// Decode before splitting and preserve conjunctions in legitimate names.
 $check(
-    ContributorSync::splitNames('A; B | C & D e E and F') === ['A', 'B', 'C', 'D', 'E', 'F'],
-    'splitNames splits on ; | & " e " " and "'
+    ContributorSync::splitNames("D&#039;Annunzio; Costa e Silva | Robert E Howard; Simon &amp; Schuster")
+        === ["D'Annunzio", 'Costa e Silva', 'Robert E Howard', 'Simon & Schuster'],
+    'splitNames decodes first, splits ;/|, and preserves conjunctions in names'
 );
 
 // 13. A comma NEVER splits: SBN/UNIMARC expose one person as
@@ -223,6 +241,33 @@ $check(
     'displaySql(): alias fully rewritten; invalid alias falls back to `a`'
 );
 
+$check(
+    book_path([
+        'id' => 237,
+        'titolo' => 'Alice nel paese delle meraviglie',
+        'autore' => 'Lewis Carroll (Charles Dodgson)',
+        'autore_principale_nome' => 'Charles Dodgson',
+    ]) === '/charles-dodgson/alice-nel-paese-delle-meraviglie/237',
+    'book_path uses the separate canonical real name, never the display label'
+);
+
+$pluginManagerReflection = new ReflectionClass(\App\Support\PluginManager::class);
+$pluginManager = $pluginManagerReflection->newInstanceWithoutConstructor();
+$compatibility = $pluginManagerReflection->getMethod('appCompatibilityError');
+$check(
+    $compatibility->invoke($pluginManager, ['requires_app' => $releaseVersion]) === null
+        && is_string($compatibility->invoke($pluginManager, ['requires_app' => '99.0.0'])),
+    'PluginManager accepts this core and rejects a plugin requiring a newer core'
+);
+
+$libriReflection = new ReflectionClass(\App\Controllers\LibriController::class);
+$libriController = $libriReflection->newInstanceWithoutConstructor();
+$positiveIds = $libriReflection->getMethod('positiveIntegerIds');
+$check(
+    $positiveIds->invoke($libriController, ['', '0', '7', '12garbage', -1, 9, '9']) === [7, 9],
+    'HTTP picker boundary drops blank, zero and malformed IDs while deduplicating valid IDs'
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // C. Database-backed invariants (atomicity, legacy cache, provenance)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -244,7 +289,7 @@ try {
         : new mysqli($env['DB_HOST'] ?? '127.0.0.1', $env['DB_USER'] ?? '', $env['DB_PASS'] ?? ($env['DB_PASSWORD'] ?? ''), $env['DB_NAME'] ?? '', (int) ($env['DB_PORT'] ?? 3306));
     $db->set_charset('utf8mb4');
 } catch (\Throwable $e) {
-    echo "SKIP: no database reachable — section C (7 checks) skipped: {$e->getMessage()}\n";
+    echo "SKIP: no database reachable — section C (10 checks) skipped: {$e->getMessage()}\n";
     echo $fail === 0 ? "\nALL {$pass} PASS (DB section skipped)\n" : "\n{$pass} PASS, {$fail} FAIL\n";
     exit($fail === 0 ? 0 : 1);
 }
@@ -276,6 +321,18 @@ $col = static function (string $sql, array $params = [], string $types = '') use
 
 try {
     $creatorId = $newAuthor("ZZ Reg Creator {$token}");
+
+    $parityResult = $db->query(
+        "SELECT " . AuthorName::displaySql('a') . " AS display_name
+           FROM (SELECT 'MARIO ROSSI' AS nome, 'Mario Rossi' AS pseudonimo) a"
+    );
+    $sqlDisplay = $parityResult instanceof mysqli_result
+        ? (string) ($parityResult->fetch_assoc()['display_name'] ?? '')
+        : '';
+    $check(
+        $sqlDisplay === AuthorName::display(['nome' => 'MARIO ROSSI', 'pseudonimo' => 'Mario Rossi']),
+        'AuthorName PHP and SQL agree on case-sensitive pseudonym differences'
+    );
 
     // 19. Invalid FK contributor id: the whole create must roll back —
     //     no orphan libri row may survive the failed sync.
@@ -352,6 +409,56 @@ try {
     $check(
         $cached === "ZZ Reg Illustrator {$token}" && $cleared === null && $links === 0,
         'entity link mirrors into the legacy cache; explicit removal clears cache + link'
+    );
+
+    $bulkBookId = $repo->createBasic(['titolo' => "ZZ reg bulk {$token}", 'autori_ids' => [$creatorId]]);
+    $bookIds[] = $bulkBookId;
+    $translatorId = $newAuthor("ZZ Reg Bulk Translator {$token}");
+    $db->query("DELETE FROM libri_autori WHERE libro_id = {$bulkBookId}");
+    $db->query(
+        "INSERT INTO libri_autori (libro_id, autore_id, ruolo)
+         VALUES ({$bulkBookId}, {$translatorId}, 'traduttore')"
+    );
+    $bulkService = new \App\Services\BulkEnrichmentService($db);
+    $bulkMethod = new ReflectionMethod($bulkService, 'enrichAuthorsIfEmpty');
+    $bulkMethod->invoke($bulkService, $bulkBookId, ["ZZ Reg Bulk Creator {$token}"]);
+    $bulkCreators = (int) $col(
+        "SELECT COUNT(*) FROM libri_autori
+          WHERE libro_id = ? AND ruolo IN ('principale', 'co-autore')",
+        [$bulkBookId],
+        'i'
+    );
+    $bulkTranslator = (int) $col(
+        "SELECT COUNT(*) FROM libri_autori
+          WHERE libro_id = ? AND autore_id = ? AND ruolo = 'traduttore'",
+        [$bulkBookId, $translatorId],
+        'ii'
+    );
+    $check(
+        $bulkCreators === 1 && $bulkTranslator === 1,
+        'bulk enrichment adds a creator when the only existing entity is a translator'
+    );
+
+    $roleBookId = $repo->createBasic(['titolo' => "ZZ reg role {$token}", 'autori_ids' => [$creatorId]]);
+    $bookIds[] = $roleBookId;
+    $db->query(
+        "UPDATE libri_autori SET ruolo = 'co-autore'
+          WHERE libro_id = {$roleBookId} AND autore_id = {$creatorId} AND ruolo = 'principale'"
+    );
+    ContributorSync::persistImportedPrincipal($db, $roleBookId, $creatorId, 3);
+    $creatorRoles = [];
+    $roleResult = $db->query(
+        "SELECT ruolo, ordine_credito FROM libri_autori
+          WHERE libro_id = {$roleBookId} AND autore_id = {$creatorId}"
+    );
+    while ($roleRow = $roleResult->fetch_assoc()) {
+        $creatorRoles[] = $roleRow;
+    }
+    $check(
+        count($creatorRoles) === 1
+            && ($creatorRoles[0]['ruolo'] ?? '') === 'principale'
+            && (int) ($creatorRoles[0]['ordine_credito'] ?? 0) === 3,
+        'CSV/LT principal persistence removes the same author co-role instead of duplicating it'
     );
 
     // 24. Re-import replaces the importer's OWN stale link (per-source

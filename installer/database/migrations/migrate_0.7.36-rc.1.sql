@@ -12,7 +12,7 @@
 --
 -- CSV and LibraryThing reimports also need to replace only links they created,
 -- while preserving manual role links. The provenance table below records that
--- ownership separately from libri_autori's public role contract.
+-- ownership separately from the public libri_autori role contract.
 --
 -- Idempotent (project rule 6): the MODIFY is applied only when 'colorista' is not
 -- already present in the column type, guarded via information_schema so re-running

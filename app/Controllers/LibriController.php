@@ -583,6 +583,31 @@ class LibriController
     }
 
     /**
+     * Normalize picker payloads at the HTTP boundary. Empty/zero/garbage values
+     * emitted by an unenhanced multi-select are ignored here; BookRepository
+     * remains fail-fast when an invalid id reaches its internal API directly.
+     *
+     * @return list<int>
+     */
+    private function positiveIntegerIds(mixed $values): array
+    {
+        $ids = [];
+        foreach ((array) $values as $value) {
+            if (is_int($value)) {
+                $id = $value;
+            } elseif (is_string($value) && preg_match('/^\s*[0-9]+\s*$/D', $value) === 1) {
+                $id = (int) trim($value);
+            } else {
+                continue;
+            }
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        return array_values($ids);
+    }
+
+    /**
      * Resolve a contributor role's picker submission into a flat list of author
      * ids (issue #237). Existing selections arrive as `<role>_ids[]`; brand-new
      * names as `<role>_new[]`, which are find-or-created just like authors.
@@ -593,7 +618,7 @@ class LibriController
      */
     private function resolveContributorIds(mysqli $db, array $data, string $roleKey): array
     {
-        $ids = array_map('intval', (array)($data[$roleKey . '_ids'] ?? []));
+        $ids = $this->positiveIntegerIds($data[$roleKey . '_ids'] ?? []);
         $newNames = (array)($data[$roleKey . '_new'] ?? []);
         if ($newNames !== []) {
             $authRepo = new \App\Models\AuthorRepository($db);
@@ -965,11 +990,15 @@ class LibriController
             }
 
             $repo = new \App\Models\BookRepository($db);
-            $fields['autori_ids'] = array_map('intval', $data['autori_ids'] ?? []);
+            $fields['autori_ids'] = $this->positiveIntegerIds($data['autori_ids'] ?? []);
             // Contributor roles as entities (issue #237): illustrator/translator/
             // curator/colorist pickers, resolved to author ids (new names created).
+            $contributorPickersReady = (string)($data['contributors_entity_picker'] ?? '') === '1';
             foreach (['illustratori', 'traduttori', 'curatori', 'coloristi'] as $contributorRole) {
-                $fields[$contributorRole . '_ids'] = $this->resolveContributorIds($db, $data, $contributorRole);
+                $resolvedContributorIds = $this->resolveContributorIds($db, $data, $contributorRole);
+                if ($contributorPickersReady || $resolvedContributorIds !== []) {
+                    $fields[$contributorRole . '_ids'] = $resolvedContributorIds;
+                }
             }
 
             // Get scraped author bio if available
@@ -1612,11 +1641,15 @@ class LibriController
                     return $response->withStatus(409)->withHeader('Content-Type', 'application/json');
                 }
             }
-            $fields['autori_ids'] = array_map('intval', $data['autori_ids'] ?? []);
+            $fields['autori_ids'] = $this->positiveIntegerIds($data['autori_ids'] ?? []);
             // Contributor roles as entities (issue #237): illustrator/translator/
             // curator/colorist pickers, resolved to author ids (new names created).
+            $contributorPickersReady = (string)($data['contributors_entity_picker'] ?? '') === '1';
             foreach (['illustratori', 'traduttori', 'curatori', 'coloristi'] as $contributorRole) {
-                $fields[$contributorRole . '_ids'] = $this->resolveContributorIds($db, $data, $contributorRole);
+                $resolvedContributorIds = $this->resolveContributorIds($db, $data, $contributorRole);
+                if ($contributorPickersReady || $resolvedContributorIds !== []) {
+                    $fields[$contributorRole . '_ids'] = $resolvedContributorIds;
+                }
             }
 
             $collRepo = new \App\Models\CollocationRepository($db);

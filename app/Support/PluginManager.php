@@ -51,6 +51,40 @@ class PluginManager
     }
 
     /**
+     * Return a user-facing error when a manifest targets a newer core.
+     * Plugin ZIPs are a supported distribution path, so merely persisting
+     * requires_app without enforcing it lets plugins fatal while loading
+     * classes introduced by a later Pinakes release.
+     *
+     * @param array<string,mixed> $pluginMeta
+     */
+    private function appCompatibilityError(array $pluginMeta): ?string
+    {
+        $required = trim((string) ($pluginMeta['requires_app'] ?? ''));
+        if ($required === '') {
+            return null;
+        }
+
+        $versionFile = dirname(__DIR__, 2) . '/version.json';
+        $versionData = is_file($versionFile)
+            ? json_decode((string) file_get_contents($versionFile), true)
+            : null;
+        $current = is_array($versionData) ? trim((string) ($versionData['version'] ?? '')) : '';
+        if ($current === '') {
+            return __('Impossibile verificare la versione di Pinakes richiesta dal plugin.');
+        }
+        if (version_compare($current, $required, '<')) {
+            return sprintf(
+                __('Plugin richiede Pinakes %s o superiore; versione installata: %s.'),
+                $required,
+                $current
+            );
+        }
+
+        return null;
+    }
+
+    /**
      * Auto-register bundled plugins that exist on disk but not in database
      * This ensures bundled plugins survive updates even if DB entries were lost
      *
@@ -119,7 +153,10 @@ class PluginManager
             }
 
             // Check if already registered
-            $stmt = $this->db->prepare("SELECT id, version, is_active FROM plugins WHERE name = ?");
+            $stmt = $this->db->prepare(
+                "SELECT id, version, is_active, requires_php, requires_app
+                   FROM plugins WHERE name = ?"
+            );
             if ($stmt === false) {
                 SecureLogger::error("[PluginManager] Failed to prepare bundled plugin lookup for $pluginName", ['db_error' => $this->db->error]);
                 continue;
@@ -140,6 +177,30 @@ class PluginManager
             $stmt->close();
 
             if ($row) {
+                // Manifest compatibility metadata is operational, not merely
+                // descriptive. Keep it in sync even when a bundled plugin's
+                // own version did not change in this core release.
+                $diskRequiresPhp = (string) ($pluginMeta['requires_php'] ?? '');
+                $diskRequiresApp = (string) ($pluginMeta['requires_app'] ?? '');
+                if ($diskRequiresPhp !== (string) ($row['requires_php'] ?? '')
+                    || $diskRequiresApp !== (string) ($row['requires_app'] ?? '')
+                ) {
+                    $requirementsStmt = $this->db->prepare(
+                        'UPDATE plugins SET requires_php = ?, requires_app = ? WHERE id = ?'
+                    );
+                    if ($requirementsStmt !== false) {
+                        $requirementsId = (int) $row['id'];
+                        $requirementsStmt->bind_param(
+                            'ssi',
+                            $diskRequiresPhp,
+                            $diskRequiresApp,
+                            $requirementsId
+                        );
+                        $requirementsStmt->execute();
+                        $requirementsStmt->close();
+                    }
+                }
+
                 // Sync version/metadata if disk version is newer
                 $diskVersion = $pluginMeta['version'] ?? '1.0.0';
                 $dbVersion = $row['version'] ?? '0.0.0';
@@ -715,6 +776,12 @@ class PluginManager
             }
         }
 
+        $appCompatibilityError = $this->appCompatibilityError($pluginMeta);
+        if ($appCompatibilityError !== null) {
+            $zip->close();
+            return ['success' => false, 'message' => $appCompatibilityError, 'plugin_id' => null];
+        }
+
         // Extract plugin to storage/plugins directory
         $pluginsBaseDir = realpath($this->pluginsDir) ?: $this->pluginsDir;
         $pluginPath = $pluginsBaseDir . '/' . $pluginMeta['name'];
@@ -934,6 +1001,19 @@ class PluginManager
 
         if ($plugin['is_active']) {
             return ['success' => false, 'message' => __('Plugin già attivo.')];
+        }
+
+        // The DB column may contain metadata from an older bundled copy. Read
+        // the on-disk manifest that will actually be loaded and enforce its
+        // minimum core version before any plugin PHP is required.
+        $manifestPath = $this->pluginsDir . '/' . $plugin['path'] . '/plugin.json';
+        $manifest = is_file($manifestPath)
+            ? json_decode((string) file_get_contents($manifestPath), true)
+            : null;
+        $compatibilityMeta = is_array($manifest) ? array_replace($plugin, $manifest) : $plugin;
+        $appCompatibilityError = $this->appCompatibilityError($compatibilityMeta);
+        if ($appCompatibilityError !== null) {
+            return ['success' => false, 'message' => $appCompatibilityError];
         }
 
         // Load plugin main file

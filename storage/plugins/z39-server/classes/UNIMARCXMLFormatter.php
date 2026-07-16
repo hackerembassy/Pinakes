@@ -89,7 +89,11 @@ class UNIMARCXMLFormatter extends RecordFormatter
         $recordEl->appendChild($this->df('102', ' ', ' ', [['a', 'IT']]));
 
         // 200 — Title and statement of responsibility
-        $authorList = $this->parseAuthors((string) ($record['autori'] ?? ''));
+        $contributors = $this->contributorRows($record);
+        $authorList = array_values(array_map(
+            static fn (array $row): string => $row['nome'],
+            array_filter($contributors, fn (array $row): bool => $this->isCreatorRole($row['ruolo']))
+        ));
         $subs200    = [['a', (string) ($record['titolo'] ?? '')]];
         if (!empty($record['sottotitolo'])) {
             $subs200[] = ['e', (string) $record['sottotitolo']];
@@ -154,13 +158,26 @@ class UNIMARCXMLFormatter extends RecordFormatter
             }
         }
 
-        // 700/701 — Personal name (primary / alternative intellectual responsibility)
+        // 700/701/702 — creators and secondary intellectual responsibility.
         // FIX 7: UNIMARC ind1=undefined (space), ind2=form of name: 1=surname entry
-        foreach ($authorList as $i => $name) {
-            $tag = ($i === 0) ? '700' : '701';
+        $primaryCreatorIndex = null;
+        foreach ($contributors as $index => $contributor) {
+            if ($contributor['ruolo'] === 'principale') {
+                $primaryCreatorIndex = $index;
+                break;
+            }
+            if ($primaryCreatorIndex === null && $contributor['ruolo'] === 'co-autore') {
+                $primaryCreatorIndex = $index;
+            }
+        }
+        require_once __DIR__ . '/UnimarcLibriParser.php';
+        foreach ($contributors as $index => $contributor) {
+            $tag = $index === $primaryCreatorIndex
+                ? '700'
+                : ($this->isCreatorRole($contributor['ruolo']) ? '701' : '702');
             $recordEl->appendChild($this->df($tag, ' ', '1', [
-                ['a', $name],
-                ['4', '070'],
+                ['a', $contributor['nome']],
+                ['4', UnimarcLibriParser::relatorForRole($contributor['ruolo'])],
             ]));
         }
 
@@ -203,17 +220,6 @@ class UNIMARCXMLFormatter extends RecordFormatter
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────
-
-    /**
-     * @return list<string>
-     */
-    private function parseAuthors(string $concatenated): array
-    {
-        if ($concatenated === '') {
-            return [];
-        }
-        return array_values(array_filter(array_map('trim', explode('; ', $concatenated))));
-    }
 
     private function langCode(string $italianName): string
     {

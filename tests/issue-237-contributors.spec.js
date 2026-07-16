@@ -162,6 +162,34 @@ test.describe.serial('Issue #237 — contributor roles and pseudonyms', () => {
     await page.goto(`${BASE}/libro/${bookId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toContainText(`${PSEUDONYM} (${REAL_NAME})`);
     await expect(page.locator('body')).toContainText(ILLUSTRATOR);
+    const canonicalPathParts = new URL(page.url()).pathname.split('/').filter(Boolean);
+    const canonicalAuthorSlug = canonicalPathParts[0] || '';
+    expect(canonicalAuthorSlug).toContain('issue237-real-');
+    expect(canonicalAuthorSlug).not.toContain(PSEUDONYM.toLowerCase().replace(/[^a-z0-9-]+/g, ''));
+
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    const homeBookLink = page.locator(`a[href$="/${bookId}"]`).first();
+    await expect(homeBookLink).toHaveAttribute('href', new RegExp(`/${canonicalAuthorSlug}/[^/]+/${bookId}$`));
+
+    const feedResponse = await page.request.get(`${BASE}/feed.xml`);
+    expect(feedResponse.ok()).toBeTruthy();
+    const feedXml = await feedResponse.text();
+    expect(feedXml).toContain(`/${canonicalAuthorSlug}/`);
+    expect(feedXml).not.toContain(`/${PSEUDONYM.toLowerCase().replace(/[^a-z0-9-]+/g, '')}/`);
+
+    const pseudonymSru = await page.request.get(
+      `${BASE}/api/sru?operation=searchRetrieve&version=1.2&recordSchema=dc&query=${encodeURIComponent(`dc.creator = "${PSEUDONYM}"`)}`,
+    );
+    expect(pseudonymSru.ok()).toBeTruthy();
+    expect(await pseudonymSru.text()).toContain(BOOK_TITLE);
+
+    const roleAwareSru = await page.request.get(
+      `${BASE}/api/sru?operation=searchRetrieve&version=1.2&recordSchema=unimarcxml&query=${encodeURIComponent(`dc.title = "${BOOK_TITLE}"`)}`,
+    );
+    expect(roleAwareSru.ok()).toBeTruthy();
+    const roleAwareXml = await roleAwareSru.text();
+    expect(roleAwareXml).toContain(ILLUSTRATOR);
+    expect(roleAwareXml).toMatch(/tag="702"[\s\S]*?<subfield code="4">440<\/subfield>/);
   });
 
   test('editing a book preserves an existing co-author role', async () => {

@@ -114,6 +114,13 @@ class LibraryRepo
                        FROM libri_autori la JOIN autori a ON a.id = la.autore_id
                       WHERE la.libro_id = l.id
                         AND la.ruolo IN ('principale', 'co-autore')) AS autori,
+                    (SELECT a.nome
+                       FROM libri_autori la JOIN autori a ON a.id = la.autore_id
+                      WHERE la.libro_id = l.id
+                        AND la.ruolo IN ('principale', 'co-autore')
+                      ORDER BY (la.ruolo = 'principale') DESC,
+                               COALESCE(la.ordine_credito, 0), la.autore_id
+                      LIMIT 1) AS autore_principale_nome,
                     (SELECT COUNT(*) FROM prenotazioni pr
                       WHERE pr.libro_id = l.id AND pr.stato = 'attiva') AS waitlist,
                     (SELECT COUNT(*) FROM prenotazioni pr2

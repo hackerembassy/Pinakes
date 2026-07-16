@@ -808,13 +808,13 @@ $additional_css = "
         box-shadow: none;
     }
 
-    .role-coautore {
+    .role-co-autore {
         background: #f97316;
         color: #fff;
         border-color: #f97316;
     }
 
-    .role-coautore:hover {
+    .role-co-autore:hover {
         color: #fff;
         box-shadow: none;
     }
@@ -2305,7 +2305,7 @@ ob_start();
         </h3>
         <div class="d-flex flex-wrap justify-content-center gap-2">
             <?php foreach ($seriesBooks as $sb):
-                $sbPath = book_path(['id' => $sb['id'], 'titolo' => $sb['titolo'], 'autore_principale' => $sb['autore_principale'] ?? '']);
+                $sbPath = book_path($sb);
             ?>
             <a href="<?= htmlspecialchars(url($sbPath), ENT_QUOTES, 'UTF-8') ?>" class="text-decoration-none">
                 <div class="d-flex align-items-center gap-2 px-2 py-1 rounded-pill" style="background: color-mix(in srgb, var(--primary-color) 8%, transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent); transition: all .2s;">

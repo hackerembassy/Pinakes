@@ -72,8 +72,11 @@ async function loginAsAdmin(page) {
 
 // ── Fixture helpers ─────────────────────────────────────────────────────────
 function insertBook(title, extra = {}) {
-  const cols = ['titolo', 'copie_totali', 'copie_disponibili', 'created_at', 'updated_at'];
-  const vals = [`'${escapeSql(title)}'`, '1', '1', 'NOW()', 'NOW()'];
+  // Direct fixtures bypass BookRepository, so seed the denormalized FULLTEXT
+  // field that the admin search uses to find the row.
+  const cols = ['titolo', 'search_index', 'copie_totali', 'copie_disponibili', 'created_at', 'updated_at'];
+  const escapedTitle = `'${escapeSql(title)}'`;
+  const vals = [escapedTitle, escapedTitle, '1', '1', 'NOW()', 'NOW()'];
   for (const [k, v] of Object.entries(extra)) {
     cols.push(k);
     vals.push(v === null ? 'NULL' : `'${escapeSql(String(v))}'`);
@@ -435,13 +438,17 @@ test.describe.serial('Books cluster SweetAlerts', () => {
     ).toBe('0');
   });
 
-  // scheda_libro.php:1687 (confirm-action) — confirmRenewal extends due date +14
-  test('scheda_libro.php:1687 confirmRenewal extends loan due date by 14 days', async () => {
+  // scheda_libro.php:1687 (confirm-action) — confirmRenewal uses the configured duration
+  test('scheda_libro.php:1687 confirmRenewal extends due date by the configured loan duration', async () => {
     const title = `${TAG} RenewBook`;
     const bookId = insertBook(title);
     const copyId = insertCopy(bookId, `${TAG}-INV-RENEW`, 'prestato');
     const loanId = insertActiveLoan(bookId, copyId, userId, 'in_corso', 14);
     const beforeDue = dbQuery(`SELECT data_scadenza FROM prestiti WHERE id = ${loanId}`);
+    const configuredDays = parseInt(dbQuery(
+      "SELECT COALESCE((SELECT setting_value FROM system_settings WHERE category='loans' AND setting_key='loan_duration_days' LIMIT 1), '30')"
+    ), 10);
+    const expectedDays = configuredDays > 0 ? configuredDays : 30;
 
     await page.goto(`${BASE}/admin/books/${bookId}`);
     await page.waitForLoadState('domcontentloaded');
@@ -458,7 +465,7 @@ test.describe.serial('Books cluster SweetAlerts', () => {
     await expect.poll(
       () => dbQuery(`SELECT DATEDIFF(data_scadenza, '${escapeSql(beforeDue)}') FROM prestiti WHERE id = ${loanId}`),
       { timeout: 8000 }
-    ).toBe('14');
+    ).toBe(String(expectedDays));
   });
 
   // scheda_libro.php:1894 (confirm-action) — editCopyForm submit updates copy status

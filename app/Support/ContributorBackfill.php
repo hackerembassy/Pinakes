@@ -23,6 +23,8 @@ use mysqli;
  */
 final class ContributorBackfill
 {
+    // @include-soft-deleted: this one-time data migration intentionally covers
+    // restorable rows as well as currently visible books.
     private const MARKER_CATEGORY = 'migrations';
     private const MARKER_KEY = 'contributors_backfilled';
 
@@ -35,7 +37,20 @@ final class ContributorBackfill
 
     public static function run(mysqli $db): bool
     {
+        $lockAcquired = false;
         try {
+            // The updater and maintenance recovery can run concurrently. The
+            // marker alone is not a lock: both processes could resolve the same
+            // new name before either writes it (autori.nome is not unique).
+            $lockResult = $db->query(
+                "SELECT GET_LOCK(CONCAT('pinakes-contributor-backfill:', DATABASE()), 30)"
+            );
+            $lockAcquired = $lockResult instanceof \mysqli_result
+                && (int) ($lockResult->fetch_row()[0] ?? 0) === 1;
+            if (!$lockAcquired) {
+                throw new \RuntimeException('Unable to acquire contributor backfill lock');
+            }
+
             $settings = new SettingsRepository($db);
             if ($settings->get(self::MARKER_CATEGORY, self::MARKER_KEY, '0') === '1') {
                 return true; // already done
@@ -61,6 +76,10 @@ final class ContributorBackfill
             // Best-effort: leave the marker unset so a later pass retries.
             SecureLogger::warning('ContributorBackfill failed: ' . $e->getMessage());
             return false;
+        } finally {
+            if ($lockAcquired) {
+                $db->query("SELECT RELEASE_LOCK(CONCAT('pinakes-contributor-backfill:', DATABASE()))");
+            }
         }
     }
 
@@ -68,8 +87,10 @@ final class ContributorBackfill
     private static function backfillColumn(mysqli $db, string $column, string $ruolo): array
     {
         $bookIds = [];
+        // Include soft-deleted books: they may be restored after this one-time
+        // migration and must not permanently miss their contributor entities.
         $sql = "SELECT id, `{$column}` AS raw FROM libri
-                WHERE `{$column}` IS NOT NULL AND TRIM(`{$column}`) <> '' AND deleted_at IS NULL";
+                WHERE `{$column}` IS NOT NULL AND TRIM(`{$column}`) <> ''";
         $res = $db->query($sql);
         if (!($res instanceof \mysqli_result)) {
             return $bookIds;
@@ -97,7 +118,7 @@ final class ContributorBackfill
                FROM libri_autori la
                JOIN autori a ON a.id = la.autore_id
                JOIN libri l ON l.id = la.libro_id
-              WHERE TRIM(COALESCE(a.pseudonimo, '')) <> '' AND l.deleted_at IS NULL"
+              WHERE TRIM(COALESCE(a.pseudonimo, '')) <> ''"
         );
         if ($res instanceof \mysqli_result) {
             while ($row = $res->fetch_row()) {
@@ -110,7 +131,7 @@ final class ContributorBackfill
     /**
      * Split a free-text contributor value into individual names. Delegates to
      * {@see ContributorSync::splitNames()}, which splits on the unambiguous list
-     * separators (semicolon, pipe, ampersand, " e " / " and "). Commas are
+     * separators (semicolon and pipe). Ampersands/conjunctions and commas are
      * deliberately preserved because a list cannot be distinguished reliably
      * from an inverted "Surname, Forename" SBN/UNIMARC personal name.
      *

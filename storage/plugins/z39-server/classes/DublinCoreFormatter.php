@@ -38,14 +38,10 @@ class DublinCoreFormatter extends RecordFormatter
             $dcRecord->appendChild($this->createElement('title', $title));
         }
 
-        // Creator - dc:creator (authors)
-        if (!empty($record['autori'])) {
-            $authors = explode('; ', $record['autori']);
-            foreach ($authors as $author) {
-                if (!empty($author)) {
-                    $dcRecord->appendChild($this->createElement('creator', $author));
-                }
-            }
+        // Keep intellectual creators distinct from role-aware contributors.
+        foreach ($this->contributorRows($record) as $contributor) {
+            $element = $this->isCreatorRole($contributor['ruolo']) ? 'creator' : 'contributor';
+            $dcRecord->appendChild($this->createElement($element, $contributor['nome']));
         }
 
         // Subject - dc:subject

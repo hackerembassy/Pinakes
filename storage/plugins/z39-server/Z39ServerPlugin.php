@@ -1601,6 +1601,7 @@ class Z39ServerPlugin
         if (!is_array($row)) {
             return null;
         }
+        $contributors = $this->getBookContributors($id);
 
         return [
             'id'                  => (int) $row['id'],
@@ -1619,6 +1620,44 @@ class Z39ServerPlugin
             'classificazione_dewey' => (string) ($row['classificazione_dewey'] ?? ''),
             'editore'             => (string) ($row['editore'] ?? ''),
             'autori'              => (string) ($row['autori'] ?? ''),
+            'contributors'        => $contributors,
         ];
+    }
+
+    /**
+     * @return list<array{nome:string,ruolo:string}>
+     */
+    private function getBookContributors(int $bookId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT a.nome, la.ruolo
+               FROM libri_autori la
+               JOIN autori a ON a.id = la.autore_id
+              WHERE la.libro_id = ?
+              ORDER BY (la.ruolo = 'principale') DESC,
+                       (la.ruolo = 'co-autore') DESC,
+                       la.ordine_credito IS NULL,
+                       la.ordine_credito,
+                       la.autore_id"
+        );
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param('i', $bookId);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
+        $result = $stmt->get_result();
+        $rows = $result instanceof \mysqli_result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return array_map(
+            static fn (array $row): array => [
+                'nome' => trim((string) ($row['nome'] ?? '')),
+                'ruolo' => (string) ($row['ruolo'] ?? ''),
+            ],
+            $rows
+        );
     }
 }
