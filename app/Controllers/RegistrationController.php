@@ -86,10 +86,13 @@ class RegistrationController
         }
 
         // Admin-defined custom fields (issue #255): validate before any write.
+        // Required IS enforced at signup (the field's contract); a format error
+        // gets a distinct code so the user isn't told to "fill" a field they did.
         $customDefinitions = \App\Support\RegistrationFields::definitions($db);
         $customValidation = \App\Support\RegistrationFields::validate($customDefinitions, $data);
         if ($customValidation['error'] !== null) {
-            return $response->withHeader('Location', RouteTranslator::route('register') . '?error=missing_fields')->withStatus(302);
+            $customError = $customValidation['error_reason'] === 'format' ? 'custom_field_invalid' : 'missing_fields';
+            return $response->withHeader('Location', RouteTranslator::route('register') . '?error=' . $customError)->withStatus(302);
         }
 
         // Validate input lengths

@@ -367,4 +367,43 @@ test.describe.serial('Issue #255 — configurable registration fields (25 checks
       dbQuery(`UPDATE registrazione_campi SET attivo=1 WHERE id=${id}`);
     }
   });
+
+  // ── review-round fixes (adamsreview) ───────────────────────────────────────
+
+  test('26. a format-invalid custom value redirects to the distinct error code (not missing_fields)', async ({ page }) => {
+    setToggles(false, false, false);
+    const email = `zz-255-fmt-${TOKEN}@example.test`;
+    const id = fieldId(LBL('email'));
+    await fillRegistration(page, {
+      fields: { nome: 'Fmt255', email, password: 'Password255!ok', password_confirm: 'Password255!ok' },
+    });
+    // Force a bad email value into the (email-typed) custom control via a text
+    // control so the browser doesn't drop it, then submit past client validation.
+    await page.evaluate((fieldName) => {
+      const el = document.querySelector(`[name="${fieldName}"]`);
+      if (el instanceof HTMLInputElement) { el.type = 'text'; el.value = 'not-an-email'; }
+    }, `custom_field[${id}]`);
+    await submitNoValidate(page);
+    expect(page.url()).toContain('error=custom_field_invalid');
+    expect(userCount(email)).toBe(0);
+  });
+
+  test('27. a surname-less member renders with no trailing space in the admin user list', async ({ page }) => {
+    setToggles(false, false, false);
+    const email = `zz-255-noln-${TOKEN}@example.test`;
+    await fillRegistration(page, {
+      fields: { nome: 'SoloNome27', email, password: 'Password255!ok', password_confirm: 'Password255!ok' },
+    });
+    await submitNoValidate(page);
+    expect(userCount(email)).toBe(1);
+    // Stored surname is '' (optional); the admin list must not show "SoloNome27 ".
+    await admin.goto(`${BASE}/admin/users`);
+    const cell = admin.locator('td', { hasText: 'SoloNome27' }).first();
+    await expect(cell).toBeVisible();
+    const text = (await cell.innerText()).trim();
+    // innerText of the cell may include the email on the next line; assert the
+    // name line itself has no trailing space before a newline or end.
+    expect(text).not.toMatch(/SoloNome27 (?:\n|$)/);
+    expect(text).toContain('SoloNome27');
+  });
 });

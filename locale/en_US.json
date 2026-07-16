@@ -6537,5 +6537,7 @@
   "Salva impostazioni registrazione": "Save registration settings",
   "Impostazioni di registrazione aggiornate correttamente.": "Registration settings updated successfully.",
   "Salvataggio dei campi personalizzati non riuscito. Riprova.": "Saving the custom fields failed. Please try again.",
-  "Le modifiche ai campi vengono salvate insieme alle impostazioni di registrazione.": "Field changes are saved together with the registration settings."
+  "Le modifiche ai campi vengono salvate insieme alle impostazioni di registrazione.": "Field changes are saved together with the registration settings.",
+  "Controlla i campi personalizzati: un valore inserito non è valido.": "Check the custom fields: one of the values entered is not valid.",
+  "Eliminare i campi personalizzati selezionati? I valori salvati dagli utenti per questi campi verranno rimossi definitivamente.": "Delete the selected custom fields? The values users saved for these fields will be permanently removed."
 }

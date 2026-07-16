@@ -201,10 +201,10 @@ $note = HtmlHelper::e($utente['note_utente'] ?? '');
     const isAdmin = roleField.value === 'admin';
     if (phoneField) {
       phoneField.required = !isAdmin && REQUIRE_TELEFONO;
-      if (addressField) {
-        addressField.required = !isAdmin && REQUIRE_INDIRIZZO;
-      }
       phoneField.placeholder = isAdmin ? __('Opzionale per amministratori') : '+39 123 456 7890';
+    }
+    if (addressField) {
+      addressField.required = !isAdmin && REQUIRE_INDIRIZZO;
     }
 
     adminBlocks.forEach((section) => {

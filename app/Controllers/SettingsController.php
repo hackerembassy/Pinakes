@@ -222,6 +222,14 @@ class SettingsController
         $repository = new SettingsRepository($db);
         $repository->ensureTables();
 
+        // Persist the custom-field definitions FIRST (own transaction). On
+        // failure, bail BEFORE writing the toggles — so a field-batch failure
+        // never leaves the toggles applied under a "save failed" flash.
+        if (!$this->saveRegistrationCustomFields($db, $data)) {
+            $_SESSION['error_message'] = __('Salvataggio dei campi personalizzati non riuscito. Riprova.');
+            return $this->redirect($response, '/admin/settings?tab=registration');
+        }
+
         $requireApproval = isset($data['require_admin_approval']) ? '1' : '0';
         $repository->set('registration', 'require_admin_approval', $requireApproval);
         ConfigStore::set('registration.require_admin_approval', (bool) $requireApproval);
@@ -232,12 +240,7 @@ class SettingsController
             ConfigStore::set('registration.' . $toggleKey, (bool) $flag);
         }
 
-        $this->saveRegistrationCustomFields($db, $data);
-
-        // saveRegistrationCustomFields surfaces its own error flash on failure.
-        if (empty($_SESSION['error_message'])) {
-            $_SESSION['success_message'] = __('Impostazioni di registrazione aggiornate correttamente.');
-        }
+        $_SESSION['success_message'] = __('Impostazioni di registrazione aggiornate correttamente.');
         return $this->redirect($response, '/admin/settings?tab=registration');
     }
 
@@ -249,8 +252,10 @@ class SettingsController
      * No-ops gracefully when the tables are not migrated yet.
      *
      * @param array<string,mixed> $data
+     * @return bool true when the batch committed (or there was nothing to do);
+     *              false when it rolled back — the caller decides the flash.
      */
-    private function saveRegistrationCustomFields(mysqli $db, array $data): void
+    private function saveRegistrationCustomFields(mysqli $db, array $data): bool
     {
         try {
             $probe = $db->prepare(
@@ -258,7 +263,7 @@ class SettingsController
                   WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1'
             );
             if ($probe === false) {
-                return;
+                return true;
             }
             $tableName = 'registrazione_campi';
             $probe->bind_param('s', $tableName);
@@ -266,7 +271,7 @@ class SettingsController
             $exists = $probe->get_result()->fetch_row() !== null;
             $probe->close();
             if (!$exists) {
-                return;
+                return true;
             }
 
             // All row mutations land atomically: a mid-batch failure must not
@@ -357,10 +362,9 @@ class SettingsController
             }
         } catch (\Throwable $e) {
             \App\Support\SecureLogger::error('[Settings] custom registration fields save failed', ['error' => $e->getMessage()]);
-            // Surface the failure: the settings page must not claim success
-            // when the field definitions were rolled back.
-            $_SESSION['error_message'] = __('Salvataggio dei campi personalizzati non riuscito. Riprova.');
+            return false;
         }
+        return true;
     }
 
     public function updateEmailTemplate(Request $request, Response $response, mysqli $db, string $template): Response
@@ -427,8 +431,9 @@ class SettingsController
         ];
         $settings = array_merge($defaults, $stored);
 
-        // Registration approval flag lives in its own config group but is edited
-        // from this (email) form, so surface it here for the checkbox to pre-fill.
+        // Registration approval flag lives in its own config group and is edited
+        // from the Registration tab (issue #255); surface it here only because
+        // resolveEmailSettings feeds several tabs' pre-fill.
         $settings['require_admin_approval'] = (bool) ConfigStore::get('registration.require_admin_approval', true);
         // Built-in field requirements (issue #255) — defaults keep the historical
         // all-required behaviour.

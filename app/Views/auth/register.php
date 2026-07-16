@@ -65,6 +65,8 @@ $registerRoute = route_path('register');
                   <?= __('Questi dati risultano già registrati') ?>
                 <?php elseif ($_GET['error'] === 'missing_fields'): ?>
                   <?= __('Compila tutti i campi richiesti') ?>
+                <?php elseif ($_GET['error'] === 'custom_field_invalid'): ?>
+                  <?= __('Controlla i campi personalizzati: un valore inserito non è valido.') ?>
                 <?php elseif ($_GET['error'] === 'privacy_required'): ?>
                   <?= __('Devi accettare la Privacy Policy per procedere') ?>
                 <?php elseif ($_GET['error'] === 'name_too_long'): ?>

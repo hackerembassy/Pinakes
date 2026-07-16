@@ -410,6 +410,21 @@ $activeTab = $activeTab ?? 'general';
             </button>
           </div>
         </form>
+        <script>
+          // Deleting a custom field cascades to every user's stored value —
+          // confirm before submitting when any "Elimina" box is checked.
+          (function () {
+            var form = document.querySelector('form[action$="/admin/settings/registration"]');
+            if (!form) return;
+            form.addEventListener('submit', function (e) {
+              var toDelete = form.querySelectorAll('input[name^="custom_fields"][name$="[delete]"]:checked');
+              if (toDelete.length > 0 &&
+                  !window.confirm(<?= json_encode(__("Eliminare i campi personalizzati selezionati? I valori salvati dagli utenti per questi campi verranno rimossi definitivamente."), JSON_HEX_TAG | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>)) {
+                e.preventDefault();
+              }
+            });
+          })();
+        </script>
       </section>
 
       <!-- Email Templates -->

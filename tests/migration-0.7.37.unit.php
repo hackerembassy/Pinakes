@@ -67,6 +67,26 @@ $check($r['error'] === null && $r['values'][3] === '1', 'checkbox normalises to 
 $r = RegistrationFields::validate($defs, ['custom_field' => [1 => str_repeat('a', 1001)]]);
 $check($r['error'] !== null, 'over-long value rejected');
 
+// error_reason distinguishes 'missing' from 'format' (issue #255 review fix #3)
+$r = RegistrationFields::validate($defs, ['custom_field' => [2 => 'https://x.y']]);
+$check($r['error_reason'] === 'missing', 'missing required reports reason=missing');
+$r = RegistrationFields::validate($defs, ['custom_field' => [1 => 'x', 5 => 'not-an-email']]);
+$check($r['error_reason'] === 'format', 'invalid value reports reason=format');
+
+// enforceRequired=false (profile self-edit): a blank required field is
+// tolerated so a field made required AFTER signup can't wall an existing user
+// out of unrelated edits — but format checks still apply (review fix #2).
+$r = RegistrationFields::validate($defs, ['custom_field' => [1 => '', 2 => '']], false);
+$check($r['error'] === null, 'enforceRequired=false tolerates a blank required field');
+$r = RegistrationFields::validate($defs, ['custom_field' => [1 => 'x', 5 => 'bad-email']], false);
+$check($r['error_reason'] === 'format', 'enforceRequired=false still rejects a bad format');
+
+// full_name() collapses the trailing space for a surname-less member (fix #1)
+require_once dirname(__DIR__) . '/app/helpers.php';
+$check(full_name('Mario', '') === 'Mario', "full_name('Mario','') === 'Mario' (no trailing space)");
+$check(full_name('Mario', 'Rossi') === 'Mario Rossi', "full_name joins name + surname");
+$check(full_name(null, null) === '', 'full_name(null,null) === ""');
+
 // ── DB sections ──────────────────────────────────────────────────────────────
 echo "A. Real migration against sandbox tables\n";
 

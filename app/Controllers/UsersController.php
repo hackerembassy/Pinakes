@@ -596,7 +596,7 @@ class UsersController
             if ($userToDelete) {
                 \App\Support\SecureLogger::info('User marked as deleted (has loan history)', [
                     'user_id' => $id,
-                    'user_name' => $userToDelete['nome'] . ' ' . $userToDelete['cognome'],
+                    'user_name' => full_name($userToDelete['nome'] ?? '', $userToDelete['cognome'] ?? ''),
                     'user_email' => $userToDelete['email'],
                     'loan_count' => $loanResult['count'],
                     'deleted_by' => $_SESSION['user']['id'] ?? 'unknown'
@@ -627,7 +627,7 @@ class UsersController
         if ($userToDelete) {
             \App\Support\SecureLogger::info('User deleted', [
                 'deleted_user_id' => $id,
-                'deleted_user_name' => $userToDelete['nome'] . ' ' . $userToDelete['cognome'],
+                'deleted_user_name' => full_name($userToDelete['nome'] ?? '', $userToDelete['cognome'] ?? ''),
                 'deleted_user_email' => $userToDelete['email'],
                 'deleted_user_role' => $userToDelete['tipo_utente'],
                 'deleted_by' => $_SESSION['user']['id'] ?? 'unknown',

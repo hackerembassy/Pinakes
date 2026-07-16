@@ -6537,5 +6537,7 @@
   "Salva impostazioni registrazione": "Salva impostazioni registrazione",
   "Impostazioni di registrazione aggiornate correttamente.": "Impostazioni di registrazione aggiornate correttamente.",
   "Salvataggio dei campi personalizzati non riuscito. Riprova.": "Salvataggio dei campi personalizzati non riuscito. Riprova.",
-  "Le modifiche ai campi vengono salvate insieme alle impostazioni di registrazione.": "Le modifiche ai campi vengono salvate insieme alle impostazioni di registrazione."
+  "Le modifiche ai campi vengono salvate insieme alle impostazioni di registrazione.": "Le modifiche ai campi vengono salvate insieme alle impostazioni di registrazione.",
+  "Controlla i campi personalizzati: un valore inserito non è valido.": "Controlla i campi personalizzati: un valore inserito non è valido.",
+  "Eliminare i campi personalizzati selezionati? I valori salvati dagli utenti per questi campi verranno rimossi definitivamente.": "Eliminare i campi personalizzati selezionati? I valori salvati dagli utenti per questi campi verranno rimossi definitivamente."
 }

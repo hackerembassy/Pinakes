@@ -84,46 +84,59 @@ final class RegistrationFields
      *
      * @param list<array{id:int, etichetta:string, tipo:string, obbligatorio:bool}> $definitions
      * @param array<string,mixed> $post  raw request body (custom_field[<id>] keys)
-     * @return array{values: array<int,string>, error: ?string}
-     *         values maps field id => normalised value ('' allowed only for
-     *         optional fields; checkboxes normalise to '1'/'')
+     * @param bool $enforceRequired  when false (profile self-edit), a blank
+     *        required field is accepted rather than rejected — a custom field
+     *        marked obbligatorio AFTER signup must not wall an existing user
+     *        (who never saw it) out of unrelated profile edits. Format checks
+     *        still apply to any value the user actually typed. Registration
+     *        passes true so the signup contract stays enforced.
+     * @return array{values: array<int,string>, error: ?string, error_reason: ?string}
+     *         values maps field id => normalised value ('' allowed for optional
+     *         — or, when $enforceRequired is false, any — fields; checkboxes
+     *         normalise to '1'/''). error is the offending field's label (null
+     *         when valid); error_reason is 'missing' or 'format' so callers can
+     *         show a message that names the actual problem.
      */
-    public static function validate(array $definitions, array $post): array
+    public static function validate(array $definitions, array $post, bool $enforceRequired = true): array
     {
         $submitted = $post['custom_field'] ?? [];
         if (!is_array($submitted)) {
             $submitted = [];
         }
 
+        $fail = static fn (string $label, string $reason): array =>
+            ['values' => [], 'error' => $label, 'error_reason' => $reason];
+
         $values = [];
         foreach ($definitions as $def) {
+            $required = $def['obbligatorio'] && $enforceRequired;
             // Reject non-scalar payloads (custom_field[id][]=x) BEFORE casting:
             // (string) on an array would coerce to "Array", passing required
             // checks and persisting garbage / ticking checkboxes.
             $submittedValue = $submitted[$def['id']] ?? null;
             if ($submittedValue !== null && !is_scalar($submittedValue)) {
-                return ['values' => [], 'error' => $def['etichetta']];
+                return $fail($def['etichetta'], 'format');
             }
             $raw = trim((string) ($submittedValue ?? ''));
 
             if ($def['tipo'] === 'checkbox') {
                 $values[$def['id']] = $raw !== '' ? '1' : '';
-                if ($def['obbligatorio'] && $values[$def['id']] === '') {
-                    return ['values' => [], 'error' => $def['etichetta']];
+                if ($required && $values[$def['id']] === '') {
+                    return $fail($def['etichetta'], 'missing');
                 }
                 continue;
             }
 
             if ($raw === '') {
-                if ($def['obbligatorio']) {
-                    return ['values' => [], 'error' => $def['etichetta']];
+                if ($required) {
+                    return $fail($def['etichetta'], 'missing');
                 }
                 $values[$def['id']] = '';
                 continue;
             }
 
             if (mb_strlen($raw) > self::MAX_VALUE_LENGTH) {
-                return ['values' => [], 'error' => $def['etichetta']];
+                return $fail($def['etichetta'], 'format');
             }
 
             $ok = match ($def['tipo']) {
@@ -134,12 +147,12 @@ final class RegistrationFields
                 default  => true, // text / textarea: length-capped free text
             };
             if (!$ok) {
-                return ['values' => [], 'error' => $def['etichetta']];
+                return $fail($def['etichetta'], 'format');
             }
             $values[$def['id']] = $raw;
         }
 
-        return ['values' => $values, 'error' => null];
+        return ['values' => $values, 'error' => null, 'error_reason' => null];
     }
 
     /**
