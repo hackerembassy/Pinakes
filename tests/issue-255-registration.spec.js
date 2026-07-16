@@ -115,6 +115,11 @@ test.describe.serial('Issue #255 — configurable registration fields (25 checks
   test.afterAll(async () => {
     // Restore the pristine default state (absent rows = code default).
     dbQuery("DELETE FROM system_settings WHERE category='registration' AND setting_key IN ('require_cognome','require_telefono','require_indirizzo')");
+    // FK-safe order (children first, then parents) — the cascades exist and
+    // are asserted by the migration test, but teardown must not depend on
+    // the very behaviour the suite verifies.
+    dbQuery(`DELETE v FROM utenti_campi_valori v JOIN registrazione_campi c ON c.id = v.campo_id WHERE c.etichetta LIKE '%${TOKEN}%'`);
+    dbQuery(`DELETE v FROM utenti_campi_valori v JOIN utenti u ON u.id = v.utente_id WHERE u.email LIKE 'zz-255-%${TOKEN}@example.test'`);
     dbQuery(`DELETE FROM registrazione_campi WHERE etichetta LIKE 'ZZ255 %${TOKEN}%' OR etichetta LIKE '%${TOKEN}%'`);
     dbQuery(`DELETE FROM utenti WHERE email LIKE 'zz-255-%${TOKEN}@example.test'`);
     await admin?.context()?.close();

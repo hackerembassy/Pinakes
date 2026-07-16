@@ -79,7 +79,7 @@ $note = HtmlHelper::e($utente['note_utente'] ?? '');
             <input type="text" id="nome" name="nome" value="<?= $nome; ?>" required class="mt-1 block w-full rounded-md border-gray-300 focus:border-gray-900 focus:ring-gray-900">
           </div>
           <div>
-            <label for="cognome" class="block text-sm font-medium text-gray-700"><?= __("Cognome") ?> *</label>
+            <label for="cognome" class="block text-sm font-medium text-gray-700"><?= __("Cognome") ?><?= \App\Support\RegistrationFields::isRequired('cognome') ? ' *' : '' ?></label>
             <input type="text" id="cognome" name="cognome" value="<?= $cognome; ?>" <?= \App\Support\RegistrationFields::isRequired('cognome') ? 'required aria-required="true"' : '' ?> class="mt-1 block w-full rounded-md border-gray-300 focus:border-gray-900 focus:ring-gray-900">
           </div>
         </div>
@@ -173,6 +173,11 @@ $note = HtmlHelper::e($utente['note_utente'] ?? '');
 (function() {
   const roleField = document.getElementById('tipo_utente');
   const phoneField = document.getElementById('telefono');
+  const addressField = document.getElementById('indirizzo');
+  // Requirement toggles (issue #255): the client mirrors the server checks in
+  // UsersController, which apply only to non-admin users.
+  const REQUIRE_TELEFONO = <?= \App\Support\RegistrationFields::isRequired('telefono') ? 'true' : 'false' ?>;
+  const REQUIRE_INDIRIZZO = <?= \App\Support\RegistrationFields::isRequired('indirizzo') ? 'true' : 'false' ?>;
   const tesseraSection = document.querySelector('[data-admin-tessera]');
   const adminBlocks = document.querySelectorAll('[data-admin-hide]');
   const roleHint = document.getElementById('role-hint');
@@ -195,7 +200,10 @@ $note = HtmlHelper::e($utente['note_utente'] ?? '');
   function applyRoleState() {
     const isAdmin = roleField.value === 'admin';
     if (phoneField) {
-      phoneField.required = !isAdmin;
+      phoneField.required = !isAdmin && REQUIRE_TELEFONO;
+      if (addressField) {
+        addressField.required = !isAdmin && REQUIRE_INDIRIZZO;
+      }
       phoneField.placeholder = isAdmin ? __('Opzionale per amministratori') : '+39 123 456 7890';
     }
 

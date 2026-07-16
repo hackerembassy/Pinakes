@@ -320,6 +320,13 @@ class SettingsController
                     $delete->close();
                 }
 
+                // Same non-scalar guard for the add-new inputs: an array here
+                // would cast to "Array" and create a garbage definition.
+                foreach (['new_custom_field_label', 'new_custom_field_type', 'new_custom_field_required'] as $newKey) {
+                    if (isset($data[$newKey]) && !is_scalar($data[$newKey])) {
+                        throw new \RuntimeException('Non-scalar custom field payload rejected');
+                    }
+                }
                 $newLabel = trim(strip_tags((string) ($data['new_custom_field_label'] ?? '')));
                 $newType = (string) ($data['new_custom_field_type'] ?? 'text');
                 if ($newLabel !== '' && mb_strlen($newLabel) <= 100
