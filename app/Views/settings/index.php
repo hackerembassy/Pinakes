@@ -325,7 +325,7 @@ $activeTab = $activeTab ?? 'general';
 
       <section data-settings-panel="registration" class="settings-panel <?php echo $activeTab === 'registration' ? 'block' : 'hidden'; ?>">
         <form action="<?= htmlspecialchars(url('/admin/settings/registration'), ENT_QUOTES, 'UTF-8') ?>" method="post" class="space-y-8">
-          <input type="hidden" name="csrf_token" value="<?php echo HtmlHelper::e(Csrf::ensureToken()); ?>">
+          <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(Csrf::ensureToken(), ENT_QUOTES, 'UTF-8'); ?>">
           <div class="border border-gray-200 rounded-2xl p-5 bg-white max-sm:!bg-transparent max-sm:!border-0 max-sm:!rounded-none max-sm:!shadow-none max-sm:!p-0">
             <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide"><?= __("Registrazione utenti") ?></h3>
             <label class="mt-4 flex items-start gap-3 cursor-pointer">
@@ -399,7 +399,7 @@ $activeTab = $activeTab ?? 'general';
                   <?= __("Obbligatorio") ?>
                 </label>
               </div>
-              <p class="mt-2 text-xs text-gray-500"><?= __("Le modifiche ai campi vengono salvate insieme alle impostazioni email.") ?></p>
+              <p class="mt-2 text-xs text-gray-500"><?= __("Le modifiche ai campi vengono salvate insieme alle impostazioni di registrazione.") ?></p>
             </div>
           </div>
 

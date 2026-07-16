@@ -321,6 +321,7 @@
           $errors = [
             'csrf' => __('Errore di sicurezza. Riprova.'),
             'required' => __('Nome e cognome sono obbligatori.'),
+            'required_fields' => __('Compila tutti i campi obbligatori.'),
             'password_mismatch' => __('Le password non coincidono.'),
             'password_too_short' => __('La password deve essere lunga almeno 8 caratteri.'),
             'password_too_long' => __('La password non può superare i 72 caratteri.'),

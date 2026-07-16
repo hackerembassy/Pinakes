@@ -287,6 +287,14 @@ class SettingsController
                         if ($id <= 0 || !is_array($row)) {
                             continue;
                         }
+                        // Crafted nested payloads (custom_fields[5][etichetta][]=x)
+                        // must abort the batch: an array is truthy for empty()
+                        // (phantom delete) and casts to "Array" (garbage label).
+                        foreach (['delete', 'etichetta', 'tipo', 'obbligatorio', 'attivo'] as $rowKey) {
+                            if (isset($row[$rowKey]) && !is_scalar($row[$rowKey])) {
+                                throw new \RuntimeException('Non-scalar custom field payload rejected');
+                            }
+                        }
                         if (!empty($row['delete'])) {
                             $delete->bind_param('i', $id);
                             if (!$delete->execute()) {

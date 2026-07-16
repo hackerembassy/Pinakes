@@ -72,7 +72,7 @@ $errorKey = (string)($_GET['error'] ?? '');
           </div>
           <div>
             <label for="cognome" class="block text-sm font-medium text-gray-700"><?= __("Cognome") ?> *</label>
-            <input type="text" id="cognome" name="cognome" required aria-required="true" class="mt-1 block w-full rounded-md border-gray-300 focus:border-gray-900 focus:ring-gray-900" placeholder="<?= __("Cognome") ?>">
+            <input type="text" id="cognome" name="cognome" <?= \App\Support\RegistrationFields::isRequired('cognome') ? 'required aria-required="true"' : '' ?> class="mt-1 block w-full rounded-md border-gray-300 focus:border-gray-900 focus:ring-gray-900" placeholder="<?= __("Cognome") ?>">
           </div>
         </div>
         <div class="grid gap-4 md:grid-cols-2" data-admin-hide>

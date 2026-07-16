@@ -7,7 +7,7 @@
  * correctly, whether via fresh install (schema.sql) or upgrade (migrate_*.sql).
  *
  * IMPORTANT — two-tier table model:
- *   CORE_TABLES (57): always created by the base installer via schema.sql.
+ *   CORE_TABLES (59): always created by the base installer via schema.sql.
  *   Archives tables (5): created only when the Archives plugin is activated
  *     (archival_units, authority_records, archival_unit_authority,
  *      autori_authority_link, archival_unit_files). Tests 10–12 skip
@@ -96,7 +96,7 @@ function parseCoreTablesFromSchema() {
 // ── Expected state ────────────────────────────────────────────────────────────
 
 /**
- * 57 tables always created by the base installer via schema.sql.
+ * 59 tables always created by the base installer via schema.sql.
  * Present after fresh install AND after upgrade, regardless of which
  * optional plugins the user has activated.
  *
@@ -112,9 +112,9 @@ const CORE_TABLES = [
     'ncip_partners', 'ncip_transactions', 'oai_deleted_records',
     'oai_resumption_tokens', 'plugin_data', 'plugin_hooks', 'plugin_logs',
     'plugin_settings', 'plugins', 'posizioni', 'preferenze_notifica_utenti',
-    'prenotazioni', 'prestiti', 'recensioni', 'scaffali', 'sedi', 'staff',
+    'prenotazioni', 'prestiti', 'recensioni', 'registrazione_campi', 'scaffali', 'sedi', 'staff',
     'system_settings', 'tag', 'themes', 'update_logs', 'user_sessions',
-    'utenti', 'volumi', 'wishlist', 'z39_access_logs', 'z39_rate_limits',
+    'utenti', 'utenti_campi_valori', 'volumi', 'wishlist', 'z39_access_logs', 'z39_rate_limits',
 ];
 
 /** All 16 bundled plugins that must be registered in `plugins` table */

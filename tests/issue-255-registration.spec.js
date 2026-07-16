@@ -105,11 +105,16 @@ test.describe.serial('Issue #255 — configurable registration fields (25 checks
       admin.waitForURL(/\/admin\//, { timeout: 15000 }),
       admin.click('button[type="submit"]'),
     ]);
-    setToggles(true, true, true);
+    // Tests 1-4 must exercise the application's ACTUAL defaults (no toggle
+    // rows in system_settings → code-side default = required), not a value
+    // this suite planted. Deleting also makes the run deterministic on a
+    // DB dirtied by earlier manual testing.
+    dbQuery("DELETE FROM system_settings WHERE category='registration' AND setting_key IN ('require_cognome','require_telefono','require_indirizzo')");
   });
 
   test.afterAll(async () => {
-    setToggles(true, true, true);
+    // Restore the pristine default state (absent rows = code default).
+    dbQuery("DELETE FROM system_settings WHERE category='registration' AND setting_key IN ('require_cognome','require_telefono','require_indirizzo')");
     dbQuery(`DELETE FROM registrazione_campi WHERE etichetta LIKE 'ZZ255 %${TOKEN}%' OR etichetta LIKE '%${TOKEN}%'`);
     dbQuery(`DELETE FROM utenti WHERE email LIKE 'zz-255-%${TOKEN}@example.test'`);
     await admin?.context()?.close();
