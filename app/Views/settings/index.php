@@ -318,6 +318,72 @@ $activeTab = $activeTab ?? 'general';
                 <span class="block text-gray-500 mt-0.5"><?= __("Se attivo, un nuovo utente resta in attesa finché un amministratore non ne approva l'account. Se disattivo, l'account si attiva automaticamente dopo la verifica dell'email.") ?></span>
               </span>
             </label>
+
+            <div class="mt-5 pt-4 border-t border-gray-100">
+              <p class="text-sm font-medium text-gray-900"><?= __("Campi obbligatori alla registrazione") ?></p>
+              <p class="text-xs text-gray-500 mt-0.5"><?= __("Disattiva i campi che la tua comunità non vuole raccogliere: diventeranno facoltativi nel modulo di registrazione.") ?></p>
+              <div class="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                  <input type="checkbox" name="require_cognome" value="1" <?php echo !empty($emailSettings['require_cognome']) ? 'checked' : ''; ?> class="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500">
+                  <?= __("Cognome") ?>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                  <input type="checkbox" name="require_telefono" value="1" <?php echo !empty($emailSettings['require_telefono']) ? 'checked' : ''; ?> class="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500">
+                  <?= __("Telefono") ?>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                  <input type="checkbox" name="require_indirizzo" value="1" <?php echo !empty($emailSettings['require_indirizzo']) ? 'checked' : ''; ?> class="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500">
+                  <?= __("Indirizzo") ?>
+                </label>
+              </div>
+            </div>
+
+            <div class="mt-5 pt-4 border-t border-gray-100">
+              <p class="text-sm font-medium text-gray-900"><?= __("Campi personalizzati") ?></p>
+              <p class="text-xs text-gray-500 mt-0.5"><?= __("Campi aggiuntivi definiti da te (es. username Telegram): compaiono nel modulo di registrazione e nel profilo utente.") ?></p>
+              <?php $cfTypeLabels = ['text' => __('Testo'), 'textarea' => __('Testo lungo'), 'email' => __('Email'), 'url' => __('URL'), 'number' => __('Numero'), 'checkbox' => __('Casella di spunta')]; ?>
+              <?php if (!empty($registrationCustomFields)): ?>
+                <div class="mt-3 space-y-2">
+                  <?php foreach ($registrationCustomFields as $cf): $cfId = (int) $cf['id']; ?>
+                    <div class="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+                      <input type="text" name="custom_fields[<?= $cfId ?>][etichetta]" value="<?= htmlspecialchars($cf['etichetta'], ENT_QUOTES, 'UTF-8') ?>" maxlength="100"
+                        class="flex-1 min-w-[10rem] px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-900">
+                      <select name="custom_fields[<?= $cfId ?>][tipo]" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-900">
+                        <?php foreach ($cfTypeLabels as $tVal => $tLabel): ?>
+                          <option value="<?= $tVal ?>" <?= $cf['tipo'] === $tVal ? 'selected' : '' ?>><?= $tLabel ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                      <label class="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer">
+                        <input type="checkbox" name="custom_fields[<?= $cfId ?>][obbligatorio]" value="1" <?= $cf['obbligatorio'] ? 'checked' : '' ?> class="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500">
+                        <?= __("Obbligatorio") ?>
+                      </label>
+                      <label class="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer">
+                        <input type="checkbox" name="custom_fields[<?= $cfId ?>][attivo]" value="1" <?= $cf['attivo'] ? 'checked' : '' ?> class="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500">
+                        <?= __("Attivo") ?>
+                      </label>
+                      <label class="flex items-center gap-1.5 text-xs text-red-600 cursor-pointer">
+                        <input type="checkbox" name="custom_fields[<?= $cfId ?>][delete]" value="1" class="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500">
+                        <?= __("Elimina") ?>
+                      </label>
+                    </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <input type="text" name="new_custom_field_label" maxlength="100" placeholder="<?= __("Etichetta nuovo campo") ?>"
+                  class="flex-1 min-w-[10rem] px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-900">
+                <select name="new_custom_field_type" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-900">
+                  <?php foreach ($cfTypeLabels as $tVal => $tLabel): ?>
+                    <option value="<?= $tVal ?>"><?= $tLabel ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <label class="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer">
+                  <input type="checkbox" name="new_custom_field_required" value="1" class="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-500">
+                  <?= __("Obbligatorio") ?>
+                </label>
+              </div>
+              <p class="mt-2 text-xs text-gray-500"><?= __("Le modifiche ai campi vengono salvate insieme alle impostazioni email.") ?></p>
+            </div>
           </div>
 
           <div class="flex justify-end">

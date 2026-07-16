@@ -251,6 +251,12 @@ jobs:
             --config=tests/playwright.config.js \
             --workers=1
 
+      - name: "[required] issue-255-registration.spec.js — configurable registration fields"
+        run: |
+          npx playwright test tests/issue-255-registration.spec.js \
+            --config=tests/playwright.config.js \
+            --workers=1
+
       # ── Orphan-spec backfill: tests that were authored against a fresh
       #    install but never wired into the CI workflow. Adding them as
       #    `continue-on-error: true` so we get the signal from a clean

@@ -372,12 +372,13 @@ return function (App $app): void {
     }
 
     // Public registration routes (all language variants)
-    $registerGetHandler = function ($request, $response) {
+    $registerGetHandler = function ($request, $response) use ($app) {
         if (!empty($_SESSION['user']['id'])) {
             return $response->withHeader('Location', RouteTranslator::route('user_dashboard'))->withStatus(302);
         }
+        $db = $app->getContainer()->get('db');
         $controller = new RegistrationController();
-        return $controller->form($request, $response);
+        return $controller->form($request, $response, $db);
     };
     $registerPostHandler = function ($request, $response) use ($app) {
         if (!empty($_SESSION['user']['id'])) {

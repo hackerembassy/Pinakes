@@ -38,6 +38,10 @@ class SettingsController
         $loansSettings = $this->resolveLoansSettings($repository);
         $contactMessages = $this->loadContactMessages($db);
         $cookieBannerTexts = $this->resolveCookieBannerTexts($repository);
+        // Custom registration fields (issue #255) — edited from the email tab's
+        // "Registrazione utenti" block; include inactive ones so the admin can
+        // re-enable them.
+        $registrationCustomFields = \App\Support\RegistrationFields::definitions($db, false);
 
         $queryParams = $request->getQueryParams();
         $activeTab = $queryParams['tab'] ?? 'general';
@@ -193,6 +197,16 @@ class SettingsController
         $repository->set('registration', 'require_admin_approval', $requireApproval);
         ConfigStore::set('registration.require_admin_approval', (bool) $requireApproval);
 
+        // Built-in registration field requirements (issue #255)
+        foreach (\App\Support\RegistrationFields::BUILTIN_TOGGLES as $toggleKey) {
+            $flag = isset($data[$toggleKey]) ? '1' : '0';
+            $repository->set('registration', $toggleKey, $flag);
+            ConfigStore::set('registration.' . $toggleKey, (bool) $flag);
+        }
+
+        // Custom registration field definitions (issue #255)
+        $this->saveRegistrationCustomFields($db, $data);
+
         ConfigStore::set('mail.driver', $driver);
         ConfigStore::set('mail.from_email', $fromEmail);
         ConfigStore::set('mail.from_name', $fromName);
@@ -206,6 +220,90 @@ class SettingsController
 
         $_SESSION['success_message'] = __('Impostazioni email aggiornate correttamente.');
         return $this->redirect($response, '/admin/settings?tab=email');
+    }
+
+    /**
+     * Persist the admin-defined custom registration fields (issue #255).
+     * Existing rows arrive as custom_fields[<id>][etichetta|tipo|obbligatorio|attivo|delete];
+     * one optional new row arrives as new_custom_field_*. Deleting a definition
+     * cascades its per-user values (FK) — an explicit admin action.
+     * No-ops gracefully when the tables are not migrated yet.
+     *
+     * @param array<string,mixed> $data
+     */
+    private function saveRegistrationCustomFields(mysqli $db, array $data): void
+    {
+        try {
+            $probe = $db->prepare(
+                'SELECT 1 FROM information_schema.tables
+                  WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1'
+            );
+            if ($probe === false) {
+                return;
+            }
+            $tableName = 'registrazione_campi';
+            $probe->bind_param('s', $tableName);
+            $probe->execute();
+            $exists = $probe->get_result()->fetch_row() !== null;
+            $probe->close();
+            if (!$exists) {
+                return;
+            }
+
+            $rows = $data['custom_fields'] ?? [];
+            if (is_array($rows)) {
+                $update = $db->prepare(
+                    'UPDATE registrazione_campi SET etichetta = ?, tipo = ?, obbligatorio = ?, attivo = ? WHERE id = ?'
+                );
+                $delete = $db->prepare('DELETE FROM registrazione_campi WHERE id = ?');
+                if ($update === false || $delete === false) {
+                    return;
+                }
+                foreach ($rows as $id => $row) {
+                    $id = (int) $id;
+                    if ($id <= 0 || !is_array($row)) {
+                        continue;
+                    }
+                    if (!empty($row['delete'])) {
+                        $delete->bind_param('i', $id);
+                        $delete->execute();
+                        continue;
+                    }
+                    $label = trim(strip_tags((string) ($row['etichetta'] ?? '')));
+                    $tipo = (string) ($row['tipo'] ?? 'text');
+                    if ($label === '' || mb_strlen($label) > 100
+                        || !in_array($tipo, \App\Support\RegistrationFields::TYPES, true)
+                    ) {
+                        continue;
+                    }
+                    $required = !empty($row['obbligatorio']) ? 1 : 0;
+                    $active = !empty($row['attivo']) ? 1 : 0;
+                    $update->bind_param('ssiii', $label, $tipo, $required, $active, $id);
+                    $update->execute();
+                }
+                $update->close();
+                $delete->close();
+            }
+
+            $newLabel = trim(strip_tags((string) ($data['new_custom_field_label'] ?? '')));
+            $newType = (string) ($data['new_custom_field_type'] ?? 'text');
+            if ($newLabel !== '' && mb_strlen($newLabel) <= 100
+                && in_array($newType, \App\Support\RegistrationFields::TYPES, true)
+            ) {
+                $newRequired = !empty($data['new_custom_field_required']) ? 1 : 0;
+                $insert = $db->prepare(
+                    'INSERT INTO registrazione_campi (etichetta, tipo, obbligatorio, attivo, ordine)
+                     SELECT ?, ?, ?, 1, COALESCE(MAX(ordine), 0) + 1 FROM registrazione_campi'
+                );
+                if ($insert !== false) {
+                    $insert->bind_param('ssi', $newLabel, $newType, $newRequired);
+                    $insert->execute();
+                    $insert->close();
+                }
+            }
+        } catch (\Throwable $e) {
+            \App\Support\SecureLogger::error('[Settings] custom registration fields save failed', ['error' => $e->getMessage()]);
+        }
     }
 
     public function updateEmailTemplate(Request $request, Response $response, mysqli $db, string $template): Response
@@ -275,6 +373,11 @@ class SettingsController
         // Registration approval flag lives in its own config group but is edited
         // from this (email) form, so surface it here for the checkbox to pre-fill.
         $settings['require_admin_approval'] = (bool) ConfigStore::get('registration.require_admin_approval', true);
+        // Built-in field requirements (issue #255) — defaults keep the historical
+        // all-required behaviour.
+        foreach (\App\Support\RegistrationFields::BUILTIN_TOGGLES as $toggleKey) {
+            $settings[$toggleKey] = (bool) ConfigStore::get('registration.' . $toggleKey, true);
+        }
         $driver = $stored['driver_mode'] ?? $settings['type'] ?? $defaults['type'];
         $settings['type'] = $driver;
 

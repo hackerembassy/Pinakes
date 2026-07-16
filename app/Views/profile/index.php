@@ -403,8 +403,9 @@
           <span id="nome-error" class="text-sm text-red-600 mt-1 hidden" role="alert" aria-live="polite"></span>
         </div>
         <div class="form-group">
-          <label for="cognome" class="form-label"><?= __("Cognome") ?> *</label>
-          <input type="text" id="cognome" name="cognome" class="form-input" required aria-required="true" aria-describedby="cognome-error"
+          <?php $cognomeRequired = \App\Support\RegistrationFields::isRequired('cognome'); ?>
+          <label for="cognome" class="form-label"><?= __("Cognome") ?><?= $cognomeRequired ? ' *' : '' ?></label>
+          <input type="text" id="cognome" name="cognome" class="form-input" <?= $cognomeRequired ? 'required aria-required="true"' : '' ?> aria-describedby="cognome-error"
                  value="<?php echo App\Support\HtmlHelper::e($user['cognome'] ?? ''); ?>">
           <span id="cognome-error" class="text-sm text-red-600 mt-1 hidden" role="alert" aria-live="polite"></span>
         </div>
@@ -445,6 +446,31 @@
         <input type="text" id="indirizzo" name="indirizzo" class="form-input"
                value="<?php echo App\Support\HtmlHelper::e($user['indirizzo'] ?? ''); ?>">
       </div>
+
+      <?php foreach (($customFields ?? []) as $cf): ?>
+        <?php
+          $cfId = (int) $cf['id'];
+          $cfName = 'custom_field[' . $cfId . ']';
+          $cfValue = (string) (($customFieldValues ?? [])[$cfId] ?? '');
+        ?>
+        <div class="form-group">
+          <?php if ($cf['tipo'] === 'checkbox'): ?>
+            <label class="form-label" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+              <input type="checkbox" name="<?= htmlspecialchars($cfName, ENT_QUOTES, 'UTF-8') ?>" value="1" <?= $cfValue === '1' ? 'checked' : '' ?> <?= $cf['obbligatorio'] ? 'required aria-required="true"' : '' ?>>
+              <?= htmlspecialchars($cf['etichetta'], ENT_QUOTES, 'UTF-8') ?><?= $cf['obbligatorio'] ? ' *' : '' ?>
+            </label>
+          <?php else: ?>
+            <label for="custom_field_<?= $cfId ?>" class="form-label"><?= htmlspecialchars($cf['etichetta'], ENT_QUOTES, 'UTF-8') ?><?= $cf['obbligatorio'] ? ' *' : '' ?></label>
+            <?php if ($cf['tipo'] === 'textarea'): ?>
+              <textarea id="custom_field_<?= $cfId ?>" name="<?= htmlspecialchars($cfName, ENT_QUOTES, 'UTF-8') ?>" class="form-input" rows="3" <?= $cf['obbligatorio'] ? 'required aria-required="true"' : '' ?>><?php echo App\Support\HtmlHelper::e($cfValue); ?></textarea>
+            <?php else: ?>
+              <?php $cfType = in_array($cf['tipo'], ['email', 'url', 'number'], true) ? $cf['tipo'] : 'text'; ?>
+              <input type="<?= $cfType ?>" id="custom_field_<?= $cfId ?>" name="<?= htmlspecialchars($cfName, ENT_QUOTES, 'UTF-8') ?>" class="form-input" <?= $cf['obbligatorio'] ? 'required aria-required="true"' : '' ?>
+                     value="<?php echo App\Support\HtmlHelper::e($cfValue); ?>">
+            <?php endif; ?>
+          <?php endif; ?>
+        </div>
+      <?php endforeach; ?>
 
       <?php
         $availableLocales = \App\Support\I18n::getAvailableLocales();

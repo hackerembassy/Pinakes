@@ -88,7 +88,9 @@ class UsersController
         $role = $requestedRole;
         $isAdmin = $role === 'admin';
 
-        if ($nome === '' || $cognome === '' || $email === '') {
+        if ($nome === '' || $email === ''
+            || ($cognome === '' && \App\Support\RegistrationFields::isRequired('cognome'))
+        ) {
             return $response->withHeader('Location', url('/admin/users/create?error=missing_fields'))->withStatus(302);
         }
 
@@ -122,7 +124,7 @@ class UsersController
             return $response->withHeader('Location', url('/admin/users/create?error=phone_too_long'))->withStatus(302);
         }
 
-        if (!$isAdmin && $telefono === '') {
+        if (!$isAdmin && $telefono === '' && \App\Support\RegistrationFields::isRequired('telefono')) {
             return $response->withHeader('Location', url('/admin/users/create?error=missing_fields'))->withStatus(302);
         }
 
@@ -270,6 +272,10 @@ class UsersController
         $utente = $result->fetch_assoc();
         $stmt->close();
 
+        // Custom registration field values (issue #255) — shown read-only so the
+        // admin can see community handles (e.g. Telegram) alongside the account.
+        $customFieldValues = \App\Support\RegistrationFields::labelledValuesForUser($db, $id);
+
         ob_start();
         require __DIR__ . '/../Views/utenti/modifica_utente.php';
         $content = ob_get_clean();
@@ -323,11 +329,13 @@ class UsersController
         $role = $requestedRole;
         $isAdmin = $role === 'admin';
 
-        if ($nome === '' || $cognome === '' || $email === '') {
+        if ($nome === '' || $email === ''
+            || ($cognome === '' && \App\Support\RegistrationFields::isRequired('cognome'))
+        ) {
             return $response->withHeader('Location', url('/admin/users/edit/' . $id . '?error=missing_fields'))->withStatus(302);
         }
 
-        if (!$isAdmin && $telefono === '') {
+        if (!$isAdmin && $telefono === '' && \App\Support\RegistrationFields::isRequired('telefono')) {
             return $response->withHeader('Location', url('/admin/users/edit/' . $id . '?error=missing_fields'))->withStatus(302);
         }
 
