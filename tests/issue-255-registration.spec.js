@@ -105,8 +105,31 @@ function userCount(email) {
 test.describe.serial('Issue #255 — configurable registration fields (29 checks)', () => {
   /** @type {import('@playwright/test').Page} */
   let admin;
+  /** @type {Map<string, string>} setting key -> original HEX(setting_value) */
+  let originalToggleSettings;
+  /** @type {number[]} pre-existing required fields made optional for this suite */
+  let originallyRequiredFieldIds;
 
   test.beforeAll(async ({ browser }) => {
+    originalToggleSettings = new Map();
+    const toggleRows = dbQuery(
+      "SELECT setting_key, HEX(setting_value) FROM system_settings WHERE category='registration' " +
+      "AND setting_key IN ('require_cognome','require_telefono','require_indirizzo') ORDER BY setting_key"
+    );
+    for (const row of toggleRows ? toggleRows.split('\n') : []) {
+      const [key, hex = ''] = row.split('\t');
+      originalToggleSettings.set(key, hex);
+    }
+
+    // The suite owns only TOKEN-labelled definitions. A real installation may
+    // already have other required custom fields; temporarily make those
+    // optional so unrelated site data cannot invalidate registration fixtures.
+    const requiredIds = dbQuery('SELECT id FROM registrazione_campi WHERE obbligatorio=1 ORDER BY id');
+    originallyRequiredFieldIds = requiredIds ? requiredIds.split('\n').map(Number).filter(Number.isFinite) : [];
+    if (originallyRequiredFieldIds.length > 0) {
+      dbQuery(`UPDATE registrazione_campi SET obbligatorio=0 WHERE id IN (${originallyRequiredFieldIds.join(',')})`);
+    }
+
     const ctx = await browser.newContext();
     admin = await ctx.newPage();
     await admin.goto(`${BASE}/login`);
@@ -124,8 +147,14 @@ test.describe.serial('Issue #255 — configurable registration fields (29 checks
   });
 
   test.afterAll(async () => {
-    // Restore the pristine default state (absent rows = code default).
+    // Restore the exact pre-suite toggle state, including row absence.
     dbQuery("DELETE FROM system_settings WHERE category='registration' AND setting_key IN ('require_cognome','require_telefono','require_indirizzo')");
+    for (const [key, hex] of originalToggleSettings) {
+      dbQuery(
+        `INSERT INTO system_settings (category, setting_key, setting_value) VALUES ('registration', '${key}', UNHEX('${hex}')) ` +
+        'ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)'
+      );
+    }
     // FK-safe order (children first, then parents) — the cascades exist and
     // are asserted by the migration test, but teardown must not depend on
     // the very behaviour the suite verifies.
@@ -133,6 +162,9 @@ test.describe.serial('Issue #255 — configurable registration fields (29 checks
     dbQuery(`DELETE v FROM utenti_campi_valori v JOIN utenti u ON u.id = v.utente_id WHERE u.email LIKE 'zz-255-%${TOKEN}@example.test'`);
     dbQuery(`DELETE FROM registrazione_campi WHERE etichetta LIKE 'ZZ255 %${TOKEN}%' OR etichetta LIKE '%${TOKEN}%'`);
     dbQuery(`DELETE FROM utenti WHERE email LIKE 'zz-255-%${TOKEN}@example.test'`);
+    if (originallyRequiredFieldIds.length > 0) {
+      dbQuery(`UPDATE registrazione_campi SET obbligatorio=1 WHERE id IN (${originallyRequiredFieldIds.join(',')})`);
+    }
     await admin?.context()?.close();
   });
 

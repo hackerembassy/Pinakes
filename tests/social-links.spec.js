@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Social links — end-to-end + static hardening contract (25 checks).
+ * Social links — end-to-end + static hardening contract (26 checks).
  *
  * The security fix lives at the OUTPUT boundary: social URLs pass through
  * HtmlHelper::sanitizePublicHttpUrl() when the footer loads them, so only a
@@ -11,8 +11,8 @@
  * SQL directly — otherwise the page would serve a stale value.
  *
  *   1-14  E2E: set each social through Settings → General, verify the footer.
- *   15-25 Static invariants over the touched files (sanitize usage, escaping,
- *         the 4 sync points, the reworded Updater message, the README links).
+ *   15-26 Static invariants over the touched files (sanitize usage, escaping,
+ *         the 5 sync points, the reworded Updater message, the README links).
  */
 
 const { test, expect } = require('@playwright/test');
@@ -55,9 +55,12 @@ const SOCIALS = [
 
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf-8');
 
-test.describe.serial('Social links — E2E + hardening contract (25 checks)', () => {
+test.describe.serial('Social links — E2E + hardening contract (26 checks)', () => {
   /** @type {import('@playwright/test').Page} */
   let admin;
+  /** @type {Map<string, string>} setting key -> original HEX(setting_value) */
+  let originalSocials;
+  let originalSnapshot;
 
   /** Save one or more social URLs through the real General settings form. */
   async function saveSocials(values) {
@@ -84,6 +87,16 @@ test.describe.serial('Social links — E2E + hardening contract (25 checks)', ()
   }
 
   test.beforeAll(async ({ browser }) => {
+    originalSocials = new Map();
+    const keys = SOCIALS.map((s) => `'social_${s.key}'`).join(',');
+    originalSnapshot = dbQuery(
+      `SELECT setting_key, HEX(setting_value) FROM system_settings WHERE category='app' AND setting_key IN (${keys}) ORDER BY setting_key`
+    );
+    for (const row of originalSnapshot ? originalSnapshot.split('\n') : []) {
+      const [key, hex = ''] = row.split('\t');
+      originalSocials.set(key, hex);
+    }
+
     const ctx = await browser.newContext();
     admin = await ctx.newPage();
     await admin.goto(`${BASE}/login`);
@@ -96,9 +109,27 @@ test.describe.serial('Social links — E2E + hardening contract (25 checks)', ()
   });
 
   test.afterAll(async () => {
-    // Reset to empty through the form (cache-safe), then delete the rows.
-    try { await saveSocials({}); } catch { /* best effort */ }
-    dbQuery("DELETE FROM system_settings WHERE category='app' AND setting_key LIKE 'social_%'");
+    // Restore the exact pre-suite state. Drive the real form first so its
+    // ConfigStore invalidation path runs, then correct row presence/value in
+    // SQL (the form necessarily creates empty rows for originally absent keys).
+    const originalValues = {};
+    for (const s of SOCIALS) {
+      const hex = originalSocials.get(`social_${s.key}`);
+      originalValues[s.key] = hex === undefined ? '' : Buffer.from(hex, 'hex').toString('utf8');
+    }
+    try { await saveSocials(originalValues); } catch { /* SQL restore below is authoritative */ }
+    const keys = SOCIALS.map((s) => `'social_${s.key}'`).join(',');
+    dbQuery(`DELETE FROM system_settings WHERE category='app' AND setting_key IN (${keys})`);
+    for (const [key, hex] of originalSocials) {
+      dbQuery(
+        `INSERT INTO system_settings (category, setting_key, setting_value) VALUES ('app', '${key}', UNHEX('${hex}')) ` +
+        'ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)'
+      );
+    }
+    const restoredSnapshot = dbQuery(
+      `SELECT setting_key, HEX(setting_value) FROM system_settings WHERE category='app' AND setting_key IN (${keys}) ORDER BY setting_key`
+    );
+    expect(restoredSnapshot).toBe(originalSnapshot);
     await admin?.context()?.close();
   });
 
@@ -176,7 +207,7 @@ test.describe.serial('Social links — E2E + hardening contract (25 checks)', ()
     expect(html).not.toContain('javascript:alert');
   });
 
-  // ── 15-25: static invariants over the touched files ─────────────────────────
+  // ── 15-26: static invariants over the touched files ─────────────────────────
   test('15. frontend/layout.php sanitizes all five socials at load', async () => {
     const src = read('app/Views/frontend/layout.php');
     for (const s of SOCIALS) {
@@ -225,7 +256,16 @@ test.describe.serial('Social links — E2E + hardening contract (25 checks)', ()
     for (const s of SOCIALS) expect(m[1]).toContain(`'social_${s.key}'`);
   });
 
-  test('23. the reworded Docker updater message exists in all four locales', async () => {
+  test('23. FrontendController sanitizes and adds all five socials to Schema.org sameAs', async () => {
+    const src = read('app/Controllers/FrontendController.php');
+    for (const s of SOCIALS) {
+      const variable = `$social${cap(s.key)}`;
+      expect(src).toContain(`${variable} = \\App\\Support\\HtmlHelper::sanitizePublicHttpUrl((string) \\App\\Support\\ConfigStore::get('app.social_${s.key}'`);
+      expect(src).toContain(`if (${variable}) $sameAs[] = ${variable};`);
+    }
+  });
+
+  test('24. the reworded Docker updater message exists in all four locales', async () => {
     // The i18n KEY is the full Italian source string in every locale; match on
     // its distinctive opening rather than the whole sentence.
     const marker = "I file dell'applicazione non sono scrivibili dall'utente del web server e Pinakes gira dentro un container.";
@@ -237,7 +277,7 @@ test.describe.serial('Social links — E2E + hardening contract (25 checks)', ()
     }
   });
 
-  test('24. the old presumptuous Docker message is gone from all four locales', async () => {
+  test('25. the old presumptuous Docker message is gone from all four locales', async () => {
     const old = "Sembra che tu stia eseguendo l'immagine Docker";
     for (const loc of ['it_IT', 'en_US', 'de_DE', 'fr_FR']) {
       const d = JSON.parse(read(`locale/${loc}.json`));
@@ -245,7 +285,7 @@ test.describe.serial('Social links — E2E + hardening contract (25 checks)', ()
     }
   });
 
-  test('25. README links the official Docker image (repo + Docker Hub)', async () => {
+  test('26. README links the official Docker image (repo + Docker Hub)', async () => {
     const readme = read('README.md');
     expect(readme).toContain('fabiodalez/pinakes');
     expect(readme).toContain('hub.docker.com/r/fabiodalez/pinakes');

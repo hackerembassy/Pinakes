@@ -138,6 +138,11 @@ verify_package_contents() {
         ".idea"
         ".cursor"
         ".github"
+        ".code-review-graph"
+        ".playwright-cli"
+        ".playwright-mcp"
+        "graphify-out"
+        "test-upgrade"
         # node_modules is EXCLUDED (not needed - compiled assets in public/assets)
         # frontend/ is INCLUDED for customization (users can rebuild)
         "internal"          # Internal dev docs
@@ -165,6 +170,8 @@ verify_package_contents() {
         ".env"
         ".gitignore"
         ".gitattributes"
+        ".coderabbit.yaml"
+        ".semgrepignore"
         ".installed"
         "config.local.php"
         "updater.md"
@@ -173,6 +180,8 @@ verify_package_contents() {
         "FEATURES_IT.md"
         "SERVER_CONFIG.md"
         "NGINX_SETUP.md"
+        "phpstan.neon"
+        "phpstan-baseline.neon"
         ".distignore"
         ".rsync-filter"
         "vectors.db"
@@ -218,6 +227,19 @@ verify_package_contents() {
             has_errors=true
         fi
     done
+
+    # Public uploads are installation data, never release inputs. Keep only
+    # directory sentinels/security files and the shipped cover placeholder.
+    local unexpected_upload
+    unexpected_upload=$(find "$package_dir/public/uploads" -type f \
+        ! -name '.gitkeep' \
+        ! -name '.htaccess' \
+        ! -path "$package_dir/public/uploads/copertine/placeholder.jpg" \
+        -print -quit 2>/dev/null || true)
+    if [ -n "$unexpected_upload" ]; then
+        log_error "Package contains user upload: ${unexpected_upload#"$package_dir/"}"
+        has_errors=true
+    fi
 
     # Files that MUST be in the package
     local required_files=(
@@ -311,7 +333,8 @@ get_version() {
         exit 1
     fi
 
-    local version=$(jq -r '.version' version.json)
+    local version
+    version=$(jq -r '.version' version.json)
 
     if [ -z "$version" ] || [ "$version" == "null" ]; then
         log_error "Could not read version from version.json"
@@ -500,8 +523,10 @@ EOF
 print_summary() {
     local version=$1
     local zip_file="${OUTPUT_DIR}/pinakes-v${version}.zip"
-    local zip_size=$(du -h "$zip_file" | cut -f1)
-    local checksum=$(cat "${OUTPUT_DIR}/pinakes-v${version}.zip.sha256" | cut -d' ' -f1)
+    local zip_size
+    local checksum
+    zip_size=$(du -h "$zip_file" | cut -f1)
+    checksum=$(cut -d' ' -f1 "${OUTPUT_DIR}/pinakes-v${version}.zip.sha256")
 
     echo ""
     echo "=================================="
@@ -544,7 +569,8 @@ main() {
     OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
     # Get version
-    local version=$(get_version)
+    local version
+    version=$(get_version)
     log_info "Building release for version: v${version}"
 
     # Build frontend

@@ -55,23 +55,22 @@
 - storage/plugins/**/.DS_Store
 - storage/plugins/**/CLAUDE.md
 - storage/plugins/**/claude.md
-+ storage/plugins/open-library/
-+ storage/plugins/open-library/**
-+ storage/plugins/z39-server/
-+ storage/plugins/z39-server/**
-+ storage/plugins/api-book-scraper/
-+ storage/plugins/api-book-scraper/**
-+ storage/plugins/digital-library/
-+ storage/plugins/digital-library/**
-+ storage/plugins/dewey-editor/
-+ storage/plugins/dewey-editor/**
-# NOTE: scraping-pro is NOT bundled (premium plugin, sold separately)
+# Keep every source plugin except the explicitly non-bundled premium plugin.
+# The build verifier compares the result with BundledPlugins::LIST, so an
+# unregistered directory or a missing registered plugin fails the package.
+- storage/plugins/scraping-pro/
++ storage/plugins/*/
++ storage/plugins/*/**
 
 # Keep public uploads structure
 + public/uploads/
 + public/uploads/.gitkeep
 + public/uploads/copertine/
-+ public/uploads/copertine/**
++ public/uploads/copertine/placeholder.jpg
+- public/uploads/copertine/**
++ public/uploads/digital/
++ public/uploads/digital/.htaccess
+- public/uploads/digital/**
 
 # Keep backups structure
 + backups/
@@ -97,6 +96,11 @@
 - .cursor/
 - CLAUDE.md
 - claude.md
+- /.code-review-graph/
+- /graphify-out/
+- /test-upgrade/
+- /.playwright-cli/
+- /.playwright-mcp/
 - .project
 - .buildpath
 - .settings/
@@ -173,6 +177,10 @@
 
 # Development files
 - /router.php
+- /.coderabbit.yaml
+- /.semgrepignore
+- /phpstan.neon
+- /phpstan-baseline.neon
 
 # Temporary scripts
 - clean-*.sh

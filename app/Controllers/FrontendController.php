@@ -330,6 +330,7 @@ class FrontendController
         $socialTwitter = \App\Support\HtmlHelper::sanitizePublicHttpUrl((string) \App\Support\ConfigStore::get('app.social_twitter', ''));
         $socialInstagram = \App\Support\HtmlHelper::sanitizePublicHttpUrl((string) \App\Support\ConfigStore::get('app.social_instagram', ''));
         $socialLinkedin = \App\Support\HtmlHelper::sanitizePublicHttpUrl((string) \App\Support\ConfigStore::get('app.social_linkedin', ''));
+        $socialBluesky = \App\Support\HtmlHelper::sanitizePublicHttpUrl((string) \App\Support\ConfigStore::get('app.social_bluesky', ''));
 
         // Build Schema.org structured data
         $schemaOrg = [
@@ -368,6 +369,7 @@ class FrontendController
             if ($socialTwitter) $sameAs[] = $socialTwitter;
             if ($socialInstagram) $sameAs[] = $socialInstagram;
             if ($socialLinkedin) $sameAs[] = $socialLinkedin;
+            if ($socialBluesky) $sameAs[] = $socialBluesky;
 
             if (!empty($sameAs)) {
                 $orgSchema['sameAs'] = $sameAs;
