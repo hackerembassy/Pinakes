@@ -7,6 +7,10 @@ tests/fixtures/test_import_languages.tsv -whitespace
 # Exclude from release archives (git archive)
 # NOTE: public/installer/assets/ MUST be in the ZIP — contains installer.js
 # and style.css. Excluding it causes step 2 (test connection) to silently fail.
+# Committed E2E fixture uploads (archives test data) are never release inputs;
+# create-release.sh archives via `git archive`, so they need export-ignore here
+# — the .rsync-filter catch-all only covers the bin/build-release.sh path.
+public/uploads/archives/ export-ignore
 tests/ export-ignore
 test/ export-ignore
 .github/ export-ignore
