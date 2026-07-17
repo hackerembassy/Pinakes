@@ -163,18 +163,27 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
     let bookWithFile = '';
     /** @type {string} */
     let bookWithoutFile = '';
+    /** @type {string} */
+    let listRecordsUrl = `${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`;
 
     test.beforeAll(async ({ browser }) => {
         await ensureOaiPmhRoute(browser);
 
         // Basic book for OAI tests
         const row = dbQuery(
-            "SELECT id, titolo FROM libri WHERE deleted_at IS NULL ORDER BY id LIMIT 1"
+            "SELECT id, titolo, DATE_FORMAT(updated_at, '%Y-%m-%dT%H:%i:%sZ') " +
+            "FROM libri WHERE deleted_at IS NULL ORDER BY updated_at DESC, id DESC LIMIT 1"
         );
         if (row) {
             const parts = row.split('\t');
             testBookId    = parseInt(parts[0]) || 0;
             testBookTitle = (parts[1] ?? '').trim();
+            if (parts[2]) {
+                // A long-lived/shared DB can have more than one page of old
+                // deleted records. Anchor ListRecords to the newest active
+                // fixture so the page actually exercises MAG metadata.
+                listRecordsUrl += `&from=${encodeURIComponent(parts[2])}`;
+            }
         }
 
         // Book with file_url set (for <doc> section test)
@@ -211,7 +220,7 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
 
     test('3. OAI ListRecords?metadataPrefix=mag → 200, no OAI error', async ({ request }) => {
         test.skip(testBookId === 0, 'No book in DB');
-        const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
+        const res = await request.get(listRecordsUrl);
         expect(res.status()).toBe(200);
         const body = await res.text();
         expect(body).not.toContain('<error code=');
@@ -220,7 +229,7 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
 
     test('4. MAG record has version="2.0.1" attribute', async ({ request }) => {
         test.skip(testBookId === 0, 'No book in DB');
-        const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
+        const res = await request.get(listRecordsUrl);
         const body = await res.text();
         expect(body).toContain('version="2.0.1"');
     });
@@ -229,7 +238,7 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
 
     test('5. MAG record contains <gen> section', async ({ request }) => {
         test.skip(testBookId === 0, 'No book in DB');
-        const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
+        const res = await request.get(listRecordsUrl);
         const body = await res.text();
         expect(body).toContain('<gen>');
         expect(body).toContain('</gen>');
@@ -237,7 +246,7 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
 
     test('6. MAG <gen> contains <stprog> (project provenance)', async ({ request }) => {
         test.skip(testBookId === 0, 'No book in DB');
-        const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
+        const res = await request.get(listRecordsUrl);
         const body = await res.text();
         expect(body).toContain('<stprog>');
         expect(body).toContain('<progetto>');
@@ -245,14 +254,14 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
 
     test('7. MAG <gen> contains <collection> element', async ({ request }) => {
         test.skip(testBookId === 0, 'No book in DB');
-        const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
+        const res = await request.get(listRecordsUrl);
         const body = await res.text();
         expect(body).toContain('<collection>');
     });
 
     test('8. MAG <gen> contains <rights> element', async ({ request }) => {
         test.skip(testBookId === 0, 'No book in DB');
-        const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
+        const res = await request.get(listRecordsUrl);
         const body = await res.text();
         expect(body).toContain('<rights>');
     });
@@ -261,7 +270,7 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
 
     test('9. MAG record contains <bib> section', async ({ request }) => {
         test.skip(testBookId === 0, 'No book in DB');
-        const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
+        const res = await request.get(listRecordsUrl);
         const body = await res.text();
         expect(body).toContain('<bib>');
         expect(body).toContain('</bib>');
@@ -269,7 +278,7 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
 
     test('10. MAG <bib> contains dc:title', async ({ request }) => {
         test.skip(testBookId === 0, 'No book in DB');
-        const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
+        const res = await request.get(listRecordsUrl);
         const body = await res.text();
         expect(body).toContain('<dc:title>');
     });
@@ -291,7 +300,7 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
 
     test('12. MAG <bib> contains <paese>IT</paese>', async ({ request }) => {
         test.skip(testBookId === 0, 'No book in DB');
-        const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
+        const res = await request.get(listRecordsUrl);
         const body = await res.text();
         expect(body).toContain('<paese>IT</paese>');
     });
@@ -372,7 +381,7 @@ test.describe.serial('MAG 2.0.1 metadata validation — v0.7.4 (18 tests)', () =
 
     test('18. MAG records use iccu.sbn.it/mag XML namespace', async ({ request }) => {
         test.skip(testBookId === 0, 'No book in DB');
-        const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
+        const res = await request.get(listRecordsUrl);
         const body = await res.text();
         expect(body).toContain('iccu.sbn.it/mag');
     });

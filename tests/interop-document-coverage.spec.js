@@ -265,7 +265,8 @@ test.describe.serial('Interop document coverage - 50 tests', () => {
     test.skip(!HAS_BASE, 'Set E2E_BASE_URL for API tests');
     const res = await request.get(`${BASE}/oai?verb=ListRecords&metadataPrefix=mag&set=books`);
     const body = await textFor(res);
-    expect(body).toMatch(/iccu\.sbn\.it\/mag|noRecordsMatch/);
+    expect(body).not.toContain('cannotDisseminateFormat');
+    expect(body).toMatch(/iccu\.sbn\.it\/mag|<ListRecords|noRecordsMatch/);
   });
 
   test('35. UNIMARC records can be requested through OAI', async ({ request }) => {

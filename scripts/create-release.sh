@@ -167,27 +167,17 @@ CRITICAL_FILES=(
     "vendor/composer/autoload_real.php"
 )
 
-# Bundled plugins that MUST be in the ZIP (scraping-pro is premium, NOT bundled)
-BUNDLED_PLUGINS=(
-    "api-book-scraper"
-    "archives"
-    "bibframe-linked-data"
-    "deezer"
-    "dewey-editor"
-    "digital-library"
-    "discogs"
-    "frbr-lrm"
-    "goodlib"
-    "mobile-api"
-    "musicbrainz"
-    "ncip-server"
-    "oai-pmh-server"
-    "open-library"
-    "openurl-resolver"
-    "resource-sync"
-    "viaf-authority"
-    "z39-server"
-)
+# Bundled plugins that MUST be in the ZIP, derived from the runtime source.
+BUNDLED_OUTPUT=$(php scripts/list-source-expectations.php plugins)
+BUNDLED_PLUGINS=()
+while IFS= read -r plugin; do
+    [ -n "$plugin" ] && BUNDLED_PLUGINS+=("$plugin")
+done <<< "$BUNDLED_OUTPUT"
+if [ "${#BUNDLED_PLUGINS[@]}" -eq 0 ]; then
+    echo -e "${RED}  ✗ BundledPlugins::LIST produced an empty plugin list${NC}"
+    exit 1
+fi
+EXPECTED_PLUGIN_COUNT=${#BUNDLED_PLUGINS[@]}
 
 MISSING=0
 for file in "${CRITICAL_FILES[@]}"; do
@@ -206,6 +196,13 @@ for plugin in "${BUNDLED_PLUGINS[@]}"; do
         MISSING=$((MISSING + 1))
     fi
 done
+
+PACKAGED_PLUGIN_COUNT=$(find "$VERIFY_DIR/pinakes-v${VERSION}/storage/plugins" \
+    -mindepth 2 -maxdepth 2 -name plugin.json -print 2>/dev/null | wc -l | tr -d ' ')
+if [ "$PACKAGED_PLUGIN_COUNT" -ne "$EXPECTED_PLUGIN_COUNT" ]; then
+    echo -e "${RED}  ✗ PLUGIN SET MISMATCH: package has $PACKAGED_PLUGIN_COUNT manifests, BundledPlugins::LIST declares $EXPECTED_PLUGIN_COUNT${NC}"
+    MISSING=$((MISSING + 1))
+fi
 
 # Verify scraping-pro is NOT in ZIP (premium plugin, not bundled)
 if [ -d "$VERIFY_DIR/pinakes-v${VERSION}/storage/plugins/scraping-pro" ]; then
@@ -436,6 +433,11 @@ REMOTE_ZIP="$REMOTE_VERIFY_DIR/remote.zip"
 
 LOCAL_SHA=$(shasum -a 256 "$ZIPFILE" | awk '{print $1}')
 LOCAL_PLUGIN_COUNT=$(unzip -l "$ZIPFILE" 2>/dev/null | grep -cE "storage/plugins/[^/]+/plugin\.json$" || true)
+if [ "$LOCAL_PLUGIN_COUNT" -ne "$EXPECTED_PLUGIN_COUNT" ]; then
+    echo -e "${RED}❌ ERROR: local ZIP has $LOCAL_PLUGIN_COUNT plugin manifests; BundledPlugins::LIST declares $EXPECTED_PLUGIN_COUNT${NC}"
+    rm -rf "$REMOTE_VERIFY_DIR"
+    exit 1
+fi
 GH_USER=$(gh api user --jq .login 2>/dev/null || echo "unknown")
 
 # Resolve the DRAFT release's numeric id by tag_name: drafts have no git tag yet,
@@ -490,7 +492,7 @@ while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
     REMOTE_SHA=$(shasum -a 256 "$REMOTE_ZIP" | awk '{print $1}')
     REMOTE_PLUGIN_COUNT=$(unzip -l "$REMOTE_ZIP" 2>/dev/null | grep -cE "storage/plugins/[^/]+/plugin\.json$" || true)
 
-    if [ "$LOCAL_SHA" = "$REMOTE_SHA" ] && [ "$REMOTE_PLUGIN_COUNT" = "$LOCAL_PLUGIN_COUNT" ] && [ "$REMOTE_PLUGIN_COUNT" -ge 10 ]; then
+    if [ "$LOCAL_SHA" = "$REMOTE_SHA" ] && [ "$REMOTE_PLUGIN_COUNT" = "$EXPECTED_PLUGIN_COUNT" ]; then
         MATCH=1
         break
     fi

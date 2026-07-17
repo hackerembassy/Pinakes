@@ -399,6 +399,11 @@ function scenarioDescrizionePlainSearch(mysqli $db): array
         $bookId = (int) $db->insert_id;
         $stmt->close();
 
+        // The production write paths rebuild the denormalized FULLTEXT index
+        // after persistence. This fixture inserts directly, so mirror that
+        // contract before exercising the admin and public searches.
+        \App\Support\SearchIndexBuilder::rebuild($db, $bookId);
+
         $request = $factory
             ->createServerRequest('GET', '/api/libri')
             ->withQueryParams([

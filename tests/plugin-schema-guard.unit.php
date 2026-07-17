@@ -8,15 +8,14 @@ declare(strict_types=1);
  *
  * For EVERY bundled plugin that declares expectedTables() this asserts:
  *   (a) ensureSchema() reports no failed tables;
- *   (b) every table in expectedTables() exists afterwards (catches a wrong /
- *       stale list — the exact mistake that lets PluginManager's self-heal
- *       either miss a real gap or thrash on a table that is never created);
+ *   (b) expectedTables() exactly matches every unconditional CREATE TABLE in
+ *       the plugin's PHP sources, then every declared table exists afterwards;
  *   (c) a second ensureSchema() is a no-op (idempotent, safe to re-run on
  *       every boot / upgrade).
  *
  * This is what makes the boot-time self-heal trustworthy: the heal only re-runs
- * ensureSchema when an expectedTable is missing, so expectedTables() MUST be an
- * exact subset of what ensureSchema() creates. A stale entry would make a
+ * ensureSchema when an expectedTable is missing, so expectedTables() MUST be the
+ * exact set of tables ensureSchema() creates. A stale entry would make a
  * healthy install rebuild on every boot; a missing entry would leave a real gap
  * un-healed. Both are caught here, before release.
  *
@@ -26,6 +25,7 @@ declare(strict_types=1);
  */
 
 require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/helpers/plugin-schema-source.php';
 
 function psg_env(string $path): array
 {
@@ -54,10 +54,15 @@ $name   = getenv('E2E_DB_NAME') ?: ($env['DB_NAME'] ?? '');
 mysqli_report(MYSQLI_REPORT_OFF);
 try {
     $db = (is_string($socket) && $socket !== '' && file_exists($socket))
-        ? new mysqli(null, $user, $pass, $name, 0, $socket)
-        : new mysqli($env['DB_HOST'] ?? '127.0.0.1', $user, $pass, $name, (int) ($env['DB_PORT'] ?? 3306));
+        ? @new mysqli(null, $user, $pass, $name, 0, $socket)
+        : @new mysqli($env['DB_HOST'] ?? '127.0.0.1', $user, $pass, $name, (int) ($env['DB_PORT'] ?? 3306));
 } catch (\Throwable $e) {
     echo "SKIP: database not reachable (" . $e->getMessage() . ")\n";
+    exit(0);
+}
+if (!isset($db) || $db->connect_errno !== 0) {
+    $error = isset($db) ? $db->connect_error : 'connection failed';
+    echo "SKIP: database not reachable ({$error})\n";
     exit(0);
 }
 $db->set_charset('utf8mb4');
@@ -87,13 +92,13 @@ $hm = new \App\Support\HookManager($db);
 
 // Every bundled plugin dir with a global "<Name>Plugin" class we can construct.
 $pluginsDir = __DIR__ . '/../storage/plugins';
-$dirs = array_filter(glob($pluginsDir . '/*', GLOB_ONLYDIR) ?: [], function ($d) {
-    return file_exists($d . '/wrapper.php')
-        || (bool) glob($d . '/*Plugin.php');
-});
-sort($dirs);
+$dirs = array_map(
+    static fn(string $slug): string => $pluginsDir . '/' . $slug,
+    \App\Support\BundledPlugins::LIST
+);
 
 $checkedPlugins = 0;
+$schemaOwningPlugins = 0;
 
 foreach ($dirs as $dir) {
     $slug = basename($dir);
@@ -118,12 +123,12 @@ foreach ($dirs as $dir) {
     // missing after an already-active upgrade (the Uwe #138 class of bug). This
     // is what makes the self-heal "dynamic for every plugin": you cannot add a
     // table-owning plugin (or a new table) without also declaring it, because
-    // this test fails. The check is on the main plugin file's own CREATE TABLE
-    // (its unconditional core schema) — the tables the self-heal must guarantee.
-    $ownsSchema = false;
-    if ($mainGlob) {
-        $src = (string) @file_get_contents($mainGlob[0]);
-        $ownsSchema = stripos($src, 'CREATE TABLE') !== false;
+    // this test fails. Scan every PHP source in the plugin so moving DDL into
+    // a schema helper cannot silently escape the contract.
+    $ddlTables = plugin_schema_declared_tables_in_directory($dir);
+    $ownsSchema = $ddlTables !== [];
+    if ($ownsSchema) {
+        $schemaOwningPlugins++;
     }
     $declares = method_exists($className, 'expectedTables');
     if ($ownsSchema) {
@@ -149,6 +154,13 @@ foreach ($dirs as $dir) {
 
     $expected = $instance->expectedTables();
     check(is_array($expected) && $expected !== [], "$slug: expectedTables() returns a non-empty list");
+    $expected = array_values(array_unique(array_map('strval', $expected)));
+    sort($expected);
+    check(
+        $expected === $ddlTables,
+        "$slug: expectedTables() exactly matches plugin CREATE TABLE declarations " .
+        '(expected=' . implode(',', $expected) . '; ddl=' . implode(',', $ddlTables) . ')'
+    );
 
     // Run the plugin's own schema creation (idempotent).
     $result = $instance->ensureSchema();
@@ -167,7 +179,10 @@ foreach ($dirs as $dir) {
     $checkedPlugins++;
 }
 
-check($checkedPlugins >= 6, "covered at least 6 schema-owning plugins (got {$checkedPlugins})");
+check(
+    $checkedPlugins === $schemaOwningPlugins,
+    "covered every bundled schema-owning plugin ({$checkedPlugins})"
+);
 
 $db->close();
 printf("\nALL %d PASS (%d plugins verified)\n", $TESTNO, $checkedPlugins);

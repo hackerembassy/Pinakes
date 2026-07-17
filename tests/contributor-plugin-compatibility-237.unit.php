@@ -1,0 +1,199 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Cross-plugin contract guards for issue #237.
+ *
+ * Protocol exports keep canonical names and preserve contributor roles; user
+ * interfaces may search/display pseudonyms. No database or active plugin state
+ * is required, so this runs on an empty CI installation too.
+ */
+
+$root = dirname(__DIR__);
+require $root . '/vendor/autoload.php';
+$passed = 0;
+$failed = 0;
+$check = static function (bool $condition, string $label) use (&$passed, &$failed): void {
+    if ($condition) {
+        ++$passed;
+        echo "  OK  {$label}\n";
+    } else {
+        ++$failed;
+        echo "  FAIL {$label}\n";
+    }
+};
+$read = static fn (string $path): string => (string) file_get_contents($root . '/' . $path);
+
+echo "A. Bundled plugin surface\n";
+$manifests = array_map(
+    static fn (string $plugin): string => $root . '/storage/plugins/' . $plugin . '/plugin.json',
+    \App\Support\BundledPlugins::LIST
+);
+$check(count($manifests) === count(\App\Support\BundledPlugins::LIST)
+    && count(array_filter($manifests, 'is_file')) === count($manifests),
+    'all centrally registered bundled plugin manifests are covered by the compatibility audit');
+$check(count(array_filter($manifests, static fn (string $file): bool => is_array(json_decode((string) file_get_contents($file), true)))) === count($manifests), 'all bundled plugin manifests remain valid JSON');
+foreach (['archives', 'book-club', 'frbr-lrm', 'mobile-api', 'z39-server'] as $plugin) {
+    $manifest = json_decode($read("storage/plugins/{$plugin}/plugin.json"), true);
+    $check(
+        is_array($manifest)
+            && version_compare((string) ($manifest['requires_app'] ?? ''), '0.7.36-rc.1', '>='),
+        "{$plugin} requires the AuthorName-era core version"
+    );
+}
+
+echo "B. Identity boundary\n";
+$authors = $read('app/Models/AuthorRepository.php');
+$check(str_contains($authors, 'findByCanonicalName') && str_contains($authors, 'intentionally never searches `pseudonimo`'), 'import lookup has an explicit canonical-name-only API');
+foreach ([
+    'app/Controllers/LibriController.php',
+    'app/Controllers/CsvImportController.php',
+    'app/Controllers/LibraryThingImportController.php',
+    'app/Support/ContributorSync.php',
+    'storage/plugins/book-club/src/Repo.php',
+] as $path) {
+    $check(str_contains($read($path), 'findByCanonicalName'), basename($path) . ' resolves imported names canonically');
+}
+$sbnAuthority = $read('storage/plugins/z39-server/classes/SbnAuthorityClient.php');
+$check(!str_contains($sbnAuthority, 'pseudonimo'), 'SBN authority records are never written into the pseudonym field');
+
+echo "C. Role-aware interoperability\n";
+$openUrl = $read('storage/plugins/openurl-resolver/OpenUrlResolverPlugin.php');
+$check(substr_count($openUrl, "ruolo IN (\\'principale\\', \\'co-autore\\')") >= 1 && substr_count($openUrl, "ruolo IN ('principale', 'co-autore')") >= 1, 'OpenURL exposes canonical creators only');
+$check(substr_count($openUrl, "ruolo = 'principale'") >= 1 && substr_count($openUrl, "ruolo = \\'principale\\'") >= 1, 'OpenURL always gives the principal creator ordering priority');
+$bibframe = $read('storage/plugins/bibframe-linked-data/BibframeLinkedDataPlugin.php');
+$check(str_contains($bibframe, "relators/clr") && str_contains($bibframe, "la2.ruolo IN"), 'BIBFRAME keeps creator selection separate and maps colorist');
+$check(str_contains($bibframe, "(la2.ruolo = \\'principale\\') DESC"), 'BIBFRAME always selects the principal creator before a co-author');
+$ncip = $read('storage/plugins/ncip-server/NcipServerPlugin.php');
+$check(str_contains($ncip, 'la2.ruolo IN'), 'NCIP primary author cannot fall through to a contributor');
+$check(str_contains($ncip, "(la2.ruolo = \\'principale\\') DESC"), 'NCIP always selects the principal creator before a co-author');
+$z3950 = $read('storage/plugins/z39-server/Z39ServerPlugin.php');
+$check(str_contains($z3950, "GROUP_CONCAT(a.nome ORDER BY (la.ruolo = 'principale') DESC"), 'Z39.50 creator lists put the principal creator first');
+
+require_once $root . '/storage/plugins/z39-server/classes/UnimarcLibriParser.php';
+$check(\Z39Server\UnimarcLibriParser::relatorForRole('traduttore') === '730', 'UNIMARC translator relator is 730');
+$check(\Z39Server\UnimarcLibriParser::relatorForRole('illustratore') === '440', 'UNIMARC illustrator relator is 440');
+$check(\Z39Server\UnimarcLibriParser::relatorForRole('colorista') === '410', 'UNIMARC colorist relator is 410');
+
+require_once $root . '/storage/plugins/z39-server/classes/RecordFormatter.php';
+require_once $root . '/storage/plugins/z39-server/classes/DublinCoreFormatter.php';
+require_once $root . '/storage/plugins/z39-server/classes/MODSFormatter.php';
+require_once $root . '/storage/plugins/z39-server/classes/MARCXMLFormatter.php';
+require_once $root . '/storage/plugins/z39-server/classes/UNIMARCXMLFormatter.php';
+$interopRecord = [
+    'id' => 237,
+    'titolo' => 'Role-aware record',
+    'autori' => 'Principal Person',
+    'contributors' => [
+        ['nome' => 'Principal Person', 'ruolo' => 'principale'],
+        ['nome' => 'Translator Person', 'ruolo' => 'traduttore'],
+    ],
+];
+$renderRecord = static function (string $formatterClass) use ($interopRecord): string {
+    $document = new DOMDocument('1.0', 'UTF-8');
+    $node = (new $formatterClass($document))->format($interopRecord);
+    return (string) $document->saveXML($node);
+};
+$dcXml = $renderRecord(\Z39Server\DublinCoreFormatter::class);
+$check(str_contains($dcXml, '<dc:creator>Principal Person</dc:creator>')
+    && str_contains($dcXml, '<dc:contributor>Translator Person</dc:contributor>'),
+    'SRU Dublin Core behavior keeps translator separate from creator');
+$modsXml = $renderRecord(\Z39Server\MODSFormatter::class);
+$check(str_contains($modsXml, '<namePart>Translator Person</namePart>')
+    && str_contains($modsXml, '<roleTerm type="text" authority="marcrelator">translator</roleTerm>'),
+    'SRU MODS behavior exports the translator role');
+$marcXml = $renderRecord(\Z39Server\MARCXMLFormatter::class);
+$check(str_contains($marcXml, 'tag="100"') && str_contains($marcXml, 'Translator Person')
+    && str_contains($marcXml, '>translator</subfield>'),
+    'SRU MARCXML behavior exports principal and translator responsibilities');
+$unimarcXml = $renderRecord(\Z39Server\UNIMARCXMLFormatter::class);
+$check(str_contains($unimarcXml, 'tag="702"') && str_contains($unimarcXml, 'Translator Person')
+    && str_contains($unimarcXml, '>730</subfield>'),
+    'SRU UNIMARC behavior exports translator as 702 with relator 730');
+
+$oai = $read('storage/plugins/oai-pmh-server/OaiPmhServerPlugin.php');
+$check(str_contains($oai, "? 'creator' : 'contributor'") && str_contains($oai, "? (\$index === \$primaryCreatorIndex ? '700' : '701') : '702'"), 'OAI Dublin Core and UNIMARC preserve creator/contributor semantics');
+$check(str_contains($oai, 'private function primaryCreatorIndex')
+    && str_contains($oai, "if (\$role === 'principale')")
+    && !str_contains($oai, "\$authors[0]['nome']"),
+    'OAI MARC/UNIMARC main responsibility is role-driven, never array-position-driven');
+$check(substr_count($oai, "CASE la.ruolo WHEN 'principale' THEN 0 WHEN 'co-autore' THEN 1 ELSE 2 END") >= 1
+    && substr_count($oai, "CASE la.ruolo WHEN \\'principale\\' THEN 0 WHEN \\'co-autore\\' THEN 1 ELSE 2 END") >= 1,
+    'OAI batch and single-record fetches sort principal creators first');
+$check(str_contains($oai, "'traduttore'   => '730'") && str_contains($oai, "'illustratore' => '440'") && str_contains($oai, "'colorista'    => '410'"), 'OAI UNIMARC mappings use the standard relator codes');
+require_once $root . '/storage/plugins/oai-pmh-server/OaiPmhServerPlugin.php';
+$oaiReflection = new ReflectionClass(\App\Plugins\OaiPmhServer\OaiPmhServerPlugin::class);
+$oaiInstance = $oaiReflection->newInstanceWithoutConstructor();
+$primaryCreatorIndex = $oaiReflection->getMethod('primaryCreatorIndex');
+$check($primaryCreatorIndex->invoke($oaiInstance, [
+    ['nome' => 'Translator', 'ruolo' => 'traduttore'],
+    ['nome' => 'Coauthor', 'ruolo' => 'co-autore'],
+    ['nome' => 'Principal', 'ruolo' => 'principale'],
+]) === 2, 'OAI role selection finds a principal even when it is last');
+$check($primaryCreatorIndex->invoke($oaiInstance, [
+    ['nome' => 'Illustrator', 'ruolo' => 'illustratore'],
+    ['nome' => 'Coauthor', 'ruolo' => 'co-autore'],
+]) === 1, 'OAI role selection falls back to a co-author when no principal exists');
+$check($primaryCreatorIndex->invoke($oaiInstance, [
+    ['nome' => 'Translator', 'ruolo' => 'traduttore'],
+]) === null, 'OAI contributors never become the main creator');
+$writeMarc = $oaiReflection->getMethod('writeBookMarcXml');
+$renderOaiMarc = static function (array $authors) use ($writeMarc, $oaiInstance): string {
+    $writer = new XMLWriter();
+    $writer->openMemory();
+    $writer->startDocument('1.0', 'UTF-8');
+    $writeMarc->invoke(
+        $oaiInstance,
+        $writer,
+        ['id' => 237, 'titolo' => 'Translated title', 'traduttore' => 'Translator Person'],
+        $authors,
+        [],
+        null
+    );
+    $writer->endDocument();
+    return $writer->outputMemory();
+};
+$marcWithEntityTranslator = $renderOaiMarc([
+    ['nome' => 'Translator Person', 'ruolo' => 'traduttore'],
+]);
+$marcWithLegacyTranslator = $renderOaiMarc([]);
+$check(
+    str_contains($marcWithEntityTranslator, 'Translator Person')
+        && !str_contains($marcWithEntityTranslator, 'traduzione di')
+        && str_contains($marcWithLegacyTranslator, 'traduzione di Translator Person'),
+    'OAI MARC 245$c falls back to legacy translator only when no translator entity exists'
+);
+
+echo "D. Plugin and API presentation\n";
+foreach ([
+    'LibraryRepo.php', 'Repo.php', 'StatsRepo.php', 'LendingRepo.php',
+    'QuoteRepo.php', 'AffinityRepo.php', 'ReadingRepo.php',
+] as $file) {
+    $src = $read('storage/plugins/book-club/src/' . $file);
+    $check((str_contains($src, 'AuthorName::displaySql')
+        || str_contains($src, 'AuthorName::DISPLAY_SQL_A'))
+        && !str_contains($src, 'CASE WHEN TRIM(COALESCE(a.pseudonimo')
+        && str_contains($src, "la.ruolo IN ('principale', 'co-autore')"),
+        'Book Club ' . $file . ' reuses the canonical preferred-name SQL for creators only');
+}
+$challenge = $read('storage/plugins/book-club/src/ChallengeRepo.php');
+$check(str_contains($challenge, "la.ruolo IN (\\'principale\\', \\'co-autore\\')"), 'Book Club author challenges count creators only');
+
+$mobile = $read('storage/plugins/mobile-api/src/Controllers/CatalogController.php');
+$check(str_contains($mobile, 'canonical_name') && str_contains($mobile, "'pseudonym'") && str_contains($mobile, 'a_q.pseudonimo LIKE'), 'Mobile API returns both identities and searches pseudonyms');
+$check(str_contains($mobile, '$creatorAuthors') && str_contains($mobile, "la.ruolo IN ('principale', 'co-autore')"), 'Mobile related-title logic uses creators only');
+$openApi = $read('storage/plugins/mobile-api/src/Controllers/OpenApiController.php');
+$check(str_contains($openApi, "'canonical_name'") && str_contains($openApi, "'colorista'"), 'Mobile OpenAPI documents identity fields and all roles');
+
+$frbr = $read('storage/plugins/frbr-lrm/OpereRepository.php') . $read('storage/plugins/frbr-lrm/EspressioniRepository.php');
+$check(str_contains($frbr, 'AuthorName::displaySql'), 'FRBR/LRM views use preferred display names');
+$archives = $read('storage/plugins/archives/ArchivesPlugin.php');
+$check(str_contains($archives, 'a.pseudonimo LIKE ?') && str_contains($archives, 'MATCH(a.nome)'), 'Archives UI searches pseudonyms while authority reconciliation remains canonical');
+
+$frontend = $read('app/Controllers/FrontendController.php');
+$check(str_contains($frontend, 'la_match.autore_id IN') && str_contains($frontend, 'a_all.autore_id'), 'related-book matching keeps the complete creator list');
+$publicApi = $read('app/Controllers/PublicApiController.php');
+$check(str_contains($publicApi, "str_replace(['\\\\', '%', '_']") && str_contains($publicApi, 'ESCAPE'), 'public API treats author wildcard characters literally');
+
+echo "\n" . ($failed === 0 ? "ALL {$passed} PASS\n" : "{$passed} passed, {$failed} FAILED\n");
+exit($failed === 0 ? 0 : 1);

@@ -335,9 +335,15 @@ class CsvImportController
                 $bookId = $upsertResult['id'];
                 $action = $upsertResult['action'];
 
-                // Remove old author links if updating
+                // Remove old PRINCIPAL author links if updating — scoped to
+                // ruolo='principale' so a re-import re-writes the authors the CSV
+                // owns without wiping illustrator/translator/curator/colorist
+                // ENTITY links (#237): translator/illustrator are synchronized
+                // below with importer provenance, while colorist/curator aren't
+                // CSV columns at all. A blanket delete-all silently lost every
+                // contributor entity on each re-import.
                 if ($action === 'updated') {
-                    $stmt = $db->prepare("DELETE FROM libri_autori WHERE libro_id = ?");
+                    $stmt = $db->prepare("DELETE FROM libri_autori WHERE libro_id = ? AND ruolo = 'principale'");
                     $stmt->bind_param('i', $bookId);
                     $stmt->execute();
                     $stmt->close();
@@ -358,13 +364,29 @@ class CsvImportController
                             $importData['authors_created']++;
                         }
 
-                        $stmt = $db->prepare("INSERT INTO libri_autori (libro_id, autore_id, ruolo, ordine_credito) VALUES (?, ?, 'principale', ?)");
-                        $stmt->bind_param('iii', $bookId, $authorId, $authorOrder);
-                        $stmt->execute();
-                        $stmt->close();
+                        \App\Support\ContributorSync::persistImportedPrincipal(
+                            $db,
+                            $bookId,
+                            $authorId,
+                            $authorOrder
+                        );
                         $authorOrder++;
                     }
                 }
+
+                // Contributor roles are entities too (#237). This call replaces
+                // only links previously owned by the CSV importer; manually
+                // curated contributor links and roles absent from the CSV stay
+                // untouched. Provenance lives in libri_autori_import_sources.
+                $importData['authors_created'] += \App\Support\ContributorSync::syncImportedLegacyValues(
+                    $db,
+                    $bookId,
+                    [
+                        'traduttore' => $parsedData['traduttore'] ?? null,
+                        'illustratore' => $parsedData['illustratore'] ?? null,
+                    ],
+                    'csv'
+                );
 
                 $db->commit();
 
@@ -1129,8 +1151,8 @@ class CsvImportController
     {
         $authRepo = new \App\Models\AuthorRepository($db);
 
-        // findByName normalizes and handles different formats
-        $existingId = $authRepo->findByName($name);
+        // External catalogue values are canonical names, never pseudonyms.
+        $existingId = $authRepo->findByCanonicalName($name);
         if ($existingId) {
             return ['id' => $existingId, 'created' => false];
         }

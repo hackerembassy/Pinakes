@@ -718,7 +718,10 @@ class BulkEnrichmentService
     private function enrichAuthorsIfEmpty(int $bookId, array $authors): void
     {
         // Check if book already has authors
-        $stmt = $this->db->prepare("SELECT COUNT(*) AS cnt FROM libri_autori WHERE libro_id = ?");
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(*) AS cnt FROM libri_autori
+             WHERE libro_id = ? AND ruolo IN ('principale', 'co-autore')"
+        );
         if ($stmt === false) {
             return;
         }

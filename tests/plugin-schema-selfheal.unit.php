@@ -52,10 +52,15 @@ $name   = getenv('E2E_DB_NAME') ?: ($env['DB_NAME'] ?? '');
 mysqli_report(MYSQLI_REPORT_OFF);
 try {
     $db = (is_string($socket) && $socket !== '' && file_exists($socket))
-        ? new mysqli(null, $user, $pass, $name, 0, $socket)
-        : new mysqli($env['DB_HOST'] ?? '127.0.0.1', $user, $pass, $name, (int) ($env['DB_PORT'] ?? 3306));
+        ? @new mysqli(null, $user, $pass, $name, 0, $socket)
+        : @new mysqli($env['DB_HOST'] ?? '127.0.0.1', $user, $pass, $name, (int) ($env['DB_PORT'] ?? 3306));
 } catch (\Throwable $e) {
     echo "SKIP: database not reachable (" . $e->getMessage() . ")\n";
+    exit(0);
+}
+if (!isset($db) || $db->connect_errno !== 0) {
+    $error = isset($db) ? $db->connect_error : 'connection failed';
+    echo "SKIP: database not reachable ({$error})\n";
     exit(0);
 }
 $db->set_charset('utf8mb4');

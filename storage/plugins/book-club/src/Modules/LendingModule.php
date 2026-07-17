@@ -75,9 +75,9 @@ class LendingModule extends AbstractModule
         "VARCHAR(32) GENERATED ALWAYS AS (CASE WHEN status IN ('offered','requested','active') "
         . "THEN CONCAT(club_book_id, ':', lender_id) ELSE NULL END) VIRTUAL";
 
-    public function ensureSchema(): array
+    protected static function schemaSteps(): array
     {
-        $result = $this->runDdl([
+        return [
             'bookclub_member_loans' => "CREATE TABLE IF NOT EXISTS bookclub_member_loans (
                 id INT NOT NULL AUTO_INCREMENT,
                 club_id INT NOT NULL,
@@ -104,7 +104,12 @@ class LendingModule extends AbstractModule
                 CONSTRAINT fk_bcmloan_lender FOREIGN KEY (lender_id)
                     REFERENCES utenti (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-        ]);
+        ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $result = $this->runDdl(static::schemaSteps());
 
         // Migration for installs created before the open_key invariant existed
         // (e.g. book-club shipped in 0.7.29-rc.1/rc.2). Idempotent: guarded on the

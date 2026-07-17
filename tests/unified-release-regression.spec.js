@@ -295,8 +295,8 @@ test.describe('[U-RIC] PR #136 RiC-CM full roadmap', () => {
     test('U-RIC-S2: version.json release ≥ highest migration file version', async () => {
         const { version } = JSON.parse(readRepoFile('version.json'));
         function cmp(a, b) {
-            const aa = a.split('.').map(Number);
-            const bb = b.split('.').map(Number);
+            const aa = String(a).split('-', 1)[0].split('.').map(Number);
+            const bb = String(b).split('-', 1)[0].split('.').map(Number);
             for (let i = 0; i < Math.max(aa.length, bb.length); i++) {
                 const x = aa[i] || 0, y = bb[i] || 0;
                 if (x !== y) return x - y;
@@ -353,8 +353,8 @@ test.describe('[U-RIC] PR #136 RiC-CM full roadmap', () => {
     // R8 — Plugin version bumps reflect the new capabilities
     test('U-RIC-S8: archives plugin.json ≥ 1.5.0 and oai-pmh-server ≥ 1.1.0', async () => {
         function cmp(a, b) {
-            const aa = a.split('.').map(Number);
-            const bb = b.split('.').map(Number);
+            const aa = String(a).split('-', 1)[0].split('.').map(Number);
+            const bb = String(b).split('-', 1)[0].split('.').map(Number);
             for (let i = 0; i < Math.max(aa.length, bb.length); i++) {
                 const x = aa[i] || 0, y = bb[i] || 0;
                 if (x !== y) return x - y;

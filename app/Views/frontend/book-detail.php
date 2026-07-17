@@ -1,6 +1,7 @@
 <?php
 use App\Support\HtmlHelper;
 use App\Support\ConfigStore;
+use App\Support\AuthorName;
 
 /**
  * Book Detail View
@@ -30,7 +31,7 @@ $isMusic = $resolvedTipoMedia === 'disco';
 
 // SEO ottimizzato
 $bookTitle = html_entity_decode($book['titolo'] ?? '', ENT_QUOTES, 'UTF-8');
-$bookAuthor = !empty($authors) ? html_entity_decode($authors[0]['nome'] ?? '', ENT_QUOTES, 'UTF-8') : '';
+$bookAuthor = !empty($authors) ? html_entity_decode(AuthorName::display($authors[0]), ENT_QUOTES, 'UTF-8') : '';
 $bookDescription = !empty($book['descrizione']) ? html_entity_decode($book['descrizione'], ENT_QUOTES, 'UTF-8') : '';
 $bookPublisher = !empty($book['editore']) ? html_entity_decode($book['editore'], ENT_QUOTES, 'UTF-8') : '';
 $bookYear = $book['anno_pubblicazione'] ?? '';
@@ -64,7 +65,7 @@ $bookCover = url($bookCover);
 $isAvailable = ($book['copie_disponibili'] ?? 0) > 0;
 $authorNames = [];
 foreach ($authors as $authorData) {
-    $name = trim(html_entity_decode($authorData['nome'] ?? '', ENT_QUOTES, 'UTF-8'));
+    $name = trim(html_entity_decode(AuthorName::display($authorData), ENT_QUOTES, 'UTF-8'));
     if ($name !== '') {
         $authorNames[] = $name;
     }
@@ -196,6 +197,7 @@ $schemaAuthors = [];
 $schemaTranslators = [];
 $schemaIllustrators = [];
 $schemaEditors = [];
+$schemaContributors = [];
 $validExternalSameAs = static function (mixed $uri): ?string {
     if (!is_string($uri)) {
         return null;
@@ -246,6 +248,9 @@ foreach ($authors as $authorData) {
             break;
         case 'curatore':
             $schemaEditors[] = $person;
+            break;
+        case 'colorista':
+            $schemaContributors[] = $person;
             break;
         default: // principale, co-autore
             $schemaAuthors[] = $person;
@@ -386,6 +391,13 @@ if ($schemaType === 'MusicAlbum') {
     if ($bookEdition !== '') {
         $bookSchema["bookEdition"] = $bookEdition;
     }
+}
+
+// Colorists do not have a dedicated Schema.org Book property; expose them as
+// generic contributors for every supported media type instead of mislabelling
+// them as primary authors.
+if (!empty($schemaContributors)) {
+    $bookSchema["contributor"] = count($schemaContributors) === 1 ? $schemaContributors[0] : $schemaContributors;
 }
 
 // Availability — only include Offer when the item has a price
@@ -796,13 +808,13 @@ $additional_css = "
         box-shadow: none;
     }
 
-    .role-coautore {
+    .role-co-autore {
         background: #f97316;
         color: #fff;
         border-color: #f97316;
     }
 
-    .role-coautore:hover {
+    .role-co-autore:hover {
         color: #fff;
         box-shadow: none;
     }
@@ -1669,12 +1681,17 @@ ob_start();
 
                     <div class="authors-list" id="book-authors-list">
                         <?php foreach($authors as $author): ?>
+                            <?php
+                                // Pseudonym-aware display "Pseudonimo (Nome)"; the link still
+                                // targets the real name (author page keys on nome). Issue #237.
+                                $authorDisplay = \App\Support\AuthorName::display([
+                                    'nome' => html_entity_decode($author['nome'] ?? '', ENT_QUOTES, 'UTF-8'),
+                                    'pseudonimo' => html_entity_decode($author['pseudonimo'] ?? '', ENT_QUOTES, 'UTF-8'),
+                                ]);
+                            ?>
                             <a href="<?= htmlspecialchars(route_path('author') . '/' . urlencode(html_entity_decode($author['nome'] ?? '', ENT_QUOTES, 'UTF-8')), ENT_QUOTES, 'UTF-8') ?>" class="text-decoration-none">
                                 <span class="author-item role-<?= htmlspecialchars($author['ruolo'], ENT_QUOTES, 'UTF-8') ?>">
-                                    <?= htmlspecialchars(html_entity_decode($author['nome'] ?? '', ENT_QUOTES, 'UTF-8')) ?>
-                                    <?php if ($author['ruolo'] !== 'principale'): ?>
-                                        (<?= htmlspecialchars(ucfirst($author['ruolo']), ENT_QUOTES, 'UTF-8') ?>)
-                                    <?php endif; ?>
+                                    <?= htmlspecialchars($authorDisplay, ENT_QUOTES, 'UTF-8') ?><?php if ($author['ruolo'] !== 'principale'): ?> <span class="contributor-role-sep">·</span> <?= htmlspecialchars(\App\Support\ContributorRoles::label($author['ruolo']), ENT_QUOTES, 'UTF-8') ?><?php endif; ?>
                                 </span>
                             </a>
                         <?php endforeach; ?>
@@ -2288,7 +2305,7 @@ ob_start();
         </h3>
         <div class="d-flex flex-wrap justify-content-center gap-2">
             <?php foreach ($seriesBooks as $sb):
-                $sbPath = book_path(['id' => $sb['id'], 'titolo' => $sb['titolo'], 'autore_principale' => $sb['autore_principale'] ?? '']);
+                $sbPath = book_path($sb);
             ?>
             <a href="<?= htmlspecialchars(url($sbPath), ENT_QUOTES, 'UTF-8') ?>" class="text-decoration-none">
                 <div class="d-flex align-items-center gap-2 px-2 py-1 rounded-pill" style="background: color-mix(in srgb, var(--primary-color) 8%, transparent); border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent); transition: all .2s;">

@@ -62,8 +62,23 @@ session_start();
 // ============================================================
 if (PHP_SAPI === 'cli') {
     $zipArg = $argv[1] ?? '';
+    if ($zipArg === '--count-sql-statements') {
+        $sqlFile = $argv[2] ?? '';
+        if ($sqlFile === '' || !is_file($sqlFile)) {
+            fwrite(STDERR, "ERROR: SQL file not found: {$sqlFile}\n");
+            exit(1);
+        }
+        $sql = file_get_contents($sqlFile);
+        if ($sql === false) {
+            fwrite(STDERR, "ERROR: cannot read SQL file: {$sqlFile}\n");
+            exit(1);
+        }
+        fwrite(STDOUT, (string) count(splitSqlStatements($sql)) . "\n");
+        exit(0);
+    }
     if ($zipArg === '' || in_array($zipArg, ['-h', '--help'], true)) {
-        fwrite(STDOUT, "Usage: php scripts/manual-upgrade.php /path/to/pinakes-vX.Y.Z.zip\n");
+        fwrite(STDOUT, "Usage: php scripts/manual-upgrade.php /path/to/pinakes-vX.Y.Z.zip\n"
+            . "       php scripts/manual-upgrade.php --count-sql-statements /path/to/migration.sql\n");
         exit($zipArg === '' ? 1 : 0);
     }
     $zipReal = realpath($zipArg);
@@ -206,6 +221,39 @@ function splitSqlStatements(string $sql): array
 
     for ($i = 0; $i < $length; $i++) {
         $char = $sql[$i];
+
+        // SQL comments may legally contain apostrophes, quotes and semicolons.
+        // Copy them verbatim without letting their contents alter quote state
+        // or terminate a statement. This is load-bearing for the standalone
+        // manual upgrade path, which splits before stripping leading comments.
+        if (!$inSingle && !$inDouble && !$inBacktick) {
+            $isDashComment = $char === '-' && $i + 1 < $length && $sql[$i + 1] === '-'
+                && ($i + 2 >= $length || ctype_space($sql[$i + 2]));
+            if ($isDashComment || $char === '#') {
+                while ($i < $length && $sql[$i] !== "\n") {
+                    $current .= $sql[$i];
+                    $i++;
+                }
+                if ($i < $length) {
+                    $current .= "\n";
+                }
+                continue;
+            }
+            if ($char === '/' && $i + 1 < $length && $sql[$i + 1] === '*') {
+                $current .= '/*';
+                $i += 2;
+                while ($i < $length) {
+                    if ($sql[$i] === '*' && $i + 1 < $length && $sql[$i + 1] === '/') {
+                        $current .= '*/';
+                        $i++;
+                        break;
+                    }
+                    $current .= $sql[$i];
+                    $i++;
+                }
+                continue;
+            }
+        }
 
         // Handle backslash escapes inside quoted strings
         if (($inSingle || $inDouble) && $char === '\\' && $i + 1 < $length) {
@@ -755,6 +803,21 @@ if ($authenticated && $requestMethod === 'POST' && isset($_FILES['zipfile'])) {
             $log[] = '[INFO] Nessuna nuova migrazione da eseguire';
         } else {
             $log[] = '[OK] ' . count($migrationsRun) . ' migrazioni eseguite: ' . implode(', ', $migrationsRun);
+        }
+
+        // Keep the standalone upgrader equivalent to the in-app and Docker
+        // migration paths: the 0.7.36 contributor backfill must finish before
+        // the upgrade is reported as complete.
+        if (version_compare($targetVersion, '0.7.36-rc.1', '>=')) {
+            $autoload = $rootPath . '/vendor/autoload.php';
+            if (!is_file($autoload)) {
+                throw new RuntimeException('Autoloader non trovato per il backfill contributor');
+            }
+            require_once $autoload;
+            if (!\App\Support\ContributorBackfill::run($db)) {
+                throw new RuntimeException('Backfill contributor non completato');
+            }
+            $log[] = '[OK] Backfill contributor completato';
         }
 
         // 11. Clear cache

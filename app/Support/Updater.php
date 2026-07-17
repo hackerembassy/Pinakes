@@ -3277,6 +3277,21 @@ class Updater
             // code. Idempotent and non-fatal.
             $this->reapplyTriggers();
 
+            // 0.7.36's legacy contributor conversion needs PHP row logic and
+            // must complete in the same upgrade path as its schema migration.
+            // Docker drives this method directly, so doing it here prevents a
+            // post-upgrade window where legacy contributors disappear until a
+            // later admin login or nightly maintenance run.
+            if (version_compare($toVersion, '0.7.36-rc.1', '>=')
+                && !ContributorBackfill::run($this->db)
+            ) {
+                // SQL migrations are already committed and recorded at this
+                // point. Failing the whole package install would restore old
+                // files over the new schema. Keep the upgrade coherent and let
+                // MaintenanceService retry the idempotent conversion.
+                $this->debugLog('WARNING', 'Contributor backfill deferred; maintenance will retry');
+            }
+
             return [
                 'success' => true,
                 'executed' => $executed,

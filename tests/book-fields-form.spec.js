@@ -74,15 +74,17 @@ async function loginAsAdmin(page) {
 /** Submit #bookForm, tolerate a SweetAlert confirm, wait to leave the form. */
 async function saveBookForm(page) {
   await page.locator('#bookForm button[type="submit"]').click();
-  await Promise.race([
-    page.waitForSelector('.swal2-popup', { timeout: 8000 }),
-    page.waitForURL(u => !u.toString().includes('/create') && !u.toString().includes('/edit'), { timeout: 8000 }),
-  ]).catch(() => {});
-  const confirm = page.locator('.swal2-confirm');
-  if (await confirm.isVisible({ timeout: 1500 }).catch(() => false)) {
+  const confirm = page.locator('.swal2-confirm:visible');
+  if (await confirm.isVisible({ timeout: 3000 }).catch(() => false)) {
     await confirm.click();
   }
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForFunction(
+    () => !window.location.pathname.endsWith('/admin/books/create')
+      && !window.location.pathname.includes('/admin/books/edit/'),
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForLoadState('domcontentloaded');
 }
 
 test.describe.serial('book fields + derived status — form/controller behavior', () => {

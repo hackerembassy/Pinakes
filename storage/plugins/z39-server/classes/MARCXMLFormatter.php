@@ -75,28 +75,29 @@ class MARCXMLFormatter extends RecordFormatter
             ]));
         }
 
-        // Main Entry - Personal Name - 100
-        if (!empty($record['autori'])) {
-            $authors = explode('; ', $record['autori']);
-            if (!empty($authors[0])) {
-                $recordEl->appendChild($this->createDataField('100', '1', ' ', [
-                    ['a', $authors[0]]
-                ]));
+        // 100/700 — creators and role-aware contributors.
+        $contributors = $this->contributorRows($record);
+        $primaryCreatorIndex = null;
+        foreach ($contributors as $index => $contributor) {
+            if ($contributor['ruolo'] === 'principale') {
+                $primaryCreatorIndex = $index;
+                break;
             }
-
-            // Additional authors - 700
-            for ($i = 1; $i < count($authors); $i++) {
-                if (!empty($authors[$i])) {
-                    $recordEl->appendChild($this->createDataField('700', '1', ' ', [
-                        ['a', $authors[$i]]
-                    ]));
-                }
+            if ($primaryCreatorIndex === null && $contributor['ruolo'] === 'co-autore') {
+                $primaryCreatorIndex = $index;
             }
+        }
+        foreach ($contributors as $index => $contributor) {
+            $tag = $index === $primaryCreatorIndex ? '100' : '700';
+            $recordEl->appendChild($this->createDataField($tag, '1', ' ', [
+                ['a', $contributor['nome']],
+                ['e', $this->roleTerm($contributor['ruolo'])],
+            ]));
         }
 
         // Title Statement - 245
         // Indicator 1: '1' when a 1XX field is present (added entry required), '0' otherwise
-        $ind1_245 = empty($record['autori']) ? '0' : '1';
+        $ind1_245 = $primaryCreatorIndex === null ? '0' : '1';
         $titleSubfields = [['a', $record['titolo'] ?? 'Untitled']];
         if (!empty($record['sottotitolo'])) {
             $titleSubfields[] = ['b', $record['sottotitolo']];

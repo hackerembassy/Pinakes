@@ -62,13 +62,21 @@ class FeedController
         $sql = "
             SELECT l.id, l.titolo, l.descrizione_plain, l.created_at,
                    (
-                       SELECT a.nome
+                       SELECT " . \App\Support\AuthorName::displaySql('a') . "
                        FROM libri_autori la
                        JOIN autori a ON la.autore_id = a.id
-                       WHERE la.libro_id = l.id
+                       WHERE la.libro_id = l.id AND la.ruolo IN ('principale', 'co-autore')
                        ORDER BY CASE la.ruolo WHEN 'principale' THEN 0 ELSE 1 END, la.ordine_credito
                        LIMIT 1
                    ) AS autore_principale,
+                   (
+                       SELECT a.nome
+                       FROM libri_autori la
+                       JOIN autori a ON la.autore_id = a.id
+                       WHERE la.libro_id = l.id AND la.ruolo IN ('principale', 'co-autore')
+                       ORDER BY CASE la.ruolo WHEN 'principale' THEN 0 ELSE 1 END, la.ordine_credito
+                       LIMIT 1
+                   ) AS autore_principale_nome,
                    e.nome AS editore
             FROM libri l
             LEFT JOIN editori e ON l.editore_id = e.id
@@ -107,7 +115,12 @@ class FeedController
                 $desc = $publisher;
             }
 
-            $bookPath = book_path(['id' => $id, 'titolo' => $title, 'autore_principale' => $author]);
+            $bookPath = book_path([
+                'id' => $id,
+                'titolo' => $title,
+                'autore_principale' => $author,
+                'autore_principale_nome' => $row['autore_principale_nome'] ?? '',
+            ]);
             $link = $baseUrl . $bookPath;
 
             $pubDate = gmdate('r');

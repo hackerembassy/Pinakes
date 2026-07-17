@@ -61,9 +61,9 @@ class SeasonsModule extends AbstractModule
     // Schema
     // ------------------------------------------------------------------
 
-    public function ensureSchema(): array
+    protected static function schemaSteps(): array
     {
-        $result = $this->runDdl([
+        return [
             'bookclub_seasons' => "CREATE TABLE IF NOT EXISTS bookclub_seasons (
                 id INT NOT NULL AUTO_INCREMENT,
                 club_id INT NOT NULL,
@@ -78,7 +78,12 @@ class SeasonsModule extends AbstractModule
                 CONSTRAINT fk_bcseasons_club FOREIGN KEY (club_id)
                     REFERENCES bookclub_clubs (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-        ]);
+        ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $result = $this->runDdl(static::schemaSteps());
         $this->addColumnIfMissing('bookclub_books', 'season_id', 'INT NULL DEFAULT NULL');
         $this->migrateSeasonFk();
         // addColumnIfMissing only logs on failure: verify the column really

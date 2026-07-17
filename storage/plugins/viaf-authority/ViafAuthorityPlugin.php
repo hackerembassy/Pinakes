@@ -25,6 +25,11 @@ use Psr\Http\Message\ServerRequestInterface;
  */
 class ViafAuthorityPlugin
 {
+    /** @var array<string,string> table => idempotent ensure method */
+    private const TABLE_ENSURERS = [
+        'author_authority_alternates' => 'ensureAlternatesTable',
+    ];
+
     private mysqli $db;
     /** @phpstan-ignore property.onlyWritten */
     private HookManager $hookManager;
@@ -62,7 +67,7 @@ class ViafAuthorityPlugin
      */
     public function expectedTables(): array
     {
-        return ['author_authority_alternates'];
+        return array_keys(self::TABLE_ENSURERS);
     }
 
     public function ensureSchema(): array
@@ -78,12 +83,14 @@ class ViafAuthorityPlugin
             $failed[] = 'autori_authority_columns';
         }
 
-        try {
-            $this->ensureAlternatesTable();
-            $created[] = 'author_authority_alternates';
-        } catch (\Throwable $e) {
-            SecureLogger::error('[ViafAuthority] ensureAlternatesTable failed: ' . $e->getMessage());
-            $failed[] = 'author_authority_alternates';
+        foreach (self::TABLE_ENSURERS as $table => $method) {
+            try {
+                $this->{$method}();
+                $created[] = $table;
+            } catch (\Throwable $e) {
+                SecureLogger::error("[ViafAuthority] {$method} failed: " . $e->getMessage());
+                $failed[] = $table;
+            }
         }
 
         return ['created' => $created, 'failed' => $failed];

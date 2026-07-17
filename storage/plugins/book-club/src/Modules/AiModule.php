@@ -60,9 +60,9 @@ class AiModule extends AbstractModule
     // Schema
     // ------------------------------------------------------------------
 
-    public function ensureSchema(): array
+    protected static function schemaSteps(): array
     {
-        return $this->runDdl([
+        return [
             'bookclub_ai_outputs' => "CREATE TABLE IF NOT EXISTS bookclub_ai_outputs (
                 id INT NOT NULL AUTO_INCREMENT,
                 club_id INT NOT NULL,
@@ -80,7 +80,7 @@ class AiModule extends AbstractModule
                 CONSTRAINT fk_bcai_user FOREIGN KEY (created_by)
                     REFERENCES utenti (id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-        ]);
+        ];
     }
 
     // ------------------------------------------------------------------

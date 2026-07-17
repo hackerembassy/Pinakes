@@ -6540,5 +6540,14 @@
   "Invia email di prova": "Invia email di prova",
   "Invio in corso…": "Invio in corso…",
   "Richiesta non riuscita. Riprova.": "Richiesta non riuscita. Riprova.",
-  "oggi": "oggi"
+  "oggi": "oggi",
+  "Database installato (%d tabelle)": "Database installato (%d tabelle)",
+  "Colorista": "Colorista",
+  "Co-autore": "Co-autore",
+  "Cerca o aggiungi...": "Cerca o aggiungi...",
+  "Nessun risultato, premi Invio per aggiungerne uno nuovo": "Nessun risultato, premi Invio per aggiungerne uno nuovo",
+  "Cerca un autore esistente o scrivine uno nuovo": "Cerca un autore esistente o scrivine uno nuovo",
+  "Cerca un autore esistente o scrivine uno nuovo (utile per i fumetti)": "Cerca un autore esistente o scrivine uno nuovo (utile per i fumetti)",
+  "Contributore \"%s\" è già selezionato": "Contributore \"%s\" è già selezionato",
+  "Contributore \"%s\" pronto per essere creato": "Contributore \"%s\" pronto per essere creato"
 }

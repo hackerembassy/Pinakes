@@ -119,14 +119,13 @@ class Z39ServerPlugin
      */
     public function expectedTables(): array
     {
-        return ['autore_varianti', 'libri_soggetti', 'soggetti', 'z39_access_logs', 'z39_rate_limits'];
+        return array_keys(self::schemaSteps());
     }
 
-    public function ensureSchema(): array
+    /** @return array<string,string> table => CREATE DDL, in dependency order. */
+    private static function schemaSteps(): array
     {
-        $result = ['created' => [], 'failed' => []];
-
-        $tables = [
+        return [
             'z39_access_logs' => "CREATE TABLE IF NOT EXISTS z39_access_logs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 ip_address VARCHAR(45) NOT NULL COMMENT 'Client IP address',
@@ -189,6 +188,12 @@ class Z39ServerPlugin
                 INDEX idx_forma (forma_variante)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $result = ['created' => [], 'failed' => []];
+        $tables = self::schemaSteps();
 
         foreach ($tables as $table => $ddl) {
             if ($this->db->query($ddl) !== false) {
@@ -1574,9 +1579,13 @@ class Z39ServerPlugin
                     l.numero_pagine, l.isbn13, l.isbn10, l.collana, l.numero_serie,
                     l.descrizione_plain, l.parole_chiave, l.classificazione_dewey,
                     e.nome AS editore,
-                    (SELECT GROUP_CONCAT(a.nome SEPARATOR '; ')
+                    (SELECT GROUP_CONCAT(a.nome ORDER BY (la.ruolo = 'principale') DESC,
+                                                            la.ordine_credito IS NULL,
+                                                            la.ordine_credito,
+                                                            la.autore_id SEPARATOR '; ')
                        FROM libri_autori la JOIN autori a ON a.id = la.autore_id
-                      WHERE la.libro_id = l.id) AS autori
+                      WHERE la.libro_id = l.id
+                        AND la.ruolo IN ('principale', 'co-autore')) AS autori
              FROM libri l
              LEFT JOIN editori e ON e.id = l.editore_id
              WHERE l.id = ? AND l.deleted_at IS NULL
@@ -1592,6 +1601,7 @@ class Z39ServerPlugin
         if (!is_array($row)) {
             return null;
         }
+        $contributors = $this->getBookContributors($id);
 
         return [
             'id'                  => (int) $row['id'],
@@ -1610,6 +1620,44 @@ class Z39ServerPlugin
             'classificazione_dewey' => (string) ($row['classificazione_dewey'] ?? ''),
             'editore'             => (string) ($row['editore'] ?? ''),
             'autori'              => (string) ($row['autori'] ?? ''),
+            'contributors'        => $contributors,
         ];
+    }
+
+    /**
+     * @return list<array{nome:string,ruolo:string}>
+     */
+    private function getBookContributors(int $bookId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT a.nome, la.ruolo
+               FROM libri_autori la
+               JOIN autori a ON a.id = la.autore_id
+              WHERE la.libro_id = ?
+              ORDER BY (la.ruolo = 'principale') DESC,
+                       (la.ruolo = 'co-autore') DESC,
+                       la.ordine_credito IS NULL,
+                       la.ordine_credito,
+                       la.autore_id"
+        );
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param('i', $bookId);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
+        $result = $stmt->get_result();
+        $rows = $result instanceof \mysqli_result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+        $stmt->close();
+
+        return array_map(
+            static fn (array $row): array => [
+                'nome' => trim((string) ($row['nome'] ?? '')),
+                'ruolo' => (string) ($row['ruolo'] ?? ''),
+            ],
+            $rows
+        );
     }
 }

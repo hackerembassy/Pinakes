@@ -312,12 +312,13 @@ class ArchivesPlugin
      */
     public function expectedTables(): array
     {
-        return ['archival_units', 'archival_unit_files', 'archival_unit_authority', 'archive_activities', 'archive_unit_activities', 'archive_agent_identifiers', 'archive_agent_relations', 'archive_places', 'archive_relations', 'authority_records', 'autori_authority_link'];
+        return array_keys(self::schemaSteps());
     }
 
-    public function ensureSchema(): array
+    /** @return array<string,string> table => CREATE DDL, in dependency order. */
+    private static function schemaSteps(): array
     {
-        $steps = [
+        return [
             'archival_units'             => self::ddlArchivalUnits(),
             'authority_records'          => self::ddlAuthorityRecords(),
             'archival_unit_authority'    => self::ddlArchivalAuthorityLinks(),
@@ -333,6 +334,11 @@ class ArchivesPlugin
             'archive_places'             => self::ddlArchivePlaces(),
             'archive_relations'          => self::ddlArchiveRelations(),
         ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $steps = self::schemaSteps();
         $created = [];
         $failed = [];
 
@@ -2841,8 +2847,9 @@ class ArchivesPlugin
     {
         $rows = [];
         $q = trim($q);
+        $display = \App\Support\AuthorName::displaySql('a');
         if ($q === '') {
-            $result = $this->db->query('SELECT id, nome FROM autori ORDER BY nome LIMIT ' . (int) $limit);
+            $result = $this->db->query("SELECT a.id, {$display} AS nome FROM autori a ORDER BY nome LIMIT " . (int) $limit);
             if ($result instanceof \mysqli_result) {
                 while ($r = $result->fetch_assoc()) { $rows[] = $r; }
                 $result->free();
@@ -2855,11 +2862,13 @@ class ArchivesPlugin
         // single-char name. Mirrors the addcslashes pattern applied at
         // CQL parser (3510) and searchArchivalUnits (4679).
         $like = '%' . addcslashes($q, '%_\\') . '%';
-        $stmt = $this->db->prepare('SELECT id, nome FROM autori WHERE nome LIKE ? ORDER BY nome LIMIT ?');
+        $stmt = $this->db->prepare("SELECT a.id, {$display} AS nome FROM autori a
+                                    WHERE a.nome LIKE ? OR a.pseudonimo LIKE ?
+                                    ORDER BY nome LIMIT ?");
         if ($stmt === false) {
             return $rows;
         }
-        $stmt->bind_param('si', $like, $limit);
+        $stmt->bind_param('ssi', $like, $like, $limit);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result instanceof \mysqli_result) {

@@ -46,9 +46,9 @@ class DiscussionsModule extends AbstractModule
     // Schema
     // ------------------------------------------------------------------
 
-    public function ensureSchema(): array
+    protected static function schemaSteps(): array
     {
-        return $this->runDdl([
+        return [
             'bookclub_threads' => "CREATE TABLE IF NOT EXISTS bookclub_threads (
                 id INT NOT NULL AUTO_INCREMENT,
                 club_id INT NOT NULL,
@@ -116,7 +116,7 @@ class DiscussionsModule extends AbstractModule
                 CONSTRAINT fk_bcment_user FOREIGN KEY (mentioned_user_id)
                     REFERENCES utenti (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-        ]);
+        ];
     }
 
     // ------------------------------------------------------------------

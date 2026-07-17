@@ -109,9 +109,18 @@ class LibraryRepo
                     l.titolo, l.copertina_url,
                     COALESCE(l.copie_totali, 0) AS copie_totali,
                     COALESCE(l.copie_disponibili, 0) AS copie_disponibili,
-                    (SELECT GROUP_CONCAT(a.nome ORDER BY la.ordine_credito SEPARATOR ', ')
+                    (SELECT GROUP_CONCAT(" . \App\Support\AuthorName::displaySql('a') . "
+                                         ORDER BY la.ordine_credito SEPARATOR ', ')
                        FROM libri_autori la JOIN autori a ON a.id = la.autore_id
-                      WHERE la.libro_id = l.id) AS autori,
+                      WHERE la.libro_id = l.id
+                        AND la.ruolo IN ('principale', 'co-autore')) AS autori,
+                    (SELECT a.nome
+                       FROM libri_autori la JOIN autori a ON a.id = la.autore_id
+                      WHERE la.libro_id = l.id
+                        AND la.ruolo IN ('principale', 'co-autore')
+                      ORDER BY (la.ruolo = 'principale') DESC,
+                               COALESCE(la.ordine_credito, 0), la.autore_id
+                      LIMIT 1) AS autore_principale_nome,
                     (SELECT COUNT(*) FROM prenotazioni pr
                       WHERE pr.libro_id = l.id AND pr.stato = 'attiva') AS waitlist,
                     (SELECT COUNT(*) FROM prenotazioni pr2

@@ -206,12 +206,12 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
                 $autori = $libro['autori'] ?? [];
                 if (is_array($autori) && count($autori) > 0):
                   foreach ($autori as $a):
-                    $label = trim((string)($a['nome'] ?? ''));
+                    $label = \App\Support\AuthorName::display($a);
                     if ($label === '') continue;
               ?>
                 <a href="<?= htmlspecialchars(url('/admin/authors/' . (int)($a['id'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>"
                    class="inline-flex items-center px-2 py-1 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
-                  <i class="fas fa-user mr-1"></i><?php echo App\Support\HtmlHelper::e($label); ?>
+                  <i class="fas fa-user mr-1"></i><?php echo htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8'); ?>
                 </a>
              <?php endforeach; else: ?>
                 <span class="text-gray-400"><?= __("Non specificato") ?></span>
@@ -501,24 +501,30 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
               <dd class="text-gray-900 font-medium"><?php echo App\Support\HtmlHelper::e(__($libro['tipo_acquisizione'])); ?></dd>
             </div>
             <?php endif; ?>
-            <?php if (!empty($libro['traduttore'])): ?>
+            <?php
+            // Contributor roles as author entities (issue #237). Entities are the
+            // single source of truth — no free-text fallback: the legacy columns
+            // are never cleared, so falling back to them would resurrect a
+            // contributor a librarian just removed (and the public book page has
+            // no such fallback, so admin and public would disagree). The legacy
+            // columns are retained only for CSV/LibraryThing export round-trip.
+            $contributorGroups = [
+                'traduttori'   => __('Traduttore'),
+                'illustratori' => __('Illustratore'),
+                'curatori'     => __('Curatore'),
+                'coloristi'    => __('Colorista'),
+            ];
+            foreach ($contributorGroups as $roleKey => $label):
+                $people = $libro[$roleKey] ?? [];
+                if (empty($people)) { continue; }
+            ?>
             <div>
-              <dt class="text-xs uppercase text-gray-500"><?= __("Traduttore") ?></dt>
-              <dd class="text-gray-900 font-medium"><?php echo App\Support\HtmlHelper::e($libro['traduttore']); ?></dd>
+              <dt class="text-xs uppercase text-gray-500"><?php echo htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8'); ?></dt>
+              <dd class="text-gray-900 font-medium">
+                <?php foreach ($people as $idx => $p): ?><?php echo $idx ? ', ' : ''; ?><a href="<?= htmlspecialchars(url('/admin/authors/' . (int)($p['id'] ?? 0)), ENT_QUOTES, 'UTF-8') ?>" class="hover:text-blue-600 transition"><?php echo htmlspecialchars(\App\Support\AuthorName::display($p), ENT_QUOTES, 'UTF-8'); ?></a><?php endforeach; ?>
+              </dd>
             </div>
-            <?php endif; ?>
-            <?php if (!empty($libro['illustratore'])): ?>
-            <div>
-              <dt class="text-xs uppercase text-gray-500"><?= __("Illustratore") ?></dt>
-              <dd class="text-gray-900 font-medium"><?php echo App\Support\HtmlHelper::e($libro['illustratore']); ?></dd>
-            </div>
-            <?php endif; ?>
-            <?php if (!empty($libro['curatore'])): ?>
-            <div>
-              <dt class="text-xs uppercase text-gray-500"><?= __("Curatore") ?></dt>
-              <dd class="text-gray-900 font-medium"><?php echo App\Support\HtmlHelper::e($libro['curatore']); ?></dd>
-            </div>
-            <?php endif; ?>
+            <?php endforeach; ?>
             <div class="sm:col-span-2">
               <dt class="text-xs uppercase text-gray-500"><?= __("Classificazione Dewey") ?></dt>
               <dd class="text-gray-900 font-medium">

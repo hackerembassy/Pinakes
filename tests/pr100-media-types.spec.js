@@ -84,6 +84,12 @@ test.describe.serial('PR #100: Media Types System', () => {
     bookId = dbQuery("SELECT id FROM libri WHERE titolo = 'PR100_Book_" + RUN_ID + "' LIMIT 1");
     audiobookId = dbQuery("SELECT id FROM libri WHERE titolo = 'PR100_Audiobook_" + RUN_ID + "' LIMIT 1");
     dvdId = dbQuery("SELECT id FROM libri WHERE titolo = 'PR100_DVD_" + RUN_ID + "' LIMIT 1");
+    // Direct SQL fixtures bypass BookRepository, whose production write path
+    // rebuilds the denormalized FULLTEXT column used by search_text.
+    dbExec(
+      `UPDATE libri SET search_index = titolo
+        WHERE id IN (${[cdId, bookId, audiobookId, dvdId].map(id => Number(id) || 0).join(',')})`
+    );
   });
 
   test.afterAll(async () => {

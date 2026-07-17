@@ -114,15 +114,13 @@ class NcipServerPlugin
      */
     public function expectedTables(): array
     {
-        return ['ncip_partners', 'ncip_transactions'];
+        return array_keys(self::schemaSteps());
     }
 
-    public function ensureSchema(): array
+    /** @return array<string,string> table => CREATE DDL, in dependency order. */
+    private static function schemaSteps(): array
     {
-        $created = [];
-        $failed  = [];
-
-        $tables = [
+        return [
             'ncip_partners' => "CREATE TABLE IF NOT EXISTS ncip_partners (
                 id           INT AUTO_INCREMENT PRIMARY KEY,
                 code         VARCHAR(64)   NULL DEFAULT NULL,
@@ -152,6 +150,13 @@ class NcipServerPlugin
                 KEY idx_prestito (prestito_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
         ];
+    }
+
+    public function ensureSchema(): array
+    {
+        $created = [];
+        $failed  = [];
+        $tables = self::schemaSteps();
 
         foreach ($tables as $name => $ddl) {
             if ($this->db->query($ddl) === true) {
@@ -1155,8 +1160,11 @@ class NcipServerPlugin
                     l.anno_pubblicazione, a.nome AS author_name
                FROM libri l
                LEFT JOIN autori a ON a.id = (
-                   SELECT la2.autore_id FROM libri_autori la2 WHERE la2.libro_id = l.id
-                   ORDER BY COALESCE(la2.ordine_credito, 0), la2.autore_id LIMIT 1
+                   SELECT la2.autore_id FROM libri_autori la2
+                    WHERE la2.libro_id = l.id
+                      AND la2.ruolo IN (\'principale\', \'co-autore\')
+                   ORDER BY (la2.ruolo = \'principale\') DESC,
+                            la2.ordine_credito IS NULL, la2.ordine_credito, la2.autore_id LIMIT 1
                )
               WHERE l.id = ? AND l.deleted_at IS NULL'
         );

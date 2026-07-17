@@ -14,6 +14,7 @@
  */
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
+const fs = require('fs');
 
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:8081';
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
@@ -263,8 +264,8 @@ test.describe.serial('SweetAlerts — users cluster', () => {
     await expect(page.locator('.swal2-popup')).toContainText('Generazione CSV in corso...');
   });
 
-  // ── index.php:674 — info: PDF export empty-state "Nessun dato"
-  test('index.php:674 — PDF export with no rows shows the "Nessun dato" info alert', async () => {
+  // ── index.php:670 — server-side PDF export keeps the active filters
+  test('index.php:670 — PDF export with no rows downloads a filtered PDF', async () => {
     // Filter to a value that returns zero rows so the table data array is empty.
     await page.goto(`${BASE}/admin/users`);
     await waitUsersTableReady(page);
@@ -275,17 +276,20 @@ test.describe.serial('SweetAlerts — users cluster', () => {
     await page.locator('#search_text').pressSequentially(`${TAG}_NO_SUCH_USER`, { delay: 25 });
     await expect(page.locator('#utenti-table td.dt-empty')).toBeVisible({ timeout: 10000 });
 
-    await page.click('#export-pdf');
-
-    // (a) + (b): the empty-state info alert appears.
-    await page.waitForSelector('.swal2-popup', { timeout: 8000 });
-    await expect(page.locator('.swal2-icon-info')).toBeVisible();
-    await expect(page.locator('.swal2-popup')).toContainText('Nessun dato');
-    await expect(page.locator('.swal2-popup')).toContainText('Non ci sono dati da esportare');
+    const [request, download] = await Promise.all([
+      page.waitForRequest(req => req.url().includes('/admin/users/export-pdf')),
+      page.waitForEvent('download'),
+      page.click('#export-pdf'),
+    ]);
+    expect(new URL(request.url()).searchParams.get('search_text')).toBe(`${TAG}_NO_SUCH_USER`);
+    expect(download.suggestedFilename()).toMatch(/^utenti_\d{8}\.pdf$/);
+    const downloadedPath = await download.path();
+    expect(downloadedPath).toBeTruthy();
+    expect(fs.readFileSync(downloadedPath).subarray(0, 4).toString()).toBe('%PDF');
   });
 
-  // ── index.php:756 — success-toast: PDF export success after jsPDF generates
-  test('index.php:756 — PDF export success toast "PDF generato!" after generation', async () => {
+  // ── index.php:670 — populated server-side PDF export
+  test('index.php:670 — PDF export downloads the filtered user list', async () => {
     // Need at least one row in the (filtered) table; create a normal user.
     const userId = createSuspendedUser('pdf_ok');
     await page.goto(`${BASE}/admin/users`);
@@ -296,13 +300,16 @@ test.describe.serial('SweetAlerts — users cluster', () => {
     await page.locator('#search_text').pressSequentially(`${TAG}_pdf_ok`, { delay: 25 });
     await expect(page.locator('#utenti-table tbody')).toContainText(TAG, { timeout: 10000 });
 
-    // Stop the actual file save from blocking; let jsPDF run then fire the toast.
-    await page.click('#export-pdf');
-
-    // (a) + (b): jsPDF loads/generates, then the success toast appears.
-    await page.waitForSelector('.swal2-icon-success', { timeout: 20000 });
-    await expect(page.locator('.swal2-popup')).toContainText('PDF generato!');
-    await expect(page.locator('.swal2-popup')).toContainText('Il download dovrebbe iniziare automaticamente');
+    const [request, download] = await Promise.all([
+      page.waitForRequest(req => req.url().includes('/admin/users/export-pdf')),
+      page.waitForEvent('download'),
+      page.click('#export-pdf'),
+    ]);
+    expect(new URL(request.url()).searchParams.get('search_text')).toBe(`${TAG}_pdf_ok`);
+    expect(download.suggestedFilename()).toMatch(/^utenti_\d{8}\.pdf$/);
+    const downloadedPath = await download.path();
+    expect(downloadedPath).toBeTruthy();
+    expect(fs.readFileSync(downloadedPath).subarray(0, 4).toString()).toBe('%PDF');
 
     dbExec(`DELETE FROM utenti WHERE id = ${userId}`);
   });

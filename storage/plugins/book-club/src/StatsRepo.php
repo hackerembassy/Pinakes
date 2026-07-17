@@ -470,9 +470,11 @@ class StatsRepo
         }
         return $this->rows(
             "SELECT cb.id, cb.season_id, cb.state, l.titolo,
-                    (SELECT GROUP_CONCAT(a.nome ORDER BY la.ordine_credito SEPARATOR ', ')
+                    (SELECT GROUP_CONCAT(" . \App\Support\AuthorName::displaySql('a') . "
+                                         ORDER BY la.ordine_credito SEPARATOR ', ')
                        FROM libri_autori la JOIN autori a ON a.id = la.autore_id
-                      WHERE la.libro_id = l.id) AS autori
+                      WHERE la.libro_id = l.id
+                        AND la.ruolo IN ('principale', 'co-autore')) AS autori
                FROM bookclub_books cb
                JOIN libri l ON l.id = cb.libro_id AND l.deleted_at IS NULL
               WHERE cb.club_id = ? AND cb.state <> ?
@@ -536,9 +538,11 @@ class StatsRepo
         return $this->rows(
             "SELECT cb.id, cb.state, cb.reading_starts, cb.reading_ends, cb.updated_at,
                     l.titolo,
-                    (SELECT GROUP_CONCAT(a.nome ORDER BY la.ordine_credito SEPARATOR ', ')
+                    (SELECT GROUP_CONCAT(" . \App\Support\AuthorName::displaySql('a') . "
+                                         ORDER BY la.ordine_credito SEPARATOR ', ')
                        FROM libri_autori la JOIN autori a ON a.id = la.autore_id
-                      WHERE la.libro_id = l.id) AS autori,
+                      WHERE la.libro_id = l.id
+                        AND la.ruolo IN ('principale', 'co-autore')) AS autori,
                     $seasonSelect
                FROM bookclub_books cb
                JOIN libri l ON l.id = cb.libro_id AND l.deleted_at IS NULL
@@ -565,9 +569,11 @@ class StatsRepo
         }
         return $this->rows(
             "SELECT l.titolo,
-                    (SELECT GROUP_CONCAT(a.nome ORDER BY la.ordine_credito SEPARATOR ', ')
+                    (SELECT GROUP_CONCAT(" . \App\Support\AuthorName::displaySql('a') . "
+                                         ORDER BY la.ordine_credito SEPARATOR ', ')
                        FROM libri_autori la JOIN autori a ON a.id = la.autore_id
-                      WHERE la.libro_id = l.id) AS autori,
+                      WHERE la.libro_id = l.id
+                        AND la.ruolo IN ('principale', 'co-autore')) AS autori,
                     cb.state, $seasonSelect,
                     TRIM(CONCAT(COALESCE(up.nome, ''), ' ', COALESCE(up.cognome, ''))) AS proposer,
                     cb.reading_starts, cb.reading_ends, cb.created_at

@@ -55,9 +55,9 @@ class BuddyModule extends AbstractModule
     // Schema
     // ------------------------------------------------------------------
 
-    public function ensureSchema(): array
+    protected static function schemaSteps(): array
     {
-        return $this->runDdl([
+        return [
             'bookclub_buddies' => "CREATE TABLE IF NOT EXISTS bookclub_buddies (
                 id INT NOT NULL AUTO_INCREMENT,
                 club_id INT NOT NULL,
@@ -80,7 +80,7 @@ class BuddyModule extends AbstractModule
                 CONSTRAINT fk_bcbuddy_userb FOREIGN KEY (user_b)
                     REFERENCES utenti (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-        ]);
+        ];
     }
 
     // ------------------------------------------------------------------

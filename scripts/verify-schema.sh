@@ -7,7 +7,7 @@
 #   • migration-0.7.31.unit.php  — the release migration adds/backfills exactly
 #     the columns/indexes it claims, over OLD-schema sandboxes, idempotently.
 #   • plugin-schema-guard.unit.php — every bundled plugin's expectedTables() is
-#     an EXACT subset of what its ensureSchema() creates (no missing table left
+#     the EXACT set its ensureSchema() creates (no missing table left
 #     un-healed, no stale entry that would make the boot self-heal thrash), and
 #     ensureSchema is idempotent.
 #   • plugin-schema-selfheal.unit.php — an already-active plugin whose version
@@ -29,10 +29,28 @@ cd "$(dirname "$0")/.."
 
 PHP="${PHP_BIN:-php}"
 TESTS=(
-  tests/migration-0.7.31.unit.php
+  tests/source-expectations.unit.php
+  tests/plugin-schema-expectations-static.unit.php
   tests/plugin-schema-guard.unit.php
   tests/plugin-schema-selfheal.unit.php
 )
+
+# The current release's behavioural migration test, derived from version.json
+# instead of a hardcoded name (which silently went stale, pinned to an old
+# release, and stopped testing the migration that actually shipped). A release
+# may legitimately carry no migration — include the test only when it exists.
+RELEASE_VERSION="$(jq -r '.version' version.json 2>/dev/null)"
+if [[ -n "$RELEASE_VERSION" && "$RELEASE_VERSION" != "null" \
+      && -f "tests/migration-${RELEASE_VERSION}.unit.php" ]]; then
+  TESTS+=("tests/migration-${RELEASE_VERSION}.unit.php")
+fi
+# Guard: if this release ships a migration SQL but no behavioural test for it,
+# fail loudly — an untested migration is exactly what updater.md forbids.
+if [[ -f "installer/database/migrations/migrate_${RELEASE_VERSION}.sql" \
+      && ! -f "tests/migration-${RELEASE_VERSION}.unit.php" ]]; then
+  echo "✗ migrate_${RELEASE_VERSION}.sql ships without tests/migration-${RELEASE_VERSION}.unit.php"
+  exit 1
+fi
 
 echo "════════════════════════════════════════════════════════════"
 echo " Schema / migration verification gate"

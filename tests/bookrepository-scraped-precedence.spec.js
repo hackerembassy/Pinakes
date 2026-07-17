@@ -17,9 +17,11 @@ test.describe('BookRepository optional field precedence', () => {
     // (array_key_exists + !== '' + !== null), NOT empty(), so a literal "0"
     // typed by the librarian is treated as present and preserved.
     expect(source).toContain("$traduttoreProvided = array_key_exists('traduttore', $data) && $data['traduttore'] !== '' && $data['traduttore'] !== null;");
-    expect(source).toContain("!$traduttoreProvided && !empty($data['scraped_translator'])");
+    expect(source).toContain("!array_key_exists('traduttori_ids', $data)");
+    expect(source).toContain("&& !empty($data['scraped_translator'])");
     expect(source).toContain("$illustratoreProvided = array_key_exists('illustratore', $data) && $data['illustratore'] !== '' && $data['illustratore'] !== null;");
-    expect(source).toContain("!$illustratoreProvided && !empty($data['scraped_illustrator'])");
+    expect(source).toContain("!array_key_exists('illustratori_ids', $data)");
+    expect(source).toContain("&& !empty($data['scraped_illustrator'])");
 
     // Regression guard: the fragile empty()-based admission must be gone, since
     // empty("0") === true would silently overwrite a manual "0" with the scrape.

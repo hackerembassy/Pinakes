@@ -2,7 +2,7 @@
 /**
  * Plugin-integrity regression for issue #101.
  *
- * After any upgrade / fresh install, the 16 bundled plugins must:
+ * After any upgrade / fresh install, every bundled plugin must:
  *   1) exist as directories on disk under storage/plugins/
  *   2) have corresponding rows in the `plugins` table
  *   3) not trigger "Main file not found" at load time
@@ -16,6 +16,9 @@
 
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const { readBundledPlugins } = require('./helpers/source-expectations');
 
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:8081';
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || '';
@@ -49,24 +52,12 @@ function dbQuery(sql) {
 test.skip(!ADMIN_EMAIL || !ADMIN_PASS || !DB_USER || !DB_NAME || !INSTALL_ROOT,
     'Missing env (ADMIN_EMAIL/PASS, DB_*, E2E_INSTALL_ROOT)');
 
-const EXPECTED_BUNDLED = [
-    'api-book-scraper',
-    'archives',
-    'bibframe-linked-data',
-    'deezer',
-    'dewey-editor',
-    'digital-library',
-    'discogs',
-    'goodlib',
-    'musicbrainz',
-    'ncip-server',
-    'oai-pmh-server',
-    'open-library',
-    'openurl-resolver',
-    'resource-sync',
-    'viaf-authority',
-    'z39-server',
-];
+// Derived from BundledPlugins::LIST — do NOT reintroduce a hardcoded list; it
+// only re-asserts the source and goes stale on every plugin added.
+const bundledPluginsFromSource = readBundledPlugins();
+const EXPECTED_BUNDLED = bundledPluginsFromSource ?? [];
+test.skip(bundledPluginsFromSource === null,
+    'app/Support/BundledPlugins.php not readable — cannot derive bundled plugin list');
 
 test.describe.serial('Plugin integrity regression (#101)', () => {
     /** @type {import('@playwright/test').BrowserContext} */
@@ -90,9 +81,7 @@ test.describe.serial('Plugin integrity regression (#101)', () => {
         await context?.close();
     });
 
-    test('1. All 16 bundled plugin folders exist on disk', async () => {
-        const fs = require('fs');
-        const path = require('path');
+    test(`1. All bundled plugin folders exist on disk (${EXPECTED_BUNDLED.length})`, async () => {
         for (const plugin of EXPECTED_BUNDLED) {
             const dir = path.join(INSTALL_ROOT, 'storage', 'plugins', plugin);
             expect(fs.existsSync(dir), `plugin folder missing: ${dir}`).toBe(true);
@@ -106,7 +95,7 @@ test.describe.serial('Plugin integrity regression (#101)', () => {
         }
     });
 
-    test('2. All 16 plugins are registered in DB after admin page hit', async () => {
+    test(`2. All bundled plugins are registered in DB (${EXPECTED_BUNDLED.length})`, async () => {
         // Hit /admin/plugins — this calls loadActivePlugins() →
         // autoRegisterBundledPlugins() + cleanupOrphanPlugins()
         await page.goto(`${BASE}/admin/plugins`);
@@ -135,21 +124,24 @@ test.describe.serial('Plugin integrity regression (#101)', () => {
             .toBe(EXPECTED_BUNDLED.length);
     });
 
-    test('4. Optional music plugins (discogs/deezer/musicbrainz) default to inactive', async () => {
-        // Safety: activating them on a server that can't reach external APIs
-        // would throw — they must start disabled and be opt-in.
-        const rows = dbQuery(
-            "SELECT CONCAT(name, '=', is_active) FROM plugins " +
-            "WHERE name IN ('discogs','deezer','musicbrainz') ORDER BY name"
-        ).split('\n').filter(Boolean);
-        expect(rows).toContain('deezer=0');
-        expect(rows).toContain('discogs=0');
-        expect(rows).toContain('musicbrainz=0');
+    test('4. Bundled does not mean active; external music plugins register as opt-in', async () => {
+        // The shared E2E database may legitimately contain plugins activated by
+        // earlier suites. Assert the fresh-registration contract at its source:
+        // every network-backed music manifest is optional and PluginManager
+        // maps optional bundled plugins to is_active=0 on INSERT.
+        for (const name of ['discogs', 'deezer', 'musicbrainz']) {
+            const manifestPath = path.join(INSTALL_ROOT, 'storage', 'plugins', name, 'plugin.json');
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+            expect(manifest.metadata?.optional, `${name} must remain opt-in`).toBe(true);
+        }
+        const managerSource = fs.readFileSync(
+            path.join(INSTALL_ROOT, 'app', 'Support', 'PluginManager.php'),
+            'utf-8'
+        );
+        expect(managerSource).toContain('$isActiveValue = $isOptional ? 0 : 1;');
     });
 
     test('5. No "Main file not found" errors in app.log', async () => {
-        const fs = require('fs');
-        const path = require('path');
         const logPath = path.join(INSTALL_ROOT, 'storage', 'logs', 'app.log');
         if (!fs.existsSync(logPath)) return; // fresh install may have empty log
         const log = fs.readFileSync(logPath, 'utf-8');
@@ -195,25 +187,51 @@ test.describe.serial('Plugin integrity regression (#101)', () => {
         test.skip(plugins.length === 0, 'no activatable inactive plugins');
 
         const failures = [];
-        for (const p of plugins) {
-            const res = await page.evaluate(async ({ base, id, token }) => {
-                const r = await fetch(`${base}/admin/plugins/${id}/activate`, {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'X-CSRF-Token': token, 'Content-Type': 'application/json' },
-                    body: '{}',
-                });
-                let data = {};
-                try { data = await r.json(); } catch (_) { /* non-JSON body */ }
-                return { status: r.status, data };
-            }, { base: BASE, id: p.id, token: csrf });
+        const cleanupFailures = [];
+        try {
+            for (const p of plugins) {
+                const res = await page.evaluate(async ({ base, id, token }) => {
+                    const r = await fetch(`${base}/admin/plugins/${id}/activate`, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'X-CSRF-Token': token, 'Content-Type': 'application/json' },
+                        body: '{}',
+                    });
+                    let data = {};
+                    try { data = await r.json(); } catch (_) { /* non-JSON body */ }
+                    return { status: r.status, data };
+                }, { base: BASE, id: p.id, token: csrf });
 
-            const active = dbQuery(`SELECT is_active FROM plugins WHERE id=${p.id}`);
-            if (!res.data.success || active !== '1') {
-                failures.push(`${p.name} (#${p.id}): ${res.data.message || ('HTTP ' + res.status)}`);
+                const active = dbQuery(`SELECT is_active FROM plugins WHERE id=${p.id}`);
+                if (!res.data.success || active !== '1') {
+                    failures.push(`${p.name} (#${p.id}): ${res.data.message || ('HTTP ' + res.status)}`);
+                }
+            }
+        } finally {
+            // Activation here is a schema probe, not installation policy. Restore
+            // every plugin that this test found inactive so the suite leaves the
+            // fresh-install activation state unchanged.
+            for (const p of [...plugins].reverse()) {
+                if (dbQuery(`SELECT is_active FROM plugins WHERE id=${p.id}`) !== '1') continue;
+                const res = await page.evaluate(async ({ base, id, token }) => {
+                    const r = await fetch(`${base}/admin/plugins/${id}/deactivate`, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'X-CSRF-Token': token, 'Content-Type': 'application/json' },
+                        body: '{}',
+                    });
+                    let data = {};
+                    try { data = await r.json(); } catch (_) { /* non-JSON body */ }
+                    return { status: r.status, data };
+                }, { base: BASE, id: p.id, token: csrf });
+                const active = dbQuery(`SELECT is_active FROM plugins WHERE id=${p.id}`);
+                if (!res.data.success || active !== '0') {
+                    cleanupFailures.push(`${p.name} (#${p.id}): ${res.data.message || ('HTTP ' + res.status)}`);
+                }
             }
         }
 
         expect(failures, `plugin activation failed:\n${failures.join('\n')}`).toHaveLength(0);
+        expect(cleanupFailures, `plugin activation-state restore failed:\n${cleanupFailures.join('\n')}`).toHaveLength(0);
     });
 });

@@ -29,7 +29,7 @@ class SRUServer
         ],
         'dc.creator' => [
             'type' => 'text',
-            'columns' => ['a.nome'],
+            'columns' => ['a.nome', 'a.pseudonimo'],
         ],
         'dc.subject' => [
             'type' => 'text',
@@ -53,6 +53,7 @@ class SRUServer
                 'l.sottotitolo',
                 'l.descrizione',
                 'a.nome',
+                'a.pseudonimo',
                 'e.nome',
                 'l.isbn10',
                 'l.isbn13',
@@ -414,6 +415,7 @@ class SRUServer
         $baseQuery = "
             FROM libri l
             LEFT JOIN libri_autori la ON l.id = la.libro_id
+                                      AND la.ruolo IN ('principale', 'co-autore')
             LEFT JOIN autori a ON la.autore_id = a.id
             LEFT JOIN editori e ON l.editore_id = e.id
             LEFT JOIN generi g ON l.genere_id = g.id
@@ -426,11 +428,25 @@ class SRUServer
         ";
 
         return [
-            'count' => "SELECT COUNT(DISTINCT l.id) " . $baseQuery,
+            // The grouped base query returns one row per book. Counting inside
+            // that same GROUP BY yields one `1` row per book and the caller
+            // reads only the first; wrap it to obtain the real total.
+            'count' => "SELECT COUNT(*) FROM (SELECT l.id {$baseQuery}) sru_matches",
             'data' => "
                 SELECT
                     l.*,
                     GROUP_CONCAT(DISTINCT a.nome ORDER BY la.ordine_credito SEPARATOR '; ') as autori,
+                    (SELECT GROUP_CONCAT(
+                                CONCAT(HEX(la_all.ruolo), ':', HEX(a_all.nome))
+                                ORDER BY (la_all.ruolo = 'principale') DESC,
+                                         (la_all.ruolo = 'co-autore') DESC,
+                                         la_all.ordine_credito IS NULL,
+                                         la_all.ordine_credito,
+                                         la_all.autore_id
+                                SEPARATOR ',')
+                       FROM libri_autori la_all
+                       JOIN autori a_all ON a_all.id = la_all.autore_id
+                      WHERE la_all.libro_id = l.id) AS contributors_encoded,
                     e.nome as editore,
                     g.nome as genere,
                     s.nome as scaffale,
@@ -466,6 +482,8 @@ class SRUServer
             $records = [];
             if ($result) {
                 while ($row = $result->fetch_assoc()) {
+                    $row['contributors'] = $this->decodeContributors((string) ($row['contributors_encoded'] ?? ''));
+                    unset($row['contributors_encoded']);
                     $records[] = $row;
                 }
                 $result->free();
@@ -478,6 +496,35 @@ class SRUServer
         } catch (\mysqli_sql_exception $e) {
             throw new \Z39Server\Exceptions\DatabaseException($e->getMessage(), (int) $e->getCode(), $e);
         }
+    }
+
+    /**
+     * Decode the delimiter-safe HEX payload produced by buildSearchQuery().
+     *
+     * @return list<array{nome:string,ruolo:string}>
+     */
+    private function decodeContributors(string $encoded): array
+    {
+        if ($encoded === '') {
+            return [];
+        }
+        $rows = [];
+        foreach (explode(',', $encoded) as $pair) {
+            [$roleHex, $nameHex] = array_pad(explode(':', $pair, 2), 2, '');
+            if ($roleHex === '' || $nameHex === ''
+                || preg_match('/^[0-9A-F]+$/i', $roleHex) !== 1
+                || preg_match('/^[0-9A-F]+$/i', $nameHex) !== 1
+            ) {
+                continue;
+            }
+            $role = hex2bin($roleHex);
+            $name = hex2bin($nameHex);
+            if ($role === false || $name === false || trim($name) === '') {
+                continue;
+            }
+            $rows[] = ['nome' => trim($name), 'ruolo' => $role];
+        }
+        return $rows;
     }
 
     private function fetchCopiesForRecords(array &$records): void

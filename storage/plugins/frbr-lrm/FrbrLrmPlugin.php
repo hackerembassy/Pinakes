@@ -176,17 +176,22 @@ class FrbrLrmPlugin
      */
     public function expectedTables(): array
     {
-        return ['opere', 'espressioni', 'libri_autori_ruoli'];
+        return array_keys(self::schemaSteps());
     }
 
-    public function ensureSchema(): array
+    /** @return array<string,string> table => CREATE DDL, in dependency order. */
+    private static function schemaSteps(): array
     {
-        $steps = [
+        return [
             'opere'              => self::ddlOpere(),
             'espressioni'        => self::ddlEspressioni(),
             'libri_autori_ruoli' => self::ddlLibriAutoriRuoli(),
         ];
+    }
 
+    public function ensureSchema(): array
+    {
+        $steps = self::schemaSteps();
         $created = [];
         $failed = [];
 
@@ -542,7 +547,8 @@ class FrbrLrmPlugin
     private function autoriForSelect(): array
     {
         $out = [];
-        $res = $this->db->query("SELECT id, nome FROM autori ORDER BY nome ASC LIMIT 1000");
+        $display = \App\Support\AuthorName::displaySql('a');
+        $res = $this->db->query("SELECT a.id, {$display} AS nome FROM autori a ORDER BY nome ASC LIMIT 1000");
         if ($res instanceof \mysqli_result) {
             while ($row = $res->fetch_assoc()) {
                 $out[] = ['id' => (int) $row['id'], 'nome' => (string) $row['nome']];

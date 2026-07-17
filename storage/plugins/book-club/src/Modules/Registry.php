@@ -18,18 +18,20 @@ final class Registry
     /** @var list<ModuleInterface>|null */
     private static ?array $modules = null;
 
+    /** @var list<class-string<ModuleInterface>>|null */
+    private static ?array $classes = null;
+
     private function __construct()
     {
     }
 
-    /** @return list<ModuleInterface> */
-    public static function all(mysqli $db): array
+    /** @return list<class-string<ModuleInterface>> */
+    public static function classes(): array
     {
-        if (self::$modules !== null) {
-            return self::$modules;
+        if (self::$classes !== null) {
+            return self::$classes;
         }
-        $modules = [];
-        $repo = new Repo($db);
+        $classes = [];
         foreach (glob(__DIR__ . '/*Module.php') ?: [] as $file) {
             $base = basename($file, '.php');
             if ($base === 'AbstractModule') {
@@ -40,10 +42,25 @@ final class Registry
             if (!class_exists($class) || !is_subclass_of($class, ModuleInterface::class)) {
                 continue;
             }
+            $classes[] = $class;
+        }
+        sort($classes);
+        return self::$classes = $classes;
+    }
+
+    /** @return list<ModuleInterface> */
+    public static function all(mysqli $db): array
+    {
+        if (self::$modules !== null) {
+            return self::$modules;
+        }
+        $modules = [];
+        $repo = new Repo($db);
+        foreach (self::classes() as $class) {
             try {
                 $modules[] = new $class($db, $repo);
             } catch (\Throwable $e) {
-                SecureLogger::error('[BookClub] module ' . $base . ' failed to load: ' . $e->getMessage());
+                SecureLogger::error('[BookClub] module ' . $class . ' failed to load: ' . $e->getMessage());
             }
         }
         usort($modules, static fn(ModuleInterface $a, ModuleInterface $b): int => strcmp($a->slug(), $b->slug()));

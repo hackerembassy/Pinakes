@@ -492,7 +492,7 @@ class LibriController
         // Volumes of this work (this book is the parent)
         $volStmt = $db->prepare("
             SELECT v.numero_volume, v.titolo_volume, l.id, l.titolo, l.isbn13, l.isbn10,
-                   (SELECT a.nome FROM libri_autori la JOIN autori a ON la.autore_id = a.id
+                   (SELECT " . \App\Support\AuthorName::displaySql('a') . " FROM libri_autori la JOIN autori a ON la.autore_id = a.id
                     WHERE la.libro_id = l.id AND la.ruolo = 'principale' LIMIT 1) AS autore
             FROM volumi v
             JOIN libri l ON v.volume_id = l.id AND l.deleted_at IS NULL
@@ -583,6 +583,85 @@ class LibriController
     }
 
     /**
+     * Normalize picker payloads at the HTTP boundary. Empty/zero/garbage values
+     * emitted by an unenhanced multi-select are ignored here; BookRepository
+     * remains fail-fast when an invalid id reaches its internal API directly.
+     *
+     * @return list<int>
+     */
+    private function positiveIntegerIds(mixed $values): array
+    {
+        $ids = [];
+        foreach ((array) $values as $value) {
+            if (is_int($value)) {
+                $id = $value;
+            } elseif (is_string($value) && preg_match('/^\s*[0-9]+\s*$/D', $value) === 1) {
+                $id = (int) trim($value);
+            } else {
+                continue;
+            }
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        return array_values($ids);
+    }
+
+    /**
+     * Resolve a contributor role's picker submission into a flat list of author
+     * ids (issue #237). Existing selections arrive as `<role>_ids[]`; brand-new
+     * names as `<role>_new[]`, which are find-or-created just like authors.
+     * Shared by store() and update() for illustratori/traduttori/curatori/coloristi.
+     *
+     * @param array<string,mixed> $data
+     * @return list<int>
+     */
+    private function resolveContributorIds(mysqli $db, array $data, string $roleKey): array
+    {
+        $ids = $this->positiveIntegerIds($data[$roleKey . '_ids'] ?? []);
+        $newNames = (array)($data[$roleKey . '_new'] ?? []);
+        if ($newNames !== []) {
+            $authRepo = new \App\Models\AuthorRepository($db);
+            foreach ($newNames as $name) {
+                $name = trim((string)$name);
+                if ($name === '') {
+                    continue;
+                }
+                $existing = $authRepo->findByCanonicalName($name);
+                $ids[] = $existing ?? $authRepo->create([
+                    'nome' => $name, 'pseudonimo' => '', 'data_nascita' => null,
+                    'data_morte' => null, 'nazionalita' => '', 'biografia' => '', 'sito_web' => '',
+                ]);
+            }
+        }
+
+        // Backward-compatible ingestion path: callers predating the entity
+        // pickers still submit singular free-text fields (and the ISBN scraper
+        // submits scraped_translator/scraped_illustrator). Convert those names
+        // to entities as well. The marker makes the current admin form
+        // authoritative: if a librarian removes a scraped chip, its stale
+        // hidden scraped_* value must not silently add it back on submit.
+        $pickerIsAuthoritative = (string)($data['contributors_entity_picker'] ?? '') === '1';
+        if (!$pickerIsAuthoritative) {
+            $legacySources = [
+                'illustratori' => ['illustratore', 'scraped_illustrator'],
+                'traduttori'   => ['traduttore', 'scraped_translator'],
+                'curatori'     => ['curatore'],
+                'coloristi'    => ['colorista'],
+            ];
+            foreach ($legacySources[$roleKey] ?? [] as $sourceKey) {
+                $raw = $data[$sourceKey] ?? '';
+                if (!is_scalar($raw) || trim((string)$raw) === '') {
+                    continue;
+                }
+                $resolved = \App\Support\ContributorSync::resolveNameIds($db, (string)$raw);
+                $ids = array_merge($ids, $resolved['ids']);
+            }
+        }
+        return array_values(array_unique(array_filter($ids, static fn($i) => $i > 0)));
+    }
+
+    /**
      * Create a book from the admin form: validates input, resolves authors and
      * publishers (multi-publisher, issue #143), handles cover + scraping data,
      * then persists via BookRepository.
@@ -638,9 +717,6 @@ class LibriController
             'anno_pubblicazione' => null,
             'edizione' => '',
             'data_pubblicazione' => '',
-            'traduttore' => '',
-            'illustratore' => '',
-            'curatore' => '',
             'numero_pagine' => null,
         ];
 
@@ -914,7 +990,16 @@ class LibriController
             }
 
             $repo = new \App\Models\BookRepository($db);
-            $fields['autori_ids'] = array_map('intval', $data['autori_ids'] ?? []);
+            $fields['autori_ids'] = $this->positiveIntegerIds($data['autori_ids'] ?? []);
+            // Contributor roles as entities (issue #237): illustrator/translator/
+            // curator/colorist pickers, resolved to author ids (new names created).
+            $contributorPickersReady = (string)($data['contributors_entity_picker'] ?? '') === '1';
+            foreach (['illustratori', 'traduttori', 'curatori', 'coloristi'] as $contributorRole) {
+                $resolvedContributorIds = $this->resolveContributorIds($db, $data, $contributorRole);
+                if ($contributorPickersReady || $resolvedContributorIds !== []) {
+                    $fields[$contributorRole . '_ids'] = $resolvedContributorIds;
+                }
+            }
 
             // Get scraped author bio if available
             $scrapedAuthorBio = trim((string) ($data['scraped_author_bio'] ?? ''));
@@ -926,7 +1011,7 @@ class LibriController
                     $nomeCompleto = trim((string) $nomeCompleto);
                     if ($nomeCompleto !== '') {
                         // Check if author already exists (handles "Levi, Primo" vs "Primo Levi")
-                        $existingId = $authRepo->findByName($nomeCompleto);
+                        $existingId = $authRepo->findByCanonicalName($nomeCompleto);
                         if ($existingId) {
                             $fields['autori_ids'][] = $existingId;
                             // Update bio if existing author has no bio and we have scraped one
@@ -954,7 +1039,7 @@ class LibriController
                 $authRepo = new \App\Models\AuthorRepository($db);
                 $scrapedAuthor = trim((string) $data['scraped_author']);
                 if ($scrapedAuthor !== '') {
-                    $found = $authRepo->findByName($scrapedAuthor);
+                    $found = $authRepo->findByCanonicalName($scrapedAuthor);
                     if ($found) {
                         $fields['autori_ids'][] = $found;
                         // Update bio if existing author has no bio and we have scraped one
@@ -1236,9 +1321,6 @@ class LibriController
             'anno_pubblicazione' => null,
             'edizione' => '',
             'data_pubblicazione' => '',
-            'traduttore' => '',
-            'illustratore' => '',
-            'curatore' => '',
             'numero_pagine' => null,
         ];
 
@@ -1559,7 +1641,16 @@ class LibriController
                     return $response->withStatus(409)->withHeader('Content-Type', 'application/json');
                 }
             }
-            $fields['autori_ids'] = array_map('intval', $data['autori_ids'] ?? []);
+            $fields['autori_ids'] = $this->positiveIntegerIds($data['autori_ids'] ?? []);
+            // Contributor roles as entities (issue #237): illustrator/translator/
+            // curator/colorist pickers, resolved to author ids (new names created).
+            $contributorPickersReady = (string)($data['contributors_entity_picker'] ?? '') === '1';
+            foreach (['illustratori', 'traduttori', 'curatori', 'coloristi'] as $contributorRole) {
+                $resolvedContributorIds = $this->resolveContributorIds($db, $data, $contributorRole);
+                if ($contributorPickersReady || $resolvedContributorIds !== []) {
+                    $fields[$contributorRole . '_ids'] = $resolvedContributorIds;
+                }
+            }
 
             $collRepo = new \App\Models\CollocationRepository($db);
             if ($fields['scaffale_id'] && $fields['mensola_id']) {
@@ -1584,7 +1675,7 @@ class LibriController
                     $nomeCompleto = trim((string) $nomeCompleto);
                     if ($nomeCompleto !== '') {
                         // Check if author already exists (handles "Levi, Primo" vs "Primo Levi")
-                        $existingId = $authRepo->findByName($nomeCompleto);
+                        $existingId = $authRepo->findByCanonicalName($nomeCompleto);
                         if ($existingId) {
                             $fields['autori_ids'][] = $existingId;
                             // Update bio if existing author has no bio and we have scraped one
@@ -1612,7 +1703,7 @@ class LibriController
                 $authRepo = new \App\Models\AuthorRepository($db);
                 $scrapedAuthor = trim((string) $data['scraped_author']);
                 if ($scrapedAuthor !== '') {
-                    $found = $authRepo->findByName($scrapedAuthor);
+                    $found = $authRepo->findByCanonicalName($scrapedAuthor);
                     if ($found) {
                         $fields['autori_ids'][] = $found;
                         // Update bio if existing author has no bio and we have scraped one
@@ -3170,7 +3261,8 @@ class LibriController
         $query = "
             SELECT
                 l.*,
-                GROUP_CONCAT(DISTINCT a.nome ORDER BY la.ordine_credito SEPARATOR ';') as autori_nomi,
+                GROUP_CONCAT(DISTINCT CASE WHEN la.ruolo IN ('principale', 'co-autore') THEN a.nome END
+                             ORDER BY la.ordine_credito SEPARATOR ';') as autori_nomi,
                 e.nome as editore_nome,
                 " . ($hasJunction
                     ? "(SELECT GROUP_CONCAT(e2.nome ORDER BY le.ordine, e2.nome SEPARATOR ';')

@@ -86,9 +86,9 @@ class AffinityModule extends AbstractModule
     // Schema
     // ------------------------------------------------------------------
 
-    public function ensureSchema(): array
+    protected static function schemaSteps(): array
     {
-        return $this->runDdl([
+        return [
             // INVARIANT: user_a < user_b (unordered pairs, enforced by
             // AffinityRepo::recomputeClub which sorts ids before insert).
             // score NULL = insufficient shared data ("dati insufficienti").
@@ -123,7 +123,7 @@ class AffinityModule extends AbstractModule
                 CONSTRAINT fk_bcaffopt_user FOREIGN KEY (user_id)
                     REFERENCES utenti (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
-        ]);
+        ];
     }
 
     // ------------------------------------------------------------------

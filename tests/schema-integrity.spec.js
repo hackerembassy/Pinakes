@@ -7,15 +7,15 @@
  * correctly, whether via fresh install (schema.sql) or upgrade (migrate_*.sql).
  *
  * IMPORTANT — two-tier table model:
- *   CORE_TABLES (57): always created by the base installer via schema.sql.
+ *   CORE_TABLES (derived from schema.sql): every CREATE TABLE the base installer runs.
  *   Archives tables (5): created only when the Archives plugin is activated
  *     (archival_units, authority_records, archival_unit_authority,
  *      autori_authority_link, archival_unit_files). Tests 10–12 skip
  *     automatically when those tables are absent (checked via tableExists()).
  *
  * Covers:
- *  1. Installer creates exactly N core tables (auto-crosscheck vs schema.sql)
- *  2. All core tables exist by name (hardcoded CORE_TABLES + auto-derived)
+ *  1. Installer creates every core table schema.sql defines (derived, not hardcoded)
+ *  2. All core tables schema.sql defines exist by name
  *  3. libri: critical columns + tipo_media ENUM values
  *  4. autori: VIAF/ISNI authority control columns (v0.7.0)
  *  5. prestiti: NCIP columns; origine ENUM includes 'ncip' (v0.7.3)
@@ -31,8 +31,8 @@
  * 13. oai_deleted_records: entity_type ENUM includes 'archival_unit' (v0.6.0)
  * 14. collane: hierarchy columns parent_id / tipo / gruppo_serie (v0.5.9.5)
  * 15. utenti: GDPR privacy columns (v0.4.0)
- * 16. Plugin registrations: all 16 bundled plugins present in DB
- * 17. Plugin path integrity: path = name for all 16 (bind_param type-swap regression)
+ * 16. Plugin registrations: all bundled plugins (BundledPlugins::LIST) present in DB
+ * 17. Plugin path integrity: path = name for all bundled (bind_param type-swap regression)
  *
  * Run:
  *   /tmp/run-e2e.sh tests/schema-integrity.spec.js \
@@ -41,8 +41,10 @@
 
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
-const fs   = require('fs');
-const path = require('path');
+const {
+    readCoreTablesFromSchema,
+    readBundledPlugins,
+} = require('./helpers/source-expectations');
 
 const DB_USER   = process.env.E2E_DB_USER   || '';
 const DB_PASS   = process.env.E2E_DB_PASS   || '';
@@ -71,59 +73,29 @@ function dbQuery(sql) {
 
 test.skip(!DB_USER || !DB_NAME, 'Missing E2E env (DB_*)');
 
-// ── Schema.sql auto-derive (approach 2) ──────────────────────────────────────
+// ── Expected state (DERIVED, never hardcoded) ───────────────────────────────
+//
+// Both lists come from the app's own sources of truth — schema.sql for core
+// tables, BundledPlugins::LIST for plugins — so schema growth NEVER requires
+// editing this file. A hardcoded count/list here would only re-assert what the
+// source already says and would fail on every legitimate addition; that isn't a
+// real invariant. What we actually verify: the installed DB reflects exactly
+// what those sources declare.
+//
+// KEEP THIS DYNAMIC. Do not reintroduce a hardcoded table/plugin list or count.
 
-/**
- * Parse CREATE TABLE names from the authoritative schema.sql.
- * Returns null when schema.sql is not readable (e.g. remote-only CI target).
- * Plugin-optional tables are NOT in schema.sql, so they are naturally excluded.
- *
- * __dirname is always the tests/ folder of the *source repo*, regardless of
- * where the app is installed — so this always reflects the latest definition.
- *
- * @returns {string[]|null}
- */
-function parseCoreTablesFromSchema() {
-    const sqlPath = path.resolve(__dirname, '..', 'installer', 'database', 'schema.sql');
-    try {
-        const sql = fs.readFileSync(sqlPath, 'utf-8');
-        return [...sql.matchAll(/^CREATE TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`(\w+)`/gim)].map(m => m[1]).sort();
-    } catch {
-        return null;
-    }
-}
+/** Core tables the installer must create — every CREATE TABLE in schema.sql. */
+const coreTablesFromSource = readCoreTablesFromSchema();
+const CORE_TABLES = coreTablesFromSource ?? [];
 
-// ── Expected state ────────────────────────────────────────────────────────────
+/** Bundled plugins that must be registered — every entry in BundledPlugins::LIST. */
+const pluginsFromSource = readBundledPlugins();
+const EXPECTED_PLUGINS = pluginsFromSource ?? [];
 
-/**
- * 57 tables always created by the base installer via schema.sql.
- * Present after fresh install AND after upgrade, regardless of which
- * optional plugins the user has activated.
- *
- * KEEP IN SYNC WITH schema.sql — Test 1 will fail if this list diverges.
- */
-const CORE_TABLES = [
-    'admin_notifications', 'api_keys', 'autori', 'author_authority_alternates',
-    'cms_pages', 'collane', 'consent_log', 'contact_messages', 'copie',
-    'digital_assets', 'donazioni', 'editori', 'email_templates', 'events',
-    'feedback', 'gdpr_requests', 'generi', 'home_content', 'import_logs',
-    'languages', 'libri', 'libri_autori', 'libri_collane', 'libri_donati',
-    'libri_editori', 'libri_tag', 'log_modifiche', 'mag_project_config', 'mensole', 'migrations',
-    'ncip_partners', 'ncip_transactions', 'oai_deleted_records',
-    'oai_resumption_tokens', 'plugin_data', 'plugin_hooks', 'plugin_logs',
-    'plugin_settings', 'plugins', 'posizioni', 'preferenze_notifica_utenti',
-    'prenotazioni', 'prestiti', 'recensioni', 'scaffali', 'sedi', 'staff',
-    'system_settings', 'tag', 'themes', 'update_logs', 'user_sessions',
-    'utenti', 'volumi', 'wishlist', 'z39_access_logs', 'z39_rate_limits',
-];
-
-/** All 16 bundled plugins that must be registered in `plugins` table */
-const EXPECTED_PLUGINS = [
-    'api-book-scraper', 'archives', 'bibframe-linked-data', 'deezer',
-    'dewey-editor', 'digital-library', 'discogs', 'goodlib', 'musicbrainz',
-    'ncip-server', 'oai-pmh-server', 'open-library', 'openurl-resolver',
-    'resource-sync', 'viaf-authority', 'z39-server',
-];
+// Without the sources we can't derive expectations — skip rather than assert
+// against an empty/guessed list (remote-only CI target, no source checkout).
+test.skip(coreTablesFromSource === null || pluginsFromSource === null,
+    'schema.sql / BundledPlugins.php not readable — cannot derive expectations');
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -157,55 +129,29 @@ test.describe.serial('Schema integrity — v0.7.4 (17 tests)', () => {
 
     // ── 1. Core table count ───────────────────────────────────────────────────
 
-    test(`1. Installer creates exactly ${CORE_TABLES.length} core tables (+ schema.sql cross-check)`, () => {
-        // Approach 1 — hardcoded CORE_TABLES (PR-discipline check)
+    test(`1. Installer creates every core table schema.sql defines (${CORE_TABLES.length})`, () => {
+        // CORE_TABLES is derived from schema.sql (the source of truth), so this
+        // verifies the installed DB contains exactly the tables the schema
+        // declares — and updates itself when schema.sql grows.
         const list = CORE_TABLES.map(t => `'${t}'`).join(',');
         const cnt = parseInt(dbQuery(
             `SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES` +
             ` WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (${list})`
         ));
-        expect(cnt, `Expected ${CORE_TABLES.length} core tables, found ${cnt}`).toBe(CORE_TABLES.length);
-
-        // Approach 2 — auto-derive from schema.sql and cross-validate against CORE_TABLES
-        // Catches: table added to schema.sql but CORE_TABLES not updated (or vice-versa).
-        const fromSchema = parseCoreTablesFromSchema();
-        if (fromSchema !== null) {
-            const schemaSet    = new Set(fromSchema);
-            const hardcodedSet = new Set(CORE_TABLES);
-            const inSchemaOnly    = fromSchema.filter(t => !hardcodedSet.has(t));
-            const inHardcodedOnly = CORE_TABLES.filter(t => !schemaSet.has(t));
-            expect(inSchemaOnly,
-                `Tables in schema.sql but missing from CORE_TABLES — update the hardcoded list: ${inSchemaOnly.join(', ')}`
-            ).toHaveLength(0);
-            expect(inHardcodedOnly,
-                `Tables in CORE_TABLES but absent from schema.sql — stale entry or typo: ${inHardcodedOnly.join(', ')}`
-            ).toHaveLength(0);
-        }
+        expect(cnt, `Expected ${CORE_TABLES.length} core tables from schema.sql, found ${cnt} in DB`).toBe(CORE_TABLES.length);
     });
 
     // ── 2. All core tables present by name ────────────────────────────────────
 
-    test('2. All core tables exist by name (CORE_TABLES + schema.sql)', () => {
+    test('2. All core tables schema.sql defines exist in the DB', () => {
         const actual = new Set(
             dbQuery("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()")
                 .split('\n').map(t => t.trim()).filter(Boolean)
         );
-
-        // Approach 1 — hardcoded list by name (detailed error output)
-        const missingHardcoded = CORE_TABLES.filter(t => !actual.has(t));
-        expect(missingHardcoded,
-            `Tables in CORE_TABLES but missing from DB: ${missingHardcoded.join(', ')}`
+        const missing = CORE_TABLES.filter(t => !actual.has(t));
+        expect(missing,
+            `Tables defined in schema.sql but missing from DB: ${missing.join(', ')}`
         ).toHaveLength(0);
-
-        // Approach 2 — auto-derived from schema.sql (catches installer regressions
-        //   where a new table in schema.sql was silently omitted during install)
-        const fromSchema = parseCoreTablesFromSchema();
-        if (fromSchema !== null) {
-            const missingFromSchema = fromSchema.filter(t => !actual.has(t));
-            expect(missingFromSchema,
-                `Tables defined in schema.sql but missing from DB: ${missingFromSchema.join(', ')}`
-            ).toHaveLength(0);
-        }
     });
 
     // ── 3. libri columns ──────────────────────────────────────────────────────
@@ -413,7 +359,7 @@ test.describe.serial('Schema integrity — v0.7.4 (17 tests)', () => {
 
     // ── 16. Plugin registrations ──────────────────────────────────────────────
 
-    test('16. All 16 bundled plugins registered in plugins table', () => {
+    test(`16. All bundled plugins registered in plugins table (${EXPECTED_PLUGINS.length})`, () => {
         const registered = new Set(
             dbQuery("SELECT name FROM plugins").split('\n').map(n => n.trim()).filter(Boolean)
         );
@@ -423,7 +369,7 @@ test.describe.serial('Schema integrity — v0.7.4 (17 tests)', () => {
 
     // ── 17. Plugin path integrity ─────────────────────────────────────────────
 
-    test('17. Plugin path = name for all 16 bundled plugins (bind_param regression)', () => {
+    test('17. Plugin path = name for all bundled plugins (bind_param regression)', () => {
         const rows = dbQuery(
             "SELECT name, path FROM plugins WHERE name IN (" +
             EXPECTED_PLUGINS.map(p => `'${p}'`).join(',') +

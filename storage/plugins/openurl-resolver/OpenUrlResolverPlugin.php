@@ -392,7 +392,8 @@ class OpenUrlResolverPlugin
                        FROM libri_autori la
                        JOIN autori a ON a.id = la.autore_id
                       WHERE la.libro_id = l.id
-                      ORDER BY COALESCE(la.ordine_credito, 0), la.autore_id
+                        AND la.ruolo IN ('principale', 'co-autore')
+                      ORDER BY (la.ruolo = 'principale') DESC, COALESCE(la.ordine_credito, 0), la.autore_id
                       LIMIT 1) AS autore_principale
                FROM libri l
               WHERE l.{$col} = ? AND l.deleted_at IS NULL
@@ -437,7 +438,8 @@ class OpenUrlResolverPlugin
                FROM libri_autori la
                JOIN autori a ON a.id = la.autore_id
               WHERE la.libro_id = ?
-              ORDER BY COALESCE(la.ordine_credito, 0), la.autore_id'
+                AND la.ruolo IN (\'principale\', \'co-autore\')
+              ORDER BY (la.ruolo = \'principale\') DESC, COALESCE(la.ordine_credito, 0), la.autore_id'
         );
         if ($stmt === false) { return []; }
         $stmt->bind_param('i', $bookId);

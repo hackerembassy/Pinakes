@@ -17,9 +17,20 @@ $libraryThingInstalled = $libraryThingInstalled ?? false;
 $initialAuthors = array_map(static function ($author) {
     return [
         'id' => (int)($author['id'] ?? 0),
-        'label' => $author['nome'] ?? ''
+        // Pseudonym-aware label (issue #237): "Pseudonimo (Nome)" when set.
+        'label' => \App\Support\AuthorName::display($author)
     ];
 }, $book['autori'] ?? []);
+
+// Contributor roles (issue #237): illustrator/translator/curator/colorist are
+// entity pickers just like authors. Initial selections mirror the authors shape.
+$contributorRoleKeys = ['illustratori', 'traduttori', 'curatori', 'coloristi'];
+$initialContributors = [];
+foreach ($contributorRoleKeys as $roleKey) {
+    $initialContributors[$roleKey] = array_map(static function ($c) {
+        return ['id' => (int)($c['id'] ?? 0), 'label' => \App\Support\AuthorName::display($c)];
+    }, $book[$roleKey] ?? []);
+}
 
 // Multi-publisher (issue #143): mirror the authors initial-selection shape.
 // Falls back to the single primary publisher for books saved before #143.
@@ -68,16 +79,20 @@ $initialData = [
     'file_url' => $book['file_url'] ?? '',
     'audio_url' => $book['audio_url'] ?? '',
     'parole_chiave' => $book['parole_chiave'] ?? '',
-    'traduttore' => $book['traduttore'] ?? '',
-    'illustratore' => $book['illustratore'] ?? '',
-    'curatore' => $book['curatore'] ?? '',
 ];
 
 $initialData['autori'] = $initialAuthors;
 $initialData['editori'] = $initialPublishers;
+foreach ($contributorRoleKeys as $roleKey) {
+    $initialData[$roleKey] = $initialContributors[$roleKey];
+}
 $initialData['current_cover'] = $currentCover;
 
 $initialAuthorsJson = htmlspecialchars(json_encode($initialAuthors, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
+$initialContributorsJson = [];
+foreach ($contributorRoleKeys as $roleKey) {
+    $initialContributorsJson[$roleKey] = htmlspecialchars(json_encode($initialContributors[$roleKey], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
+}
 $initialPublishersJson = htmlspecialchars(json_encode($initialPublishers, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
 $initialDataJsonRaw = json_encode($initialData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 $modeAttr = htmlspecialchars($mode, ENT_QUOTES, 'UTF-8');
@@ -243,22 +258,31 @@ $selectedSeriesType = \App\Support\SeriesLabels::canonical($book['tipo_collana']
               <p class="text-xs text-gray-500 mt-1"><?= __("Lingua originale del libro") ?></p>
             </div>
           </div>
+          <?php
+          // Contributor roles as entity pickers (issue #237). Same Choices.js +
+          // /api/search/autori autocomplete as authors, so an illustrator/
+          // translator/curator/colorist is a real author entity (findable by
+          // pseudonym, appears on the author page), not free text.
+          $contributorHelp = __('Cerca un autore esistente o scrivine uno nuovo');
+          $contributorFields = [
+              'illustratori' => ['label' => __('Illustratore'), 'help' => $contributorHelp],
+              'traduttori'   => ['label' => __('Traduttore'),   'help' => $contributorHelp],
+              'curatori'     => ['label' => __('Curatore'),     'help' => $contributorHelp],
+              'coloristi'    => ['label' => __('Colorista'),    'help' => __('Cerca un autore esistente o scrivine uno nuovo (utile per i fumetti)')],
+          ];
+          ?>
+          <input type="hidden" id="contributors_entity_picker" name="contributors_entity_picker" value="0" />
           <div class="form-grid-2">
+            <?php foreach ($contributorFields as $roleKey => $meta): ?>
             <div>
-              <label for="traduttore" class="form-label"><?= __("Traduttore") ?></label>
-              <input id="traduttore" name="traduttore" type="text" class="form-input" placeholder="<?= __('es. Mario Rossi') ?>" value="<?php echo HtmlHelper::e($book['traduttore'] ?? ''); ?>" />
-              <p class="text-xs text-gray-500 mt-1"><?= __("Nome del traduttore (se applicabile)") ?></p>
+              <label for="<?= $roleKey ?>_select" class="form-label"><?= htmlspecialchars((string)$meta['label'], ENT_QUOTES, 'UTF-8') ?></label>
+              <select id="<?= $roleKey ?>_select" name="<?= $roleKey ?>_select[]" multiple
+                      placeholder="<?= __('Cerca o aggiungi...') ?>"
+                      data-initial-contributors="<?php echo $initialContributorsJson[$roleKey]; ?>"></select>
+              <div id="<?= $roleKey ?>_hidden"></div>
+              <p class="text-xs text-gray-500 mt-1"><?= htmlspecialchars((string)$meta['help'], ENT_QUOTES, 'UTF-8') ?></p>
             </div>
-            <div>
-              <label for="illustratore" class="form-label"><?= __("Illustratore") ?></label>
-              <input id="illustratore" name="illustratore" type="text" class="form-input" placeholder="<?= __('es. Gianni De Conno') ?>" value="<?php echo HtmlHelper::e($book['illustratore'] ?? ''); ?>" />
-              <p class="text-xs text-gray-500 mt-1"><?= __("Nome dell'illustratore (se applicabile)") ?></p>
-            </div>
-          </div>
-          <div>
-            <label for="curatore" class="form-label"><?= __("Curatore") ?></label>
-            <input id="curatore" name="curatore" type="text" class="form-input" placeholder="<?= __('es. Umberto Eco') ?>" value="<?php echo HtmlHelper::e($book['curatore'] ?? ''); ?>" />
-            <p class="text-xs text-gray-500 mt-1"><?= __("Nome del curatore dell'opera (se applicabile)") ?></p>
+            <?php endforeach; ?>
           </div>
 
           <div class="mt-2 text-xs text-gray-500" id="genre_path_preview" style="min-height:1.25rem;">
@@ -1118,6 +1142,8 @@ const bookFormMessages = {
     uploadReady: <?= json_encode(__('File "%s" pronto per l\'upload'), JSON_HEX_TAG) ?>,
     authorAlreadySelected: <?= json_encode(__('Autore "%s" è già selezionato'), JSON_HEX_TAG) ?>,
     authorReady: <?= json_encode(__('Autore "%s" pronto per essere creato'), JSON_HEX_TAG) ?>,
+    contributorAlreadySelected: <?= json_encode(__('Contributore "%s" è già selezionato'), JSON_HEX_TAG) ?>,
+    contributorReady: <?= json_encode(__('Contributore "%s" pronto per essere creato'), JSON_HEX_TAG) ?>,
     publisherSelected: <?= json_encode(__('Editore "%s" selezionato'), JSON_HEX_TAG) ?>,
     publisherReady: <?= json_encode(__('Editore "%s" pronto per essere creato'), JSON_HEX_TAG) ?>,
     publisherPlaceholder: <?= json_encode(__('Cerca editore esistente o inserisci nuovo...'), JSON_HEX_TAG) ?>,
@@ -1142,6 +1168,12 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeUppy();
     initializeChoicesJS();
     initializePublishersChoices();
+    const contributorPickerResults = ['illustratori', 'traduttori', 'curatori', 'coloristi']
+        .map(initContributorPicker);
+    const contributorMarker = document.getElementById('contributors_entity_picker');
+    if (contributorMarker && contributorPickerResults.every(Boolean)) {
+        contributorMarker.value = '1';
+    }
     initializeSeriesAutocompletes();
     initializeSweetAlert();
     initializeGeneriDropdowns();
@@ -1312,6 +1344,18 @@ async function removeCoverImage() {
 }
 
 // Initialize Choices.js for Authors
+function authorChoiceLabelMatchesInput(label, input) {
+    const normalizedLabel = String(label || '').trim().toLowerCase();
+    const normalizedInput = String(input || '').trim().toLowerCase();
+    if (normalizedLabel === normalizedInput) return true;
+
+    // Search results use "Pseudonym (Real name)". Treat either complete name as
+    // an exact match so pressing Enter selects the existing entity instead of
+    // creating a duplicate author named after the pseudonym.
+    const match = normalizedLabel.match(/^(.+?)\s+\((.+)\)$/);
+    return Boolean(match && (match[1].trim() === normalizedInput || match[2].trim() === normalizedInput));
+}
+
 function initializeChoicesJS() {
 
     try {
@@ -1583,7 +1627,7 @@ function initializeChoicesJS() {
                 const highlightedText = (nameEl ? nameEl.textContent : highlighted.textContent).trim().toLowerCase();
                 const currentText = inputValue.toLowerCase();
 
-                if (highlightedText === currentText) {
+                if (authorChoiceLabelMatchesInput(highlightedText, currentText)) {
                     // Exact match — pick the existing author.
                     return originalOnEnterKey(event, hasActiveDropdown);
                 }
@@ -2247,6 +2291,157 @@ function initializeSeriesAutocompletes() {
             }
         } catch (err) { console.error('initializeSeriesAutocompletes:', err); }
     });
+}
+
+// Generic contributor picker (issue #237) — one Choices.js entity picker per
+// role (illustratori/traduttori/curatori/coloristi). Mirrors the authors picker
+// (same /api/search/autori autocomplete, create-on-Enter) but self-contained and
+// role-parameterized, so it never touches the bespoke authors code. Selected
+// existing authors post as `<role>_ids[]`; brand-new names post as `<role>_new[]`.
+function initContributorPicker(roleKey) {
+    try {
+        const el = document.getElementById(roleKey + '_select');
+        const hidden = document.getElementById(roleKey + '_hidden');
+        if (!el || !hidden || typeof Choices === 'undefined') return false;
+
+        const choice = new Choices(el, {
+            searchEnabled: true,
+            removeItemButton: true,
+            addItems: true,
+            duplicateItemsAllowed: false,
+            placeholder: true,
+            placeholderValue: <?= json_encode(__('Cerca o aggiungi...'), JSON_HEX_TAG) ?>,
+            noChoicesText: <?= json_encode(__('Nessun risultato, premi Invio per aggiungerne uno nuovo'), JSON_HEX_TAG) ?>,
+            itemSelectText: <?= json_encode(__('Clicca per selezionare'), JSON_HEX_TAG) ?>,
+            shouldSort: false,
+            searchResultLimit: -1,
+            searchFloor: 1,
+            fuseOptions: { threshold: 0.3, distance: 100 }
+        });
+
+        function syncHidden(value, label, add) {
+            if (!hidden) return;
+            const v = String(value == null ? '' : value);
+            Array.from(hidden.querySelectorAll('[data-choice-value]')).forEach((i) => {
+                if (i.dataset.choiceValue === v) i.remove();
+            });
+            if (!add || v === '') return;
+            const isExisting = /^\d+$/.test(v);
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.dataset.choiceValue = v;
+            input.dataset.label = (label == null ? '' : String(label)).trim();
+            if (isExisting) {
+                input.name = roleKey + '_ids[]';
+                input.value = v;
+            } else {
+                input.name = roleKey + '_new[]';
+                input.value = (label == null ? v : String(label)).trim() || v;
+            }
+            hidden.appendChild(input);
+        }
+
+        el.addEventListener('addItem', (e) => syncHidden(e.detail.value, e.detail.label, true));
+        el.addEventListener('removeItem', (e) => syncHidden(e.detail.value, e.detail.label, false));
+
+        const wrapper = el.closest('.choices');
+        const internalInput = wrapper ? wrapper.querySelector('.choices__input--cloned') : null;
+
+        // Choices.js does not create free-text options for a <select multiple>
+        // just because addItems=true. Explicitly add a temporary choice and let
+        // the controller resolve its label through <role>_new[]. This mirrors
+        // the load-bearing Enter handling of the main author picker (#74).
+        const createContributorFromInput = (rawValue, silent = false) => {
+            const label = String(rawValue || '').trim();
+            if (!label) return;
+            const duplicate = Array.from(hidden ? hidden.querySelectorAll('input') : [])
+                .some((i) => String(i.dataset.label || i.value || '').trim().toLowerCase() === label.toLowerCase());
+            if (duplicate) {
+                // Feedback parity with the authors picker: a silently-dropped
+                // duplicate looks like the keystroke was ignored.
+                if (!silent && window.Toast) {
+                    window.Toast.fire({ icon: 'info', title: bookFormMessages.contributorAlreadySelected.replace('%s', label) });
+                }
+                if (internalInput) internalInput.value = '';
+                choice.hideDropdown();
+                return;
+            }
+            const tempId = 'new_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+            choice.setChoices([{ value: tempId, label, selected: false }], 'value', 'label', false);
+            choice.setChoiceByValue(tempId);
+            syncHidden(tempId, label, true);
+            if (internalInput) internalInput.value = '';
+            if (typeof choice.clearInput === 'function') choice.clearInput();
+            choice.hideDropdown();
+            // Confirm the new contributor is staged for creation, matching the
+            // authors picker's "ready to be created" Toast. Suppressed for the
+            // scraping path (silent=true), which reuses this fn but shows its own
+            // single "import complete" Toast instead of one per contributor (F016).
+            if (!silent && window.Toast) {
+                window.Toast.fire({ icon: 'success', title: bookFormMessages.contributorReady.replace('%s', label) });
+            }
+        };
+
+        if (typeof choice._onEnterKey === 'function') {
+            const originalOnEnterKey = choice._onEnterKey.bind(choice);
+            choice._onEnterKey = function (event, hasActiveDropdown) {
+                const typed = internalInput ? internalInput.value.trim() : '';
+                if (!typed) return originalOnEnterKey(event, hasActiveDropdown);
+                const dropdown = wrapper ? wrapper.querySelector('.choices__list--dropdown') : null;
+                const highlighted = dropdown ? dropdown.querySelector('.choices__item--selectable.is-highlighted') : null;
+                if (highlighted) {
+                    const nameEl = highlighted.querySelector('.choices__item-text') || highlighted.childNodes[0];
+                    const highlightedText = (nameEl ? nameEl.textContent : highlighted.textContent).trim().toLowerCase();
+                    if (authorChoiceLabelMatchesInput(highlightedText, typed)) {
+                        return originalOnEnterKey(event, hasActiveDropdown);
+                    }
+                }
+                event.preventDefault();
+                createContributorFromInput(typed);
+            };
+        }
+
+        // ISBN scraping runs after picker initialization. Expose a narrow setter
+        // so scraped contributors become visible, removable chips instead of
+        // invisible legacy hidden values.
+        window.__contributorPickers = window.__contributorPickers || {};
+        window.__contributorPickers[roleKey] = { addName: createContributorFromInput };
+
+        // Pre-fill existing selections (edit mode).
+        let initial = [];
+        try { initial = JSON.parse(el.getAttribute('data-initial-contributors') || '[]'); } catch (_) { initial = []; }
+        (initial || []).forEach((c) => {
+            const id = String(c.id);
+            choice.setChoices([{ value: id, label: c.label, selected: true }], 'value', 'label', false);
+            syncHidden(id, c.label, true);
+        });
+
+        // Server-side search on keystroke (same endpoint as authors).
+        let searchTimeout = null;
+        choice.passedElement.element.addEventListener('search', function (event) {
+            const query = (event.detail && event.detail.value) ? event.detail.value.trim() : '';
+            clearTimeout(searchTimeout);
+            if (query.length < 2) return;
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const resp = await fetch(`${window.BASE_PATH}/api/search/autori?q=${encodeURIComponent(query)}`);
+                    if (!resp.ok) return;
+                    const results = await resp.json();
+                    const selected = new Set((choice.getValue(true) || []).map((v) => String(v)));
+                    const newChoices = (results || [])
+                        .filter((a) => !selected.has(String(a.id)))
+                        .map((a) => ({ value: String(a.id), label: a.label, selected: false }));
+                    if (newChoices.length > 0) choice.setChoices(newChoices, 'value', 'label', false);
+                } catch (e) {
+                    console.error('Contributor search failed (' + roleKey + '):', e);
+                }
+            }, 300);
+        });
+        return true;
+    } catch (error) {
+        console.error('initContributorPicker failed for ' + roleKey + ':', error);
+        return false;
+    }
 }
 
 function initializePublishersChoices() {
@@ -4162,6 +4357,9 @@ function initializeIsbnImport() {
                     if (scrapedTranslator) {
                         scrapedTranslator.value = normalized;
                     }
+                    if (window.__contributorPickers && window.__contributorPickers.traduttori) {
+                        window.__contributorPickers.traduttori.addName(normalized, true);
+                    }
                 }
             } catch (err) {
             }
@@ -4177,6 +4375,9 @@ function initializeIsbnImport() {
                     const scrapedIllustrator = document.getElementById('scraped_illustrator');
                     if (scrapedIllustrator) {
                         scrapedIllustrator.value = normalized;
+                    }
+                    if (window.__contributorPickers && window.__contributorPickers.illustratori) {
+                        window.__contributorPickers.illustratori.addName(normalized, true);
                     }
                 }
             } catch (err) {

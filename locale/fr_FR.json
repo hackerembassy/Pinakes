@@ -6540,5 +6540,14 @@
   "Invia email di prova": "Envoyer un e-mail de test",
   "Invio in corso…": "Envoi en cours…",
   "Richiesta non riuscita. Riprova.": "La requête a échoué. Réessayez.",
-  "oggi": "aujourd'hui"
+  "oggi": "aujourd'hui",
+  "Database installato (%d tabelle)": "Base de données installée (%d tables)",
+  "Colorista": "Coloriste",
+  "Co-autore": "Co-auteur",
+  "Cerca o aggiungi...": "Rechercher ou ajouter...",
+  "Nessun risultato, premi Invio per aggiungerne uno nuovo": "Aucun résultat, appuyez sur Entrée pour en ajouter un nouveau",
+  "Cerca un autore esistente o scrivine uno nuovo": "Rechercher un auteur existant ou en saisir un nouveau",
+  "Cerca un autore esistente o scrivine uno nuovo (utile per i fumetti)": "Rechercher un auteur existant ou en saisir un nouveau (utile pour les BD)",
+  "Contributore \"%s\" è già selezionato": "Contributeur \"%s\" est déjà sélectionné",
+  "Contributore \"%s\" pronto per essere creato": "Contributeur \"%s\" prêt à être créé"
 }

@@ -409,9 +409,15 @@ class LibraryThingImportController
                     $bookId = $upsertResult['id'];
                     $action = $upsertResult['action'];
 
-                    // Remove old author links if updating
+                    // Remove old PRINCIPAL author links only — scoped to
+                    // ruolo='principale' so a re-import re-writes the authors
+                    // LibraryThing owns without wiping illustrator/translator/
+                    // curator/colorist ENTITY links (#237). A blanket delete-all
+                    // silently lost every contributor entity on each re-import
+                    // (this importer only manages provenance-scoped translators
+                    // below).
                     if ($action === 'updated') {
-                        $stmt = $db->prepare("DELETE FROM libri_autori WHERE libro_id = ?");
+                        $stmt = $db->prepare("DELETE FROM libri_autori WHERE libro_id = ? AND ruolo = 'principale'");
                         $stmt->bind_param('i', $bookId);
                         $stmt->execute();
                         $stmt->close();
@@ -431,13 +437,26 @@ class LibraryThingImportController
                                 $importData['authors_created']++;
                             }
 
-                            $stmt = $db->prepare("INSERT INTO libri_autori (libro_id, autore_id, ruolo, ordine_credito) VALUES (?, ?, 'principale', ?)");
-                            $stmt->bind_param('iii', $bookId, $authorId, $authorOrder);
-                            $stmt->execute();
-                            $stmt->close();
+                            \App\Support\ContributorSync::persistImportedPrincipal(
+                                $db,
+                                $bookId,
+                                $authorId,
+                                $authorOrder
+                            );
                             $authorOrder++;
                         }
                     }
+
+                    // Secondary authors classified as translators must become
+                    // role links, not remain only in libri.traduttore. Keep this
+                    // in the import transaction so author entities and the book
+                    // row commit atomically.
+                    $importData['authors_created'] += \App\Support\ContributorSync::syncImportedLegacyValues(
+                        $db,
+                        $bookId,
+                        ['traduttore' => $parsedData['traduttore'] ?? null],
+                        'librarything'
+                    );
 
                     $db->commit();
 
@@ -1176,7 +1195,8 @@ class LibraryThingImportController
     private function getOrCreateAuthor(\mysqli $db, string $name): array
     {
         $authRepo = new \App\Models\AuthorRepository($db);
-        $existingId = $authRepo->findByName($name);
+        // LibraryThing supplies a canonical author name, never a pseudonym key.
+        $existingId = $authRepo->findByCanonicalName($name);
         if ($existingId) {
             return ['id' => $existingId, 'created' => false];
         }
@@ -2060,7 +2080,8 @@ class LibraryThingImportController
         $query = "
             SELECT
                 l.*,
-                GROUP_CONCAT(DISTINCT a.nome ORDER BY la.ordine_credito SEPARATOR ';') as autori_nomi,
+                GROUP_CONCAT(DISTINCT CASE WHEN la.ruolo IN ('principale', 'co-autore') THEN a.nome END
+                             ORDER BY la.ordine_credito SEPARATOR ';') as autori_nomi,
                 e.nome as editore_nome,
                 g.nome as genere_nome
             FROM libri l

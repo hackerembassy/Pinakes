@@ -370,7 +370,8 @@ test.describe('Mobile API — two calls per endpoint (idempotency + ETag/304)', 
                     // (declaration order precedes the other write rows), through
                     // the production join path — no raw INSERT with role ids.
                     const poll = dbScalar(`SELECT CONCAT(p.id, '|', o.id) FROM bookclub_polls p JOIN bookclub_poll_options o ON o.poll_id=p.id
-                                           WHERE p.club_id=${clubId} AND p.status='open' AND p.mode IN ('simple','multi') ORDER BY p.id, o.id LIMIT 1`) || '';
+                                           WHERE p.club_id=${clubId} AND p.status='open' AND (p.closes_at IS NULL OR p.closes_at > UTC_TIMESTAMP())
+                                             AND p.mode IN ('simple','multi') ORDER BY p.id, o.id LIMIT 1`) || '';
                     const [pollId, optionId] = poll.split('|');
                     if (pollId) { ctx.bookclubPollId = pollId; ctx.bookclubOptionId = parseInt(optionId, 10); }
                     ctx.bookclubMeetingId = dbScalar(`SELECT id FROM bookclub_meetings WHERE club_id=${clubId} AND status='scheduled' AND starts_at >= NOW() ORDER BY starts_at LIMIT 1`) || undefined;

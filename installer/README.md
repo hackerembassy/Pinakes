@@ -26,7 +26,8 @@ Validates the database connection and generates the `.env` configuration file.
 
 ### Step 3 — Schema Import
 
-Creates all 46 database tables with proper foreign keys, indexes, and constraints.
+Creates every database table declared in `installer/database/schema.sql`, with
+the corresponding foreign keys, indexes, and constraints.
 
 ### Step 4 — Seed Data
 
@@ -54,25 +55,16 @@ Sets directory permissions, installs bundled plugins, creates the `.installed` l
 
 ## Database Schema
 
-The installer creates **46 tables** organized into the following groups:
+`installer/database/schema.sql` is the authoritative table list. The installer
+derives its post-import and final verification expectations from every
+`CREATE TABLE` statement in that file, including both quoted and unquoted MySQL
+identifiers. Adding a table therefore requires no secondary count or list.
 
-**Catalog** — `libri`, `autori`, `libri_autori`, `editori`, `generi`, `tag`, `libri_tag`, `copie`, `recensioni`
+To inspect the current resolved list, run:
 
-**Loans & Reservations** — `prestiti`, `prenotazioni`, `wishlist`, `donazioni`, `libri_donati`
-
-**Shelving** — `sedi`, `scaffali`, `mensole`, `posizioni`
-
-**Users & Access** — `utenti`, `staff`, `user_sessions`, `preferenze_notifica_utenti`, `api_keys`
-
-**CMS & Content** — `cms_pages`, `home_content`, `email_templates`, `events`, `contact_messages`, `feedback`
-
-**System** — `system_settings`, `admin_notifications`, `log_modifiche`, `import_logs`, `migrations`, `update_logs`, `languages`, `themes`
-
-**Plugins** — `plugins`, `plugin_hooks`, `plugin_logs`, `plugin_data`, `plugin_settings`
-
-**GDPR & Compliance** — `gdpr_requests`, `consent_log`
-
-**Z39.50/SRU** — `z39_access_logs`, `z39_rate_limits`
+```bash
+php scripts/list-source-expectations.php tables
+```
 
 ### Migrations
 
@@ -141,7 +133,7 @@ installer/
 │   ├── Installer.php        # Core installation logic
 │   └── Validator.php        # Input validation
 ├── database/
-│   ├── schema.sql           # 46 tables
+│   ├── schema.sql           # Authoritative table source (verified dynamically)
 │   ├── triggers.sql         # 3 triggers
 │   ├── data_it_IT.sql       # Italian seed data
 │   ├── data_en_US.sql       # English seed data

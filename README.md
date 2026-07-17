@@ -37,6 +37,20 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 
 ---
 
+## What's New in v0.7.36
+
+- **Illustrators, translators, curators and colorists are now real authors (#237).**
+  For comics and illustrated books, contributors other than the main author used
+  to be plain free-text fields — no autocomplete, and they never showed up as
+  authors. Now each role (illustrator, translator, curator, and the new
+  **colorist**) is a proper author entity with the same search-as-you-type picker
+  as the author field, so it can be reused, found by pseudonym, and appears on the
+  contributor's author page and books. Existing free-text values are converted to
+  entities automatically on the first run after upgrading — nothing to redo.
+- **Find and show authors by pseudonym (#237).** The author picker now matches on
+  the pen name as well as the real name (so typing "Leo" finds them), and books
+  display the pseudonym as *"Pseudonym (Real name)"* instead of only the real name.
+
 ## What's New in v0.7.35
 
 - **Docker-aware in-app updater.** On the official Docker image the app files are
@@ -804,12 +818,12 @@ The 0.5.9.x series took four hotfix iterations because a forgotten
 GitHub Actions workflow (`release.yml`) was racing
 `scripts/create-release.sh` and overwriting the published ZIP with a
 stale build that only contained 5 of 10 bundled plugins. The rogue
-workflow is now disabled, `bin/build-release.sh` enumerates plugins
-from the filesystem instead of a hardcoded list, and
-`scripts/create-release.sh` verifies the shipped ZIP via the GitHub
-API (uploader identity + SHA + plugin count, polled for 90s) so no
-third-party overwrite can slip through unnoticed. Full post-mortem
-in `updater.md`.
+workflow is now disabled. The release builders derive the required plugin set
+from `BundledPlugins::LIST` instead of maintaining another list, and
+`scripts/create-release.sh` verifies the shipped ZIP via the GitHub API
+(uploader identity, SHA, and every expected plugin, polled for 90s) so no
+third-party overwrite can slip through unnoticed. Full post-mortem in
+`updater.md`.
 
 ---
 
