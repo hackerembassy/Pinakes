@@ -120,7 +120,7 @@ $stmt->bind_param('iii', $scaffaleId, $level, $leafId);
 $stmt->execute();
 $mensolaId = $db->insert_id;
 
-$check($repo->delete($rootId, true), 'cascade delete succeeds for a deep genre tree');
+$check($repo->cascadeDelete($rootId), 'cascade delete succeeds for a deep genre tree');
 
 $stmt = $db->prepare('SELECT COUNT(*) AS cnt FROM generi WHERE nome LIKE ?');
 $like = $prefix . '%';

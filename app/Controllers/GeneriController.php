@@ -161,8 +161,11 @@ class GeneriController
         $cascadeDelete = !empty($data['cascade_delete']);
 
         try {
-            if (!$repo->delete($id, $cascadeDelete)) {
-                throw new \RuntimeException('delete() returned false');
+            $deleted = $cascadeDelete
+                ? $repo->cascadeDelete($id)
+                : $repo->delete($id);
+            if (!$deleted) {
+                throw new \RuntimeException(($cascadeDelete ? 'cascadeDelete' : 'delete') . '() returned false');
             }
 
             $_SESSION['success_message'] = $cascadeDelete

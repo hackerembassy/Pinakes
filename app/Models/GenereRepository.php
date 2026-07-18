@@ -146,39 +146,40 @@ class GenereRepository
         return $result;
     }
 
-    public function delete(int $id, bool $cascadeDelete = false): bool
+    public function delete(int $id): bool
     {
-        if (!$cascadeDelete) {
-            // Check if genre has children
-            $stmt = $this->db->prepare("SELECT COUNT(*) as cnt FROM generi WHERE parent_id = ?");
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-            $count = (int)$stmt->get_result()->fetch_assoc()['cnt'];
+        // Check if genre has children
+        $stmt = $this->db->prepare("SELECT COUNT(*) as cnt FROM generi WHERE parent_id = ?");
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $count = (int)$stmt->get_result()->fetch_assoc()['cnt'];
 
-            if ($count > 0) {
-                throw new \RuntimeException('Impossibile eliminare: il genere ha sottogeneri');
-            }
-
-            // Only count non-deleted books. Soft-deleted rows are safe because both
-            // libri_ibfk_3 (genere_id) and fk_libri_sottogenere (sottogenere_id) use
-            // ON DELETE SET NULL — the DB automatically nullifies references when
-            // a genre is deleted, so no FK violation can occur from soft-deleted rows.
-            $stmt = $this->db->prepare("SELECT COUNT(*) as cnt FROM libri WHERE (genere_id = ? OR sottogenere_id = ?) AND deleted_at IS NULL");
-            $stmt->bind_param('ii', $id, $id);
-            $stmt->execute();
-            $count = (int)$stmt->get_result()->fetch_assoc()['cnt'];
-
-            if ($count > 0) {
-                throw new \RuntimeException('Impossibile eliminare: il genere è usato da libri esistenti');
-            }
-
-            $stmt = $this->db->prepare("DELETE FROM generi WHERE id = ?");
-            $stmt->bind_param('i', $id);
-            $result = $stmt->execute();
-            QueryCache::clearByPrefix('genre_tree_');
-            return $result;
+        if ($count > 0) {
+            throw new \RuntimeException('Impossibile eliminare: il genere ha sottogeneri');
         }
 
+        // Only count non-deleted books. Soft-deleted rows are safe because both
+        // libri_ibfk_3 (genere_id) and fk_libri_sottogenere (sottogenere_id) use
+        // ON DELETE SET NULL — the DB automatically nullifies references when
+        // a genre is deleted, so no FK violation can occur from soft-deleted rows.
+        $stmt = $this->db->prepare("SELECT COUNT(*) as cnt FROM libri WHERE (genere_id = ? OR sottogenere_id = ?) AND deleted_at IS NULL");
+        $stmt->bind_param('ii', $id, $id);
+        $stmt->execute();
+        $count = (int)$stmt->get_result()->fetch_assoc()['cnt'];
+
+        if ($count > 0) {
+            throw new \RuntimeException('Impossibile eliminare: il genere è usato da libri esistenti');
+        }
+
+        $stmt = $this->db->prepare("DELETE FROM generi WHERE id = ?");
+        $stmt->bind_param('i', $id);
+        $result = $stmt->execute();
+        QueryCache::clearByPrefix('genre_tree_');
+        return $result;
+    }
+
+    public function cascadeDelete(int $id): bool
+    {
         $ids = $this->collectSubtreeIds($id);
         if (empty($ids)) {
             return false;
