@@ -364,7 +364,7 @@
   "Attenzione: %d prestito in ritardo": "Warning: %d overdue loan",
   "Attenzione: Azione Manuale Richiesta": "Warning: Manual Action Required",
   "Attenzione: Non è stato possibile rimuovere tutte le copie richieste. Alcune copie sono attualmente in prestito.": "Warning: Could not remove all requested copies. Some copies are currently on loan.",
-  "Attiva": "Active",
+  "Attiva": "Activate",
   "Attiva Direttamente": "Activate Directly",
   "Attiva HTTP Strict Transport Security (max-age: 1 anno, include sottodomini)": "Enable HTTP Strict Transport Security (max-age: 1 year, includes subdomains)",
   "Attiva HTTPS solo se hai un certificato SSL valido installato. Attivare HSTS rende permanente il reindirizzamento HTTPS nel browser.": "Enable HTTPS only if you have a valid SSL certificate installed. Enabling HSTS makes HTTPS redirection permanent in the browser.",
