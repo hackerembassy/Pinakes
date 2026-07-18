@@ -277,7 +277,18 @@ if (!$isCli && !$httpsDetected) {
     $forceHttps = $forceHttpsFromDb || (getenv('APP_ENV') === 'production' && $forceHttpsFromEnv);
 
     if ($forceHttps) {
+        // Prefer the configured canonical host over the raw Host header so an
+        // attacker-supplied Host on a catch-all vhost cannot turn the HTTPS
+        // upgrade into an open redirect (https://evil.tld/…).
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $canonicalUrl = getenv('APP_CANONICAL_URL') ?: ($_ENV['APP_CANONICAL_URL'] ?? '');
+        if ($canonicalUrl !== '') {
+            $canonicalParts = parse_url($canonicalUrl);
+            if (!empty($canonicalParts['host'])) {
+                $host = $canonicalParts['host']
+                    . (isset($canonicalParts['port']) ? ':' . (int) $canonicalParts['port'] : '');
+            }
+        }
         $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
         header('Location: https://' . $host . $requestUri, true, 301);
         exit;
