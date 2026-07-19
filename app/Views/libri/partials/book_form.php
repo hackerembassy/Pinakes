@@ -1366,6 +1366,11 @@ function initializeChoicesJS() {
 
         authorsChoice = new Choices(element, {
             searchEnabled: true,
+            // Server-side search: the 'search' handler below fetches matches and
+            // setChoices()es them. Disable Choices' own client-side Fuse filter so
+            // it can't race that async populate and hide fresh results as "no
+            // results" until the next keystroke.
+            searchChoices: false,
             removeItemButton: true,
             addItems: true,
             duplicateItemsAllowed: false,
@@ -1418,7 +1423,10 @@ function initializeChoicesJS() {
                         }));
 
                     if (newChoices.length > 0) {
-                        authorsChoice.setChoices(newChoices, 'value', 'label', false);
+                        // replace (drop the previous query's options, no stale
+                        // results) + clearSearchFlag=false (do NOT reset the
+                        // user's in-progress search input/state).
+                        authorsChoice.setChoices(newChoices, 'value', 'label', true, false);
                     }
                 } catch (e) {
                     console.error('Server-side author search failed:', e);
@@ -2306,6 +2314,10 @@ function initContributorPicker(roleKey) {
 
         const choice = new Choices(el, {
             searchEnabled: true,
+            // Server-side search (see the 'search' handler below): disable the
+            // client-side Fuse filter so it can't race the async setChoices and
+            // hide fresh results as "no results".
+            searchChoices: false,
             removeItemButton: true,
             addItems: true,
             duplicateItemsAllowed: false,
@@ -2431,7 +2443,9 @@ function initContributorPicker(roleKey) {
                     const newChoices = (results || [])
                         .filter((a) => !selected.has(String(a.id)))
                         .map((a) => ({ value: String(a.id), label: a.label, selected: false }));
-                    if (newChoices.length > 0) choice.setChoices(newChoices, 'value', 'label', false);
+                    // replace previous query's options (no stale) without
+                    // resetting the user's in-progress search input/state.
+                    if (newChoices.length > 0) choice.setChoices(newChoices, 'value', 'label', true, false);
                 } catch (e) {
                     console.error('Contributor search failed (' + roleKey + '):', e);
                 }
@@ -2453,6 +2467,10 @@ function initializePublishersChoices() {
 
         publishersChoice = new Choices(element, {
             searchEnabled: true,
+            // Server-side search (see the 'search' handler below): disable the
+            // client-side Fuse filter so it can't race the async setChoices and
+            // hide fresh results as "no results".
+            searchChoices: false,
             removeItemButton: true,
             addItems: true,
             duplicateItemsAllowed: false,
@@ -2484,7 +2502,9 @@ function initializePublishersChoices() {
                         .filter(p => !selectedValues.has(String(p.id)))
                         .map(p => ({ value: String(p.id), label: p.label, selected: false, customProperties: { isNew: false } }));
                     if (newChoices.length > 0) {
-                        publishersChoice.setChoices(newChoices, 'value', 'label', false);
+                        // replace previous query's options (no stale) without
+                        // resetting the user's in-progress search input/state.
+                        publishersChoice.setChoices(newChoices, 'value', 'label', true, false);
                     }
                 } catch (e) {
                     console.error('Server-side publisher search failed:', e);
