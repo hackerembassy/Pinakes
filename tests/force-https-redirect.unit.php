@@ -5,27 +5,28 @@ declare(strict_types=1);
  * Security guard for the force-HTTPS bootstrap redirect in public/index.php.
  *
  * When `advanced.force_https` (or APP_ENV=production + FORCE_HTTPS) is on and a
- * request arrives over HTTP, public/index.php issues a 301 to the HTTPS URL.
- * The redirect target is built via the app's single audited host resolver:
+ * request arrives over HTTP, public/index.php issues a 301 to the HTTPS URL —
+ * but ONLY to an operator-configured trusted host, never the raw Host header:
  *
- *     $target = HtmlHelper::getCurrentUrl();
- *     $target = preg_replace('#^http://#i', 'https://', $target, 1);
+ *     $target = HtmlHelper::forceHttpsRedirectTarget();   // null = don't redirect
+ *     if ($target !== null) { header('Location: ' . $target, true, 301); exit; }
  *
- * This replaced an earlier hand-rolled block that trusted the raw Host header,
- * which was an open-redirect on catch-all vhosts (CodeRabbit). These tests pin
- * the security-relevant properties of that resolution so a future refactor
- * can't silently reintroduce Host-header trust.
+ * forceHttpsRedirectTarget() derives the host from APP_CANONICAL_URL (else the
+ * first APP_TRUSTED_HOSTS entry) and returns null when neither is set, so the
+ * bootstrap fails safe instead of redirecting to an attacker-chosen domain on a
+ * catch-all vhost (CodeRabbit). The installer always writes APP_CANONICAL_URL,
+ * so real installs still get the HTTPS upgrade.
  *
- * Each scenario runs in a FRESH subprocess (`php <this-file> --child`) so
- * per-request $_SERVER / $_ENV state and getBasePath()'s static cache never
- * bleed across cases. No DB — getCurrentUrl() reads only env + $_SERVER.
+ * These tests pin those properties. Each scenario runs in a FRESH subprocess
+ * (`php <this-file> --child`) so env / $_SERVER state never bleeds across cases.
+ * No DB — the resolver reads only env + $_SERVER.
  *
  * Run:  php tests/force-https-redirect.unit.php   (exit 0 iff all pass)
  */
 
 $root = dirname(__DIR__);
 
-// ── Child mode: apply one scenario, print the exact index.php redirect target ─
+// ── Child mode: apply one scenario, print the resolved target (or "NULL") ─────
 if (($argv[1] ?? '') === '--child') {
     require $root . '/vendor/autoload.php';
     /** @var array{server?:array<string,string>,env?:array<string,string>} $s */
@@ -37,10 +38,8 @@ if (($argv[1] ?? '') === '--child') {
     foreach (($s['server'] ?? []) as $k => $v) {
         $_SERVER[$k] = $v;
     }
-    // The exact expression public/index.php uses for the force-HTTPS upgrade.
-    $target = \App\Support\HtmlHelper::getCurrentUrl();
-    $target = preg_replace('#^http://#i', 'https://', $target, 1) ?? $target;
-    echo $target;
+    $target = \App\Support\HtmlHelper::forceHttpsRedirectTarget();
+    echo $target === null ? 'NULL' : $target;
     exit(0);
 }
 
@@ -54,13 +53,14 @@ $check = static function (bool $ok, string $label) use (&$pass, &$fail): void {
 };
 
 /**
- * Compute the redirect target for a scenario in an isolated subprocess.
+ * Resolve the redirect target for a scenario in an isolated subprocess.
+ * Returns the literal string "NULL" when the resolver declines to redirect.
  *
- * @param array<string,string> $server $_SERVER overrides (HTTP_HOST, REQUEST_URI, …)
- * @param array<string,string> $env    env overrides (APP_CANONICAL_URL, APP_TRUSTED_HOSTS, TRUSTED_PROXIES)
+ * @param array<string,string> $server $_SERVER overrides
+ * @param array<string,string> $env    env overrides (APP_CANONICAL_URL, APP_TRUSTED_HOSTS)
  */
 $target = static function (array $server, array $env = []) use ($self): string {
-    // json_encode escapes any raw CR/LF as \r\n TEXT, so the env var carries no
+    // json_encode escapes raw CR/LF as \r\n TEXT, so the env var carries no
     // control bytes; the child's json_decode restores the real bytes.
     $payload = (string) json_encode(['server' => $server, 'env' => $env]);
     $cmd = 'RT_SCENARIO=' . escapeshellarg($payload)
@@ -69,57 +69,64 @@ $target = static function (array $server, array $env = []) use ($self): string {
     return trim((string) shell_exec($cmd));
 };
 
-echo "A. Legit host — correct HTTPS upgrade\n";
+echo "A. Configured canonical host — correct, Host-independent upgrade\n";
 
-$out = $target(['HTTP_HOST' => 'mysite.com', 'REQUEST_URI' => '/admin/dashboard']);
-$check($out === 'https://mysite.com/admin/dashboard', "legit host preserves host + path (got: {$out})");
+$out = $target(['HTTP_HOST' => 'mysite.com', 'REQUEST_URI' => '/admin/dashboard'],
+    ['APP_CANONICAL_URL' => 'https://mysite.com']);
+$check($out === 'https://mysite.com/admin/dashboard', "canonical host + request path (got: {$out})");
 
-$out = $target(['HTTP_HOST' => 'mysite.com', 'REQUEST_URI' => '/x']);
-$check(str_starts_with($out, 'https://'), "scheme is forced to https (got: {$out})");
-
-$out = $target(['HTTP_HOST' => 'mysite.com', 'REQUEST_URI' => '/catalogo?page=3&q=rossi']);
+$out = $target(['HTTP_HOST' => 'mysite.com', 'REQUEST_URI' => '/catalogo?page=3&q=rossi'],
+    ['APP_CANONICAL_URL' => 'https://mysite.com']);
 $check($out === 'https://mysite.com/catalogo?page=3&q=rossi', "path + query preserved (got: {$out})");
 
-$out = $target(['HTTP_HOST' => 'mysite.com:8080', 'REQUEST_URI' => '/x']);
-$check($out === 'https://mysite.com:8080/x', "non-standard port preserved (got: {$out})");
+$out = $target(['HTTP_HOST' => 'mysite.com', 'REQUEST_URI' => '/x'],
+    ['APP_CANONICAL_URL' => 'https://mysite.com:8443']);
+$check($out === 'https://mysite.com:8443/x', "canonical port preserved (got: {$out})");
 
-echo "B. Host-header attacks — never redirect off-site\n";
+echo "B. Host-header attacks — target is the trusted host, never the attacker\n";
 
-$out = $target(['HTTP_HOST' => 'evil.tld', 'REQUEST_URI' => '/x'], ['APP_TRUSTED_HOSTS' => 'mysite.com']);
+// THE core fix: an attacker Host is ignored entirely — the target is the canonical host.
+$out = $target(['HTTP_HOST' => 'evil.tld', 'REQUEST_URI' => '/x'],
+    ['APP_CANONICAL_URL' => 'https://mysite.com']);
 $check($out === 'https://mysite.com/x' && !str_contains($out, 'evil.tld'),
-    "spoofed Host neutralised by APP_TRUSTED_HOSTS whitelist (got: {$out})");
+    "spoofed Host ignored; redirect goes to the canonical host (got: {$out})");
 
-$out = $target(['HTTP_HOST' => 'evil.tld', 'REQUEST_URI' => '/x'], ['APP_CANONICAL_URL' => 'https://mysite.com']);
-$check($out === 'https://mysite.com/x' && !str_contains($out, 'evil.tld'),
-    "spoofed Host overridden by APP_CANONICAL_URL (got: {$out})");
+// With no canonical but a whitelist, the first whitelisted host is used (not the Host).
+$out = $target(['HTTP_HOST' => 'evil.tld', 'REQUEST_URI' => '/x'],
+    ['APP_TRUSTED_HOSTS' => 'good.example, other.example']);
+$check($out === 'https://good.example/x' && !str_contains($out, 'evil.tld'),
+    "no canonical → first APP_TRUSTED_HOSTS entry used, Host ignored (got: {$out})");
 
-$out = $target(['HTTP_HOST' => 'e<vil>.tld', 'REQUEST_URI' => '/x']);
-$check(str_starts_with($out, 'https://localhost') && !str_contains($out, 'vil'),
-    "malformed Host falls back to localhost, never the attacker (got: {$out})");
+echo "C. Fail-safe when no trusted host is configured (the reported vector)\n";
 
-$out = $target(
-    ['HTTP_HOST' => 'mysite.com', 'HTTP_X_FORWARDED_HOST' => 'evil.tld', 'REMOTE_ADDR' => '203.0.113.9', 'REQUEST_URI' => '/x'],
-    [] // no TRUSTED_PROXIES → X-Forwarded-Host must be ignored
-);
-$check($out === 'https://mysite.com/x' && !str_contains($out, 'evil.tld'),
-    "X-Forwarded-Host ignored when the client is not a trusted proxy (got: {$out})");
+// The vulnerability CodeRabbit flagged: zero config + attacker Host must NOT redirect.
+$out = $target(['HTTP_HOST' => 'evil.tld', 'REQUEST_URI' => '/x'], []);
+$check($out === 'NULL', "no trusted config + attacker Host → NO redirect (fail safe) (got: {$out})");
 
-echo "C. Whitelist + header-injection hardening\n";
+// Even a plausible-looking Host is refused without configuration.
+$out = $target(['HTTP_HOST' => 'mysite.com', 'REQUEST_URI' => '/x'], []);
+$check($out === 'NULL', "no trusted config → NO redirect even for a benign Host (got: {$out})");
 
-// A non-first whitelisted host must be accepted as-is (not forced to entry 0).
-$out = $target(['HTTP_HOST' => 'second.example', 'REQUEST_URI' => '/x'],
-    ['APP_TRUSTED_HOSTS' => 'first.example, second.example']);
-$check($out === 'https://second.example/x', "a matching non-first whitelisted host is accepted (got: {$out})");
+// A malformed APP_CANONICAL_URL (no host) must not fall back to the Host header.
+$out = $target(['HTTP_HOST' => 'evil.tld', 'REQUEST_URI' => '/x'],
+    ['APP_CANONICAL_URL' => 'not-a-valid-url']);
+$check($out === 'NULL', "malformed APP_CANONICAL_URL → NO redirect, not the Host (got: {$out})");
 
-// Raw CR/LF in the request URI must be stripped so the Location stays a SINGLE
-// header line and the host is not hijacked. The injected payload survives only
-// as inert text glued to the path (no control bytes → header() cannot split it).
-$out = $target(['HTTP_HOST' => 'mysite.com', 'REQUEST_URI' => "/x\r\nSet-Cookie: pwned=1"]);
+echo "D. Request-path hardening\n";
+
+// Raw CR/LF in the request URI is stripped so the Location stays a single header.
+$out = $target(['HTTP_HOST' => 'mysite.com', 'REQUEST_URI' => "/x\r\nSet-Cookie: pwned=1"],
+    ['APP_CANONICAL_URL' => 'https://mysite.com']);
 $noCrlf = !str_contains($out, "\r") && !str_contains($out, "\n");
-$hostIntact = preg_match('#^https://mysite\.com/#', $out) === 1;
+$hostIntact = str_starts_with($out, 'https://mysite.com/');
 $check($noCrlf && $hostIntact,
-    "raw CRLF in REQUEST_URI stripped → single header, host intact (got: "
+    "raw CRLF in REQUEST_URI stripped → single header, canonical host intact (got: "
     . str_replace(["\r", "\n"], ['\\r', '\\n'], $out) . ")");
+
+// An empty / non-leading-slash REQUEST_URI is normalised to a rooted path.
+$out = $target(['HTTP_HOST' => 'mysite.com', 'REQUEST_URI' => ''],
+    ['APP_CANONICAL_URL' => 'https://mysite.com']);
+$check($out === 'https://mysite.com/', "empty REQUEST_URI normalised to '/' (got: {$out})");
 
 echo "\n" . ($fail === 0 ? "ALL {$pass} PASS\n" : "{$pass} PASS, {$fail} FAIL\n");
 exit($fail === 0 ? 0 : 1);
