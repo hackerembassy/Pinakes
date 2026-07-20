@@ -263,12 +263,13 @@ $selectedSeriesType = \App\Support\SeriesLabels::canonical($book['tipo_collana']
           // /api/search/autori autocomplete as authors, so an illustrator/
           // translator/curator/colorist is a real author entity (findable by
           // pseudonym, appears on the author page), not free text.
-          $contributorHelp = __('Cerca un autore esistente o scrivine uno nuovo');
+          // Role-specific help text (issue #237): each field names its own role
+          // so the hint reads naturally instead of a generic "author" for all.
           $contributorFields = [
-              'illustratori' => ['label' => __('Illustratore'), 'help' => $contributorHelp],
-              'traduttori'   => ['label' => __('Traduttore'),   'help' => $contributorHelp],
-              'curatori'     => ['label' => __('Curatore'),     'help' => $contributorHelp],
-              'coloristi'    => ['label' => __('Colorista'),    'help' => __('Cerca un autore esistente o scrivine uno nuovo (utile per i fumetti)')],
+              'illustratori' => ['label' => __('Illustratore'), 'help' => __('Cerca un illustratore esistente o aggiungine uno nuovo digitando il nome')],
+              'traduttori'   => ['label' => __('Traduttore'),   'help' => __('Cerca un traduttore esistente o aggiungine uno nuovo digitando il nome')],
+              'curatori'     => ['label' => __('Curatore'),     'help' => __('Cerca un curatore esistente o aggiungine uno nuovo digitando il nome')],
+              'coloristi'    => ['label' => __('Colorista'),    'help' => __('Cerca un colorista esistente o aggiungine uno nuovo digitando il nome (utile per i fumetti)')],
           ];
           ?>
           <input type="hidden" id="contributors_entity_picker" name="contributors_entity_picker" value="0" />
