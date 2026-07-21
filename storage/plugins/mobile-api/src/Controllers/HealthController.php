@@ -90,6 +90,12 @@ final class HealthController
                 'catalogue_mode'       => $catalogueMode,
                 'app_access_enabled'   => $appAccessEnabled,
                 'registration_enabled' => $registrationEnabled,
+                // Lightweight registration summary (a convenience mirror). The
+                // CANONICAL signup form-render contract is GET
+                // /auth/registration-fields — both derive from the same
+                // App\Support\RegistrationFields source so their values cannot
+                // drift; a client rendering the signup form should read the
+                // dedicated endpoint (richer per-field shape + core fields).
                 'registration'         => [
                     'require_cognome'   => RegistrationFields::isRequired('cognome'),
                     'require_telefono'  => RegistrationFields::isRequired('telefono'),

@@ -316,6 +316,79 @@ final class AuthController
         }
     }
 
+    // ─── GET /auth/registration-fields ──────────────────────────────────────
+
+    /**
+     * Public registration discovery (issue #255).
+     *
+     * Advertises whether self-registration is enabled and which fields the
+     * signup form should render: the always-required core fields, the
+     * config-driven built-in toggles, and the admin-defined custom fields.
+     * No token — it only reveals field labels/required flags the registration
+     * form shows anyway and leaks no user data. Gated on the same app-access
+     * flag as the other public auth endpoints; the registration toggle is
+     * surfaced as `registration_enabled` in the payload (not a 403) so the
+     * client can distinguish "app disabled" from "registration closed" and
+     * still learn the field shape.
+     *
+     * Relationship to GET /health: `/health` also carries a lightweight
+     * `registration` summary (require_cognome/telefono/indirizzo + custom_fields)
+     * for a quick liveness/config peek. This endpoint is the CANONICAL,
+     * form-render contract (per-field {required, configurable} shape + the
+     * always-required core fields). Both derive from the same
+     * App\Support\RegistrationFields source, so their values cannot drift — the
+     * two are intentional views, not two sources of truth. A client rendering
+     * the signup form should read THIS endpoint.
+     */
+    public function registrationFields(Request $request, ResponseInterface $response): ResponseInterface
+    {
+        if (!$this->appAccessEnabled()) {
+            return ResponseEnvelope::error($response, 'app_access_disabled', __('L\'accesso da app non è abilitato su questa istanza.'), 403);
+        }
+
+        try {
+            // The always-required core fields register() enforces unconditionally
+            // (see register(): empty nome/email/password -> 422). They carry
+            // configurable:false so a client rendering purely from this contract
+            // knows they are mandatory and cannot be toggled off — closing the
+            // gap where a contract-driven form could omit `nome` (which is not
+            // one of the configurable toggles below). `password_confirm` is a
+            // client-side echo of `password`, not advertised as its own field.
+            $builtin = [
+                'nome'     => ['required' => true, 'configurable' => false],
+                'email'    => ['required' => true, 'configurable' => false],
+                'password' => ['required' => true, 'configurable' => false],
+            ];
+
+            // The three config-driven built-in toggles (BUILTIN_TOGGLES).
+            // data_nascita/cod_fiscale/sesso are profile-only fields:
+            // register() never reads them and isRequired() returns a hardcoded
+            // true for them (they are absent from BUILTIN_TOGGLES), so they must
+            // NOT leak into the signup contract — they are always optional at
+            // registration and editable only through GET/PATCH /me.
+            foreach (array_keys(RegistrationFields::BUILTIN_TOGGLES) as $field) {
+                $builtin[$field] = [
+                    'required'     => RegistrationFields::isRequired($field),
+                    'configurable' => true,
+                ];
+            }
+
+            $data = [
+                'registration_enabled' => $this->registrationEnabled(),
+                'builtin_fields'       => $builtin,
+                // apiDefinitions() already returns the public-safe
+                // {id,label,type,required} shape (active only, ordered by
+                // ordine/id), hiding attivo/ordine. Do not re-query.
+                'custom_fields'        => RegistrationFields::apiDefinitions($this->db),
+            ];
+
+            return ResponseEnvelope::success($response, $data, [], 200);
+        } catch (\Throwable $e) {
+            SecureLogger::error('[MobileApi] registration-fields failed: ' . $e->getMessage());
+            return ResponseEnvelope::error($response, 'internal_error', __('Errore del server.'), 500);
+        }
+    }
+
     // ─── POST /auth/forgot-password ─────────────────────────────────────────
 
     public function forgotPassword(Request $request, ResponseInterface $response): ResponseInterface
