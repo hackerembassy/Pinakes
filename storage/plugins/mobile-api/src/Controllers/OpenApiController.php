@@ -1039,13 +1039,16 @@ final class OpenApiController
 
         return [
             'type'        => 'object',
-            'description' => 'Registration discovery payload. builtin_fields carries ONLY the three config-driven built-ins (cognome / telefono / indirizzo); the profile-only fields (data_nascita / cod_fiscale / sesso) are always optional at signup and are not advertised here.',
+            'description' => 'Canonical signup form-render contract. builtin_fields carries the always-required core fields (nome / email / password, configurable=false) plus the three config-driven toggles (cognome / telefono / indirizzo, configurable=true). Profile-only fields (data_nascita / cod_fiscale / sesso) are always optional at signup and are not advertised here. GET /health carries a lightweight mirror of the same RegistrationFields source; the two cannot drift.',
             'required'    => ['registration_enabled', 'builtin_fields', 'custom_fields'],
             'properties'  => [
                 'registration_enabled' => ['type' => 'boolean'],
                 'builtin_fields'       => [
                     'type'       => 'object',
                     'properties' => [
+                        'nome'      => $builtinRule,
+                        'email'     => $builtinRule,
+                        'password'  => $builtinRule,
                         'cognome'   => $builtinRule,
                         'telefono'  => $builtinRule,
                         'indirizzo' => $builtinRule,
