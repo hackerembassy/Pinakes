@@ -1473,6 +1473,16 @@ $additional_css = "
     }
 
     /* Related Books Section */
+    /* Keep the (max 3) related cards grouped and centred instead of spread
+       across the theme's ultra-wide container. ~3 cards of 280px + gutters.
+       !important overrides the theme's wide .container/.row max-width for
+       this one scoped row only. */
+    .related-books-row {
+        max-width: 960px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
     .related-book-card {
         background: var(--white);
         border-radius: 16px;
@@ -1482,6 +1492,13 @@ $additional_css = "
         height: 100%;
         display: flex;
         flex-direction: column;
+        /* Cap the card to a book-sane width and centre it in its column so the
+           cover (which is 140% of the card width) never balloons on wide
+           screens where each column is very wide. Matches the catalog card
+           size (~280px). */
+        max-width: 280px;
+        margin-left: auto;
+        margin-right: auto;
     }
 
     .related-book-card:hover {
@@ -2329,9 +2346,9 @@ ob_start();
             <i class="fas fa-lightbulb"></i>
             <?= __("Potrebbero interessarti") ?>
         </h2>
-        <div class="row g-4">
+        <div class="row g-4 justify-content-center related-books-row">
             <?php foreach($related_books as $related): ?>
-            <div class="col-lg-4 col-md-6">
+            <div class="col-12 col-sm-6 col-lg-4">
                 <div class="related-book-card">
                     <div class="related-book-image-container">
                         <?php
