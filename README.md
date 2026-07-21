@@ -37,6 +37,25 @@ Pinakes is a self-hosted, full-featured ILS for schools, municipalities, and pri
 
 ---
 
+## What's New in v0.7.40
+
+### Features
+- **Mobile API — registration-fields discovery** ([#255](https://github.com/fabiodalez-dev/Pinakes/issues/255)) — a public `GET /api/v1/auth/registration-fields` endpoint that advertises the signup form contract: `registration_enabled`, the always-required core fields (nome/email/password), the config-driven built-in toggles (cognome/telefono/indirizzo), and the admin-defined custom fields. Lets the companion app render the registration form dynamically per instance. Mobile API plugin `1.3.0 → 1.4.0`.
+
+### Fixes
+- **Related-books section responsive layout** ([#278](https://github.com/fabiodalez-dev/Pinakes/pull/278)) — the "Potrebbero interessarti" covers no longer balloon on large screens: the card is capped to a book-sane width, columns scale 1 → 2 → 3 with the viewport, and the row is grouped/centred on ultra-wide displays.
+
+### Tests
+- New reusable regression coverage: `mobile-api.spec.js` behavioural tests for the registration-fields endpoint (#277), `related-books-responsive-278.spec.js` (#278), and `accordion-book-sections-274.spec.js` for the collapsible REICAT/SBN + MAG book-form sections (#274).
+
+### Database Changes
+None — no migration in this release.
+
+### Upgrade Notes
+- Back up your database before updating (the in-app updater does this automatically).
+
+---
+
 ## What's New in v0.7.39
 
 ### Features
