@@ -224,20 +224,15 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
             <?php
               $genreParts = [];
               if (!empty($libro['radice_id'])) {
-                  $radiceName = trim((string)($libro['radice_nome'] ?? ''));
-                  if ($radiceName !== '') {
-                      $genreParts[] = [(int)$libro['radice_id'], $radiceName];
-                  }
+                  $genreParts[] = [(int)$libro['radice_id'], (string)$libro['radice_nome']];
               }
               if (!empty($libro['genere_id'])) {
-                  $genName = trim((string)($libro['genere_nome'] ?? ''));
+                  $genName = (string)$libro['genere_nome'];
                   if (strpos($genName, ' - ') !== false) {
                       $parts = explode(' - ', $genName);
-                      $genName = trim((string)end($parts));
+                      $genName = end($parts);
                   }
-                  if ($genName !== '') {
-                      $genreParts[] = [(int)$libro['genere_id'], $genName];
-                  }
+                  $genreParts[] = [(int)$libro['genere_id'], $genName];
               }
               if (!empty($libro['sottogenere_id'])) {
                   $sottogenereName = trim((string)($libro['sottogenere_nome'] ?? ''));
