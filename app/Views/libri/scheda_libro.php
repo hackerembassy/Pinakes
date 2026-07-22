@@ -224,18 +224,26 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
             <?php
               $genreParts = [];
               if (!empty($libro['radice_id'])) {
-                  $genreParts[] = [(int)$libro['radice_id'], (string)$libro['radice_nome']];
+                  $radiceName = trim((string)($libro['radice_nome'] ?? ''));
+                  if ($radiceName !== '') {
+                      $genreParts[] = [(int)$libro['radice_id'], $radiceName];
+                  }
               }
               if (!empty($libro['genere_id'])) {
-                  $genName = (string)$libro['genere_nome'];
+                  $genName = trim((string)($libro['genere_nome'] ?? ''));
                   if (strpos($genName, ' - ') !== false) {
                       $parts = explode(' - ', $genName);
-                      $genName = end($parts);
+                      $genName = trim((string)end($parts));
                   }
-                  $genreParts[] = [(int)$libro['genere_id'], $genName];
+                  if ($genName !== '') {
+                      $genreParts[] = [(int)$libro['genere_id'], $genName];
+                  }
               }
               if (!empty($libro['sottogenere_id'])) {
-                  $genreParts[] = [(int)$libro['sottogenere_id'], (string)$libro['sottogenere_nome']];
+                  $sottogenereName = trim((string)($libro['sottogenere_nome'] ?? ''));
+                  if ($sottogenereName !== '') {
+                      $genreParts[] = [(int)$libro['sottogenere_id'], $sottogenereName];
+                  }
               }
             ?>
             <?php if (!empty($genreParts)): ?>
