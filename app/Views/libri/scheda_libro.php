@@ -227,12 +227,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
                   $genreParts[] = [(int)$libro['radice_id'], (string)$libro['radice_nome']];
               }
               if (!empty($libro['genere_id'])) {
-                  $genName = (string)$libro['genere_nome'];
-                  if (strpos($genName, ' - ') !== false) {
-                      $parts = explode(' - ', $genName);
-                      $genName = end($parts);
-                  }
-                  $genreParts[] = [(int)$libro['genere_id'], $genName];
+                  $genreParts[] = [(int)$libro['genere_id'], (string)$libro['genere_nome']];
               }
               if (!empty($libro['sottogenere_id'])) {
                   $sottogenereName = trim((string)($libro['sottogenere_nome'] ?? ''));
@@ -243,7 +238,7 @@ $btnDanger  = 'inline-flex items-center gap-2 rounded-lg border-2 border-red-300
             ?>
             <?php if (!empty($genreParts)): ?>
               <?php foreach ($genreParts as $i => $gp): ?>
-                <?php if ($i > 0): ?> <span class="text-gray-400">→</span> <?php endif; ?>
+                <?php if ($i > 0 && !empty($genreParts[$i - 1][0]) && trim((string)($genreParts[$i - 1][1] ?? '')) !== '' && !empty($gp[0]) && trim((string)($gp[1] ?? '')) !== ''): ?> <span class="text-gray-400">→</span> <?php endif; ?>
                 <a href="<?= htmlspecialchars(url('/admin/books?genere=' . $gp[0]), ENT_QUOTES, 'UTF-8') ?>"
                    class="text-gray-900 hover:text-gray-600 hover:underline font-semibold"><?= App\Support\HtmlHelper::e($gp[1]) ?></a>
               <?php endforeach; ?>
