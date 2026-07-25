@@ -729,23 +729,30 @@ document.addEventListener('DOMContentLoaded', function() {
             // Set the file to the hidden input for form submission
             const fileInput = document.getElementById('hero-background-input');
             const dataTransfer = new DataTransfer();
+            let normalizedFile = null;
 
-            // Create a File object from Uppy file data
-            fetch(file.data instanceof File ? URL.createObjectURL(file.data) : file.preview)
-                .then(res => res.blob())
-                .then(blob => {
-                    const newFile = new File([blob], file.name, { type: file.type });
-                    dataTransfer.items.add(newFile);
-                    fileInput.files = dataTransfer.files;
-                })
-                .catch(err => {
-                    console.error('Error converting file:', err);
-                    // Fallback: if file.data is already a File object
-                    if (file.data instanceof File) {
-                        dataTransfer.items.add(file.data);
+            if (file.data instanceof File) {
+                normalizedFile = file.data;
+            } else if (file.data instanceof Blob) {
+                normalizedFile = new File([file.data], file.name, { type: file.type });
+            } else if (file.preview) {
+                fetch(file.preview)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        const fetchedFile = new File([blob], file.name, { type: file.type });
+                        dataTransfer.items.add(fetchedFile);
                         fileInput.files = dataTransfer.files;
-                    }
-                });
+                    })
+                    .catch(err => {
+                        console.error('Error loading preview blob:', err);
+                    });
+                return;
+            }
+
+            if (normalizedFile) {
+                dataTransfer.items.add(normalizedFile);
+                fileInput.files = dataTransfer.files;
+            }
         });
 
         // Handle file removed
